@@ -21,7 +21,7 @@ export interface ProcessingState {
 
 export type Tab = 'summary' | 'transcript' | 'analytics';
 
-export type FilterType = 'all' | 'speaker-1' | 'speaker-2' | 'speaker-3' | 'action-item' | 'decision' | 'question' | 'follow-up';
+// export type FilterType = string;
 
 export interface AppState {
   showUpload: boolean;
@@ -29,7 +29,7 @@ export interface AppState {
   showResults: boolean;
   activeTab: Tab;
   searchQuery: string;
-  activeFilter: FilterType;
+  activeFilter: string;
   transcript: TranscriptItem[];
   filteredTranscript: TranscriptItem[];
 }

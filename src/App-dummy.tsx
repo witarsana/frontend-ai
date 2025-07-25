@@ -38,13 +38,6 @@ const App: React.FC = () => {
     checkAPIConnection();
   }, []);
 
-  // Auto-load latest completed job when API is connected
-  useEffect(() => {
-    if (apiConnected && useRealAPI) {
-      loadLatestCompletedJob();
-    }
-  }, [apiConnected, useRealAPI]);
-
   const checkAPIConnection = async () => {
     try {
       const isConnected = await aiAPI.healthCheck();
@@ -57,40 +50,6 @@ const App: React.FC = () => {
       console.error('API health check failed:', error);
       setApiConnected(false);
       setUseRealAPI(false);
-    }
-  };
-
-  const loadLatestCompletedJob = async () => {
-    try {
-      const response = await fetch('http://localhost:8002/api/jobs/completed');
-      const data = await response.json();
-      
-      if (data.jobs && data.jobs.length > 0) {
-        const latestJob = data.jobs[0]; // First job is the latest
-        console.log('Loading latest completed job:', latestJob.job_id);
-        
-        // Get full result
-        const resultResponse = await aiAPI.getResult(latestJob.job_id);
-        if (resultResponse) {
-          const convertedData = convertAPIResultToFrontendFormat(resultResponse);
-          setApiData(convertedData);
-          setCurrentJobId(latestJob.job_id);
-          
-          // Show results immediately
-          setAppState(prev => ({
-            ...prev,
-            showUpload: false,
-            showProcessing: false,
-            showResults: true,
-            transcript: convertedData.transcript || sampleTranscript,
-            filteredTranscript: convertedData.transcript || sampleTranscript
-          }));
-          
-          console.log('Latest job data loaded successfully');
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load latest completed job:', error);
     }
   };
 
@@ -107,8 +66,12 @@ const App: React.FC = () => {
     }
 
     // Apply category filter
-    if (appState.activeFilter !== 'All') {
-      filtered = filtered.filter(item => item.speakerName == appState.activeFilter);
+    if (appState.activeFilter !== 'all') {
+      if (appState.activeFilter.startsWith('speaker-')) {
+        filtered = filtered.filter(item => item.speaker === appState.activeFilter);
+      } else {
+        filtered = filtered.filter(item => item.tags.includes(appState.activeFilter));
+      }
     }
 
     setAppState(prev => ({ ...prev, filteredTranscript: filtered }));
@@ -277,7 +240,7 @@ const App: React.FC = () => {
     setAppState(prev => ({ ...prev, searchQuery: query }));
   };
 
-  const handleFilterChange = (filter: string) => {
+  const handleFilterChange = (filter: FilterType) => {
     setAppState(prev => ({ ...prev, activeFilter: filter }));
   };
 
@@ -292,39 +255,24 @@ const App: React.FC = () => {
   };
 
   const renderTabContent = () => {
-    // Pass real API data to components
-    const summaryData = apiData?.summary ? {
-      summary: apiData.summary.overview,
-      action_items: apiData.summary.actionItems,
-      key_decisions: apiData.summary.keyDecisions,
-      participants: apiData.summary.participants,
-      meeting_type: apiData.summary.meetingType,
-      sentiment: apiData.summary.sentiment,
-      duration: apiData.summary.duration,
-      word_count: apiData.summary.wordCount
-    } : undefined;
-    
     switch (appState.activeTab) {
       case 'summary':
-        return <SummaryTab summaryData={summaryData} />;
+        return <SummaryTab {...(apiData && { summaryData: apiData.summary })} />;
       case 'transcript':
         return (
-          <>
-            <TranscriptTab
-              transcript={appState.filteredTranscript}
-              searchQuery={appState.searchQuery}
-              activeFilter={appState.activeFilter}
-              participants={summaryData?.participants || []}
-              onSearchChange={handleSearchChange}
-              onFilterChange={handleFilterChange}
-              onSeekToTime={handleSeekToTime}
-            />
-          </>
+          <TranscriptTab
+            transcript={appState.filteredTranscript}
+            searchQuery={appState.searchQuery}
+            activeFilter={appState.activeFilter}
+            onSearchChange={handleSearchChange}
+            onFilterChange={handleFilterChange}
+            onSeekToTime={handleSeekToTime}
+          />
         );
       case 'analytics':
-        return <AnalyticsTab />;
+        return <AnalyticsTab {...(apiData && { analyticsData: apiData.analytics })} />;
       default:
-        return <SummaryTab summaryData={summaryData} />;
+        return <SummaryTab {...(apiData && { summaryData: apiData.summary })} />;
     }
   };
 

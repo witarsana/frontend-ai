@@ -1,13 +1,14 @@
 import React from 'react';
-import { TranscriptItem, FilterType } from '../types';
+import { TranscriptItem } from '../types';
 import TranscriptItemComponent from './TranscriptItem';
 
 interface TranscriptTabProps {
   transcript: TranscriptItem[];
   searchQuery: string;
-  activeFilter: FilterType;
+  activeFilter: string;
+  participants: string[];
   onSearchChange: (query: string) => void;
-  onFilterChange: (filter: FilterType) => void;
+  onFilterChange: (filter: string) => void;
   onSeekToTime: (seconds: number) => void;
 }
 
@@ -15,18 +16,19 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
   transcript,
   searchQuery,
   activeFilter,
+  participants,
   onSearchChange,
   onFilterChange,
   onSeekToTime
 }) => {
-  const filters: { label: string; value: FilterType }[] = [
-    { label: 'Semua', value: 'all' },
-    { label: 'Speaker 1', value: 'speaker-1' },
-    { label: 'Speaker 2', value: 'speaker-2' },
-    { label: 'Speaker 3', value: 'speaker-3' },
-    { label: '#ActionItem', value: 'action-item' },
-    { label: '#Decision', value: 'decision' }
+  const filters: { label: string; value: string }[] = [
+    
   ];
+  filters.push({ label: 'All', value: 'All' });
+
+  for (const participant of participants) {
+    filters.push({ label: participant, value: participant });
+  }
 
   return (
     <div className="tab-content">

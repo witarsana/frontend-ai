@@ -15,7 +15,7 @@ export const validateFile = (file: File): { isValid: boolean; error?: string } =
     return { isValid: false, error: '❌ File format tidak didukung. Gunakan audio atau video file.' };
   }
 
-  if (file.size > 100 * 1024 * 1024) { // 100MB
+  if (file.size > 10000 * 1024 * 1024) { // 100MB
     return { isValid: false, error: '❌ File terlalu besar. Maksimal 100MB.' };
   }
 
