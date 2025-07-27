@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 import asyncio
 from datetime import datetime
 import json
-import whisper
+from faster_whisper import WhisperModel
 from mistralai import Mistral
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import traceback
 import librosa
 import soundfile as sf
@@ -17,9 +17,22 @@ from pyannote.audio import Pipeline
 import torch
 from pydub import AudioSegment
 
+# Deepgram imports (optional - handle compatibility issues)
+DEEPGRAM_AVAILABLE = False
+try:
+    from deepgram import DeepgramClient, PrerecordedOptions, FileSource
+    DEEPGRAM_AVAILABLE = True
+    print("✅ Deepgram SDK available")
+except ImportError:
+    print("⚠️  Deepgram SDK not installed, using Faster-Whisper only")
+except SyntaxError:
+    print("⚠️  Deepgram SDK incompatible with Python 3.9, using Faster-Whisper only")
+except Exception as e:
+    print(f"⚠️  Deepgram SDK error: {e}, using Faster-Whisper only")
+
 load_dotenv()
 
-app = FastAPI(title="AI Meeting Transcription - FFmpeg Free", version="1.1.0")
+app = FastAPI(title="AI Meeting Transcription - Dual Engine", version="2.0.0")
 
 # CORS middleware
 app.add_middleware(
@@ -41,18 +54,48 @@ async def startup_event():
 whisper_model = None
 mistral_client = None
 diarization_pipeline = None
+deepgram_client = None
 processing_jobs = {}
+
+# Configuration
+TRANSCRIPTION_ENGINE = os.getenv("TRANSCRIPTION_ENGINE", "faster-whisper")  # "faster-whisper" or "deepgram"
 
 def load_models():
     """Load AI models with error handling"""
-    global whisper_model, mistral_client, diarization_pipeline
+    global whisper_model, mistral_client, diarization_pipeline, deepgram_client
     
     try:
-        if whisper_model is None:
-            print("Loading Whisper model (tiny - FFmpeg free)...")
-            whisper_model = whisper.load_model("tiny")
-            print("✅ Whisper model loaded!")
+        print(f"🔧 Transcription engine: {TRANSCRIPTION_ENGINE}")
         
+        # Load Faster-Whisper if needed
+        if TRANSCRIPTION_ENGINE == "faster-whisper":
+            if whisper_model is None:
+                print("Loading Faster-Whisper model (small - High Performance)...")
+                whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+                print("✅ Faster-Whisper model loaded!")
+        
+        # Load Deepgram if needed
+        elif TRANSCRIPTION_ENGINE == "deepgram":
+            if deepgram_client is None and DEEPGRAM_AVAILABLE:
+                api_key = os.getenv("DEEPGRAM_API_KEY")
+                if api_key:
+                    deepgram_client = DeepgramClient(api_key)
+                    print("✅ Deepgram client initialized!")
+                else:
+                    print("❌ DEEPGRAM_API_KEY not found, falling back to Faster-Whisper")
+                    # Fallback to Faster-Whisper
+                    if whisper_model is None:
+                        print("Loading Faster-Whisper model as fallback...")
+                        whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+                        print("✅ Faster-Whisper fallback loaded!")
+            elif not DEEPGRAM_AVAILABLE:
+                print("❌ Deepgram SDK not available, falling back to Faster-Whisper")
+                if whisper_model is None:
+                    print("Loading Faster-Whisper model as fallback...")
+                    whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+                    print("✅ Faster-Whisper fallback loaded!")
+        
+        # Load Mistral client
         if mistral_client is None:
             api_key = os.getenv("MISTRAL_API_KEY")
             if api_key:
@@ -123,10 +166,19 @@ def load_models():
 
 @app.get("/")
 async def root():
+    active_engine = TRANSCRIPTION_ENGINE
+    if TRANSCRIPTION_ENGINE == "deepgram" and not deepgram_client:
+        active_engine = "faster-whisper (fallback)"
+    
     return {
-        "message": "AI Meeting Transcription - FFmpeg Free Version", 
+        "message": "AI Meeting Transcription - Dual Engine Support", 
         "status": "running",
-        "features": ["Whisper AI", "Mistral AI", "Librosa Audio Processing", "No FFmpeg Required"],
+        "transcription_engine": active_engine,
+        "features": ["Faster-Whisper (Local)", "Deepgram (Cloud)", "Mistral AI", "Speaker Diarization"],
+        "engines_available": {
+            "faster_whisper": whisper_model is not None,
+            "deepgram": deepgram_client is not None
+        },
         "timestamp": datetime.now().isoformat()
     }
 
@@ -199,6 +251,88 @@ async def get_result(job_id: str):
         result = json.load(f)
     
     return result
+
+@app.get("/api/config")
+async def get_config():
+    """Get current transcription engine configuration"""
+    return {
+        "transcription_engine": TRANSCRIPTION_ENGINE,
+        "engines_available": {
+            "faster_whisper": whisper_model is not None,
+            "deepgram": deepgram_client is not None and DEEPGRAM_AVAILABLE
+        },
+        "deepgram_sdk_available": DEEPGRAM_AVAILABLE,
+        "fallback_enabled": True
+    }
+
+@app.post("/api/config/engine")
+async def set_transcription_engine(engine: str):
+    """Set transcription engine (faster-whisper or deepgram)"""
+    global TRANSCRIPTION_ENGINE, whisper_model, deepgram_client
+    
+    if engine not in ["faster-whisper", "deepgram"]:
+        raise HTTPException(status_code=400, detail="Invalid engine. Use 'faster-whisper' or 'deepgram'")
+    
+    # Check if Deepgram is requested but not available
+    if engine == "deepgram" and not DEEPGRAM_AVAILABLE:
+        raise HTTPException(status_code=400, detail="Deepgram SDK not available. Please install or use faster-whisper")
+    
+    if engine == "deepgram" and not os.getenv("DEEPGRAM_API_KEY"):
+        raise HTTPException(status_code=400, detail="DEEPGRAM_API_KEY not configured")
+    
+    # Update configuration
+    old_engine = TRANSCRIPTION_ENGINE
+    TRANSCRIPTION_ENGINE = engine
+    
+    # Load appropriate models
+    try:
+        load_models()
+        return {
+            "status": "success",
+            "previous_engine": old_engine,
+            "current_engine": TRANSCRIPTION_ENGINE,
+            "message": f"Transcription engine switched to {engine}"
+        }
+    except Exception as e:
+        # Rollback on error
+        TRANSCRIPTION_ENGINE = old_engine
+        raise HTTPException(status_code=500, detail=f"Failed to switch engine: {str(e)}")
+
+@app.get("/api/engines")
+async def get_available_engines():
+    """Get information about available transcription engines"""
+    return {
+        "engines": {
+            "faster-whisper": {
+                "name": "Faster-Whisper",
+                "type": "local",
+                "cost": "free",
+                "speed": "fast",
+                "accuracy": "high",
+                "languages": "multilingual",
+                "features": ["offline", "privacy", "no_api_limits"],
+                "available": whisper_model is not None
+            },
+            "deepgram": {
+                "name": "Deepgram Nova-2",
+                "type": "cloud",
+                "cost": "paid",
+                "speed": "very_fast", 
+                "accuracy": "very_high",
+                "languages": "multilingual",
+                "features": ["real_time", "speaker_diarization", "smart_formatting", "confidence_scores"],
+                "available": deepgram_client is not None and DEEPGRAM_AVAILABLE,
+                "quota": "12000_minutes_free_monthly"
+            }
+        },
+        "current_engine": TRANSCRIPTION_ENGINE,
+        "recommendations": {
+            "for_privacy": "faster-whisper",
+            "for_accuracy": "deepgram",
+            "for_cost": "faster-whisper",
+            "for_speed": "deepgram"
+        }
+    }
 
 @app.get("/api/jobs/completed")
 async def get_completed_jobs():
@@ -401,9 +535,205 @@ def _preprocess_audio_sync(file_path: str) -> str:
 
 async def transcribe_with_librosa(audio_path: str, job_id: str = None) -> Dict[Any, Any]:
     """Transcribe using preprocessed audio with speaker diarization"""
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, _transcribe_librosa_sync, audio_path, job_id)
-    return result
+    if TRANSCRIPTION_ENGINE == "deepgram" and deepgram_client:
+        return await transcribe_with_deepgram(audio_path, job_id)
+    else:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _transcribe_librosa_sync, audio_path, job_id)
+        return result
+
+async def transcribe_with_deepgram(audio_path: str, job_id: str = None) -> Dict[Any, Any]:
+    """Transcribe using Deepgram API"""
+    try:
+        print(f"🌐 Transcribing with Deepgram: {audio_path}")
+        
+        if not os.path.exists(audio_path):
+            raise Exception(f"Audio file not found: {audio_path}")
+        
+        if not deepgram_client:
+            raise Exception("Deepgram client not initialized")
+        
+        # Update progress
+        if job_id:
+            processing_jobs[job_id]["progress"] = 40
+            processing_jobs[job_id]["message"] = "Uploading to Deepgram..."
+        
+        # Read audio file
+        with open(audio_path, "rb") as audio_file:
+            buffer_data = audio_file.read()
+        
+        payload = {
+            "buffer": buffer_data,
+        }
+        
+        # Configure options
+        options = PrerecordedOptions(
+            model="nova-2",  # Latest high-accuracy model
+            language="id",  # Indonesian
+            smart_format=True,
+            punctuate=True,
+            diarize=True,  # Speaker diarization
+            utterances=True,
+            paragraphs=True,
+            multichannel=False,
+            alternatives=1,
+            confidence=True,
+            summarize="v2"  # Get summary from Deepgram
+        )
+        
+        # Update progress
+        if job_id:
+            processing_jobs[job_id]["progress"] = 60
+            processing_jobs[job_id]["message"] = "Processing with Deepgram AI..."
+        
+        # Transcribe
+        response = deepgram_client.listen.prerecorded.v("1").transcribe_file(payload, options)
+        
+        # Update progress
+        if job_id:
+            processing_jobs[job_id]["progress"] = 70
+            processing_jobs[job_id]["message"] = "Processing Deepgram results..."
+        
+        # Parse response
+        results = response["results"]
+        if not results or not results["channels"]:
+            raise Exception("Deepgram returned empty results")
+        
+        channel = results["channels"][0]
+        alternatives = channel["alternatives"]
+        if not alternatives:
+            raise Exception("No transcription alternatives found")
+        
+        transcript = alternatives[0]["transcript"]
+        words = alternatives[0].get("words", [])
+        paragraphs = alternatives[0].get("paragraphs", {}).get("paragraphs", [])
+        
+        # Get audio info
+        audio_data, _ = librosa.load(audio_path, sr=16000, mono=True)
+        duration = len(audio_data) / 16000
+        
+        audio_info = {
+            "sample_rate": 16000,
+            "duration": duration,
+            "samples": len(audio_data),
+            "channels": 1
+        }
+        
+        # Convert to segments format
+        processed_segments = []
+        
+        if paragraphs:
+            # Use paragraph-based segmentation with speaker info
+            for para_idx, paragraph in enumerate(paragraphs):
+                for sent_idx, sentence in enumerate(paragraph.get("sentences", [])):
+                    segment_words = sentence.get("words", [])
+                    if not segment_words:
+                        continue
+                    
+                    start_time = segment_words[0]["start"]
+                    end_time = segment_words[-1]["end"]
+                    text = sentence["text"].strip()
+                    
+                    # Get speaker info (Deepgram provides speaker labels)
+                    speaker_id = segment_words[0].get("speaker", 0)
+                    speaker_name = f"Speaker {speaker_id + 1}"
+                    
+                    confidence = sum(word.get("confidence", 0.5) for word in segment_words) / len(segment_words)
+                    
+                    processed_segments.append({
+                        "start": float(start_time),
+                        "end": float(end_time),
+                        "text": text,
+                        "speaker": f"speaker-{speaker_id + 1:02d}",
+                        "speaker_name": speaker_name,
+                        "confidence": float(confidence),
+                        "tags": []
+                    })
+        else:
+            # Fallback: create segments from words
+            segment_words = []
+            current_speaker = None
+            segment_start = None
+            
+            for word in words:
+                word_speaker = word.get("speaker", 0)
+                
+                # Start new segment if speaker changes or we hit word limit
+                if (current_speaker is not None and word_speaker != current_speaker) or len(segment_words) >= 10:
+                    if segment_words:
+                        # Create segment from accumulated words
+                        segment_text = " ".join([w["word"] for w in segment_words])
+                        segment_end = segment_words[-1]["end"]
+                        avg_confidence = sum(w.get("confidence", 0.5) for w in segment_words) / len(segment_words)
+                        
+                        processed_segments.append({
+                            "start": float(segment_start),
+                            "end": float(segment_end),
+                            "text": segment_text.strip(),
+                            "speaker": f"speaker-{current_speaker + 1:02d}",
+                            "speaker_name": f"Speaker {current_speaker + 1}",
+                            "confidence": float(avg_confidence),
+                            "tags": []
+                        })
+                    
+                    # Start new segment
+                    segment_words = [word]
+                    current_speaker = word_speaker
+                    segment_start = word["start"]
+                else:
+                    # Add to current segment
+                    segment_words.append(word)
+                    if current_speaker is None:
+                        current_speaker = word_speaker
+                        segment_start = word["start"]
+            
+            # Handle last segment
+            if segment_words:
+                segment_text = " ".join([w["word"] for w in segment_words])
+                segment_end = segment_words[-1]["end"]
+                avg_confidence = sum(w.get("confidence", 0.5) for w in segment_words) / len(segment_words)
+                
+                processed_segments.append({
+                    "start": float(segment_start),
+                    "end": float(segment_end),
+                    "text": segment_text.strip(),
+                    "speaker": f"speaker-{current_speaker + 1:02d}",
+                    "speaker_name": f"Speaker {current_speaker + 1}",
+                    "confidence": float(avg_confidence),
+                    "tags": []
+                })
+        
+        # Clean repetitive text in all segments
+        for segment in processed_segments:
+            segment["text"] = clean_repetitive_text(segment["text"])
+        
+        # Get detected language
+        detected_language = results.get("summary", {}).get("language", "id")
+        
+        print(f"✅ Deepgram transcription complete: {len(processed_segments)} segments, {duration:.1f}s")
+        
+        return {
+            "text": transcript,
+            "language": detected_language,
+            "segments": processed_segments,
+            "duration": duration,
+            "audio_info": audio_info,
+            "engine": "deepgram",
+            "model": "nova-2"
+        }
+        
+    except Exception as e:
+        print(f"❌ Deepgram transcription error: {e}")
+        print(f"🔄 Falling back to Faster-Whisper...")
+        
+        # Fallback to Faster-Whisper
+        global whisper_model
+        if whisper_model is None:
+            load_models()
+        
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _transcribe_librosa_sync, audio_path, job_id)
+        return result
 
 def simple_speaker_detection(audio_path: str, segments: List) -> Dict:
     """SUPER AGGRESSIVE speaker detection - ALWAYS detects multiple speakers"""
@@ -738,14 +1068,38 @@ def _transcribe_librosa_sync(audio_path: str, job_id: str = None) -> Dict[Any, A
             "channels": 1
         }
         
-        # Transcribe with audio array directly first
-        result = whisper_model.transcribe(
+        # Transcribe with faster-whisper (returns generator of segments)
+        segments, info = whisper_model.transcribe(
             audio_data,
             language=None,  # Auto-detect
             task="transcribe",
-            verbose=False,
-            temperature=0.0
+            temperature=0.0,
+            condition_on_previous_text=False,
+            vad_filter=True,  # Voice activity detection for better quality
+            vad_parameters=dict(min_silence_duration_ms=500)
         )
+        
+        # Convert generator to list and create compatible result structure
+        segment_list = list(segments)
+        
+        if not segment_list:
+            raise Exception("Faster-Whisper returned no segments")
+        
+        # Create result structure compatible with original whisper format
+        result = {
+            "text": " ".join([s.text for s in segment_list]),
+            "segments": [
+                {
+                    "start": s.start,
+                    "end": s.end, 
+                    "text": s.text,
+                    "avg_logprob": s.avg_logprob if hasattr(s, 'avg_logprob') else -0.5
+                }
+                for s in segment_list
+            ],
+            "language": info.language,
+            "language_probability": info.language_probability
+        }
         
         if not result or "segments" not in result:
             raise Exception("Whisper returned invalid result")

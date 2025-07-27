@@ -17,7 +17,7 @@
     "lint": "cd frontend && npm run lint",
     "preview": "cd frontend && npm run preview",
     "test:backend": "cd backend && python test_mistral.py && python test_direct_summary.py",
-    "reprocess": "cd backend && python reprocess_existing.py",
+    "reprocess": "source .venv/bin/activate && cd backend && python reprocess_existing.py",
     "setup": "npm run install:all && echo '✅ Setup complete! Run npm run dev to start the application'"
   },
   "keywords": [

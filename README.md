@@ -13,11 +13,29 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - **Real-time Processing**: Live progress tracking during transcription
 
 ### 🔧 Technical Features
+- **Dual Transcription Engine**: Choose between Faster-Whisper (local/free) or Deepgram (cloud/paid)
 - **FFmpeg-Free Processing**: Uses librosa and pydub for audio processing
 - **Flexible Audio Formats**: Support for MP3, MP4, AAC, M4A, WAV
 - **RESTful API**: Clean backend API with FastAPI
 - **Modern Frontend**: React TypeScript with responsive design
 - **Real-time Updates**: WebSocket-like progress tracking
+
+### 🚀 Transcription Engines
+
+#### **Faster-Whisper** (Default - Local)
+- ✅ **Completely FREE**
+- ✅ **Privacy-focused** (offline processing)
+- ✅ **No API limits**
+- ✅ **4x faster** than OpenAI Whisper
+- ✅ **High accuracy** multilingual support
+
+#### **Deepgram Nova-2** (Optional - Cloud)
+- ✅ **Highest accuracy** available
+- ✅ **Ultra-fast** cloud processing
+- ✅ **Advanced speaker diarization**
+- ✅ **Smart formatting** and punctuation
+- ✅ **12,000 minutes/month FREE** tier
+- 💰 **Paid** service after free quota
 ```
 
 ### **Option 2: PowerShell**
@@ -77,9 +95,64 @@ voiceNote/
 
 ## 🔧 Configuration
 
-Edit `ai-backend/.env`:
+### Environment Variables
+Copy `.env.example` to `.env` and configure:
+
 ```env
+# Required for AI features
 MISTRAL_API_KEY=your_mistral_api_key_here
+HUGGING_FACE_TOKEN=your_hugging_face_token_here
+
+# Transcription Engine Configuration
+TRANSCRIPTION_ENGINE=faster-whisper  # or "deepgram"
+
+# Optional: Deepgram API (for cloud transcription)
+DEEPGRAM_API_KEY=your_deepgram_api_key_here
+```
+
+### Transcription Engine Selection
+
+#### Option 1: Faster-Whisper (Default - FREE)
+```env
+TRANSCRIPTION_ENGINE=faster-whisper
+```
+- ✅ No additional API keys needed
+- ✅ Completely free and private
+- ✅ Works offline
+
+#### Option 2: Deepgram (Premium - PAID)
+```env
+TRANSCRIPTION_ENGINE=deepgram
+DEEPGRAM_API_KEY=your_key_here
+```
+- 🆓 12,000 minutes/month FREE
+- ⚡ Ultra-fast cloud processing
+- 🎯 Highest accuracy available
+- 📊 Advanced speaker diarization
+
+### Getting API Keys
+
+1. **Mistral AI**: [mistral.ai](https://mistral.ai) → Console → API Keys
+2. **Hugging Face**: [huggingface.co](https://huggingface.co) → Settings → Tokens  
+3. **Deepgram** (optional): [deepgram.com](https://deepgram.com) → API Keys
+
+### Dynamic Engine Switching
+
+You can change transcription engines at runtime via API:
+
+```bash
+# Switch to Deepgram
+curl -X POST "http://localhost:8000/api/config/engine" \
+  -H "Content-Type: application/json" \
+  -d '"deepgram"'
+
+# Switch back to Faster-Whisper  
+curl -X POST "http://localhost:8000/api/config/engine" \
+  -H "Content-Type: application/json" \
+  -d '"faster-whisper"'
+
+# Check current configuration
+curl "http://localhost:8000/api/config"
 ```
 
 ## 🎬 Demo Materials
