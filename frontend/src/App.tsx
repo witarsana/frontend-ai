@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, Tab, FilterType, ProcessingState } from './types';
+import { AppState, Tab, ProcessingState } from './types';
 import { sampleTranscript } from './data/sampleData';
 import { aiAPI, convertAPIResultToFrontendFormat, APIStatusResponse } from './services/api';
 
@@ -377,7 +377,11 @@ const App: React.FC = () => {
 
         {appState.showResults && (
           <div className="results active">
-            <AudioPlayer onSeekToTime={handleSeekToTime} />
+            <AudioPlayer 
+              onSeekToTime={handleSeekToTime} 
+              audioUrl={currentJobId ? `http://localhost:8000/api/audio/${currentJobId}` : undefined}
+              duration={apiData?.duration}
+            />
 
             <div className="tabs">
               <button 

@@ -1,0 +1,31 @@
+# Results Directory
+
+Directory ini menyimpan hasil processing dalam format JSON.
+
+Setiap hasil transcription disimpan dengan informasi lengkap termasuk:
+- Transcript dengan speaker detection
+- AI-generated summary
+- Action items dan key decisions
+- Speaker analytics
+- Metadata audio
+
+## File Naming Convention
+- `job_{timestamp}_{random}_result.json` - Complete transcription results
+
+## JSON Structure
+```json
+{
+  "filename": "original_filename.mp3",
+  "job_id": "job_20250727_123456_789", 
+  "transcript": [...],
+  "summary": "...",
+  "action_items": [...],
+  "key_decisions": [...],
+  "speakers": [...],
+  "duration": 1234.5,
+  "language": "en",
+  "processed_at": "2025-07-27T12:34:56"
+}
+```
+
+Results dapat diakses melalui API endpoint `/api/result/{job_id}`.

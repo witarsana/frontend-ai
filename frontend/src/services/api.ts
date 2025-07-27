@@ -1,6 +1,6 @@
 // API configuration for connecting to Python FastAPI backend
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8002', // FFmpeg-free backend
+  BASE_URL: 'http://localhost:8000', // FFmpeg-free backend
   ENDPOINTS: {
     UPLOAD: '/api/upload-and-process',
     STATUS: '/api/status',
@@ -204,6 +204,8 @@ export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
         totalSpeakers: apiResult.speakers.length,
         meetingDuration: `${Math.floor(apiResult.duration / 60)} minutes ${Math.floor(apiResult.duration % 60)} seconds`
       }
-    }
+    },
+    duration: apiResult.duration,
+    jobId: apiResult.job_id
   };
 }
