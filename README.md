@@ -1,134 +1,207 @@
-# AI Meeting Transcription - React TypeScript
+# 🎙️ AI Meeting Transcription & Analysis Platform
 
-A modern React TypeScript application for AI-powered meeting transcription with speaker diarization, automatic summary generation, and intelligent tagging.
+A comprehensive full-stack application for transcribing audio recordings and generating intelligent meeting summaries using advanced AI technologies.
 
-## Features
+## 🌟 Features
 
-- 📁 **File Upload**: Drag & drop or click to upload audio/video files (MP3, WAV, MP4, MKV, M4A)
-- 🧠 **AI Processing**: Simulated AI transcription with speaker diarization
-- 📋 **Smart Summary**: Automatic generation of meeting summaries, action items, and key decisions
-- 🎯 **Intelligent Tagging**: Auto-tagging of content (action items, decisions, questions, follow-ups)
-- 🔍 **Search & Filter**: Search through transcripts and filter by speaker or tag type
-- 🎵 **Audio Player**: Integrated audio player with seek functionality
-- 📊 **Analytics**: Speaker statistics and meeting insights
-- 📱 **Responsive Design**: Mobile-friendly interface
+### 🎯 Core Capabilities
 
-## Tech Stack
+- **Audio Transcription**: High-quality speech-to-text using OpenAI Whisper
+- **Speaker Diarization**: Automatic speaker identification and separation
+- **AI-Powered Summaries**: Intelligent meeting analysis using Mistral AI
+- **Action Items Detection**: Automatic extraction of tasks and decisions
+- **Multi-Language Support**: Primary support for Indonesian and English
+- **Real-time Processing**: Live progress tracking during transcription
 
-- **React 18** with TypeScript
-- **Vite** for fast development and building
-- **ESLint** for code quality
-- Modern CSS with gradient backgrounds and smooth animations
+### 🔧 Technical Features
 
-## Getting Started
+- **Dual Transcription Engine**: Choose between Faster-Whisper (local/free) or Deepgram (cloud/paid)
+- **FFmpeg-Free Processing**: Uses librosa and pydub for audio processing
+- **Flexible Audio Formats**: Support for MP3, MP4, AAC, M4A, WAV
+- **RESTful API**: Clean backend API with FastAPI
+- **Modern Frontend**: React TypeScript with responsive design
+- **Real-time Updates**: WebSocket-like progress tracking
 
-### Prerequisites
+### 🚀 Transcription Engines
 
-- Node.js (v16 or higher)
-- npm or yarn
+#### **Faster-Whisper** (Default - Local)
 
-### Installation
+- ✅ **Completely FREE**
+- ✅ **Privacy-focused** (offline processing)
+- ✅ **No API limits**
+- ✅ **4x faster** than OpenAI Whisper
+- ✅ **High accuracy** multilingual support
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd ai-meeting-transcription
+#### **Deepgram Nova-2** (Optional - Cloud)
+
+- ✅ **Highest accuracy** available
+- ✅ **Ultra-fast** cloud processing
+- ✅ **Advanced speaker diarization**
+- ✅ **Smart formatting** and punctuation
+- ✅ **12,000 minutes/month FREE** tier
+- 💰 **Paid** service after free quota
+
+````
+
+### **Option 2: PowerShell**
+```powershell
+# Klik kanan → Run with PowerShell:
+START_APP.ps1
+````
+
+### **Option 3: Manual (Step-by-step)**
+
+```cmd
+# Terminal 1 - Backend
+cd ai-backend
+python ffmpeg_free_main.py
+
+# Terminal 2 - Frontend
+cd frontend-ai
+npm run dev
+
+# Browser: http://localhost:3001
 ```
 
-2. Install dependencies:
+## 📋 Requirements
+
+- **Python 3.8+** dengan pip
+- **Node.js 16+** dengan npm
+- **Internet connection** (untuk AI models)
+
+## 📁 Project Structure (Cleaned)
+
+```
+voiceNote/
+├── 🚀 START_APP.bat           # Quick launcher (Windows)
+├── 🚀 START_APP.ps1           # Quick launcher (PowerShell)
+├── ai-backend/                # Python FastAPI backend
+│   ├── ffmpeg_free_main.py    # Main backend server
+│   ├── requirements.txt       # Python dependencies
+│   └── .env                   # API keys configuration
+├── frontend-ai/               # React frontend application
+│   ├── src/                   # React source code
+│   ├── package.json           # Node.js dependencies
+│   └── public/                # Static assets
+├── demo/                      # Demo & presentation materials
+│   ├── stakeholder-presentation.html  # Interactive slides
+│   ├── integration-test.html          # Tech testing interface
+│   ├── docs/                          # Documentation
+│   └── scripts/                       # Utility scripts
+├── results/                   # AI processing results
+└── uploads/                   # Uploaded audio files
+```
+
+## 🎯 How to Use
+
+1. **Start the app:** Run `START_APP.bat`
+2. **Upload audio:** Drag & drop your meeting recording
+3. **Wait for AI:** Real-time progress tracking
+4. **Get results:** Summary, action items, transcript
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```env
+# Required for AI features
+MISTRAL_API_KEY=your_mistral_api_key_here
+HUGGING_FACE_TOKEN=your_hugging_face_token_here
+
+# Transcription Engine Configuration
+TRANSCRIPTION_ENGINE=faster-whisper  # or "deepgram"
+
+# Optional: Deepgram API (for cloud transcription)
+DEEPGRAM_API_KEY=your_deepgram_api_key_here
+```
+
+### Transcription Engine Selection
+
+#### Option 1: Faster-Whisper (Default - FREE)
+
+```env
+TRANSCRIPTION_ENGINE=faster-whisper
+```
+
+- ✅ No additional API keys needed
+- ✅ Completely free and private
+- ✅ Works offline
+
+#### Option 2: Deepgram (Premium - PAID)
+
+```env
+TRANSCRIPTION_ENGINE=deepgram
+DEEPGRAM_API_KEY=your_key_here
+```
+
+- 🆓 12,000 minutes/month FREE
+- ⚡ Ultra-fast cloud processing
+- 🎯 Highest accuracy available
+- 📊 Advanced speaker diarization
+
+### Getting API Keys
+
+1. **Mistral AI**: [mistral.ai](https://mistral.ai) → Console → API Keys
+2. **Hugging Face**: [huggingface.co](https://huggingface.co) → Settings → Tokens
+3. **Deepgram** (optional): [deepgram.com](https://deepgram.com) → API Keys
+
+### Dynamic Engine Switching
+
+You can change transcription engines at runtime via API:
+
 ```bash
+# Switch to Deepgram
+curl -X POST "http://localhost:8000/api/config/engine" \
+  -H "Content-Type: application/json" \
+  -d '"deepgram"'
+
+# Switch back to Faster-Whisper
+curl -X POST "http://localhost:8000/api/config/engine" \
+  -H "Content-Type: application/json" \
+  -d '"faster-whisper"'
+
+# Check current configuration
+curl "http://localhost:8000/api/config"
+```
+
+## 🎬 Demo Materials
+
+- **Stakeholder Presentation:** `demo/stakeholder-presentation.html`
+- **Technical Test:** `demo/integration-test.html`
+- **Documentation:** `demo/docs/`
+
+## 🆘 Troubleshooting
+
+**Backend not starting?**
+
+```cmd
+cd ai-backend
+pip install -r requirements.txt
+python ffmpeg_free_main.py
+```
+
+**Frontend not starting?**
+
+```cmd
+cd frontend-ai
 npm install
-```
-
-3. Start the development server:
-```bash
 npm run dev
 ```
 
-4. Open your browser and navigate to `http://localhost:3000`
+**Port conflicts?**
 
-## Available Scripts
+- Backend: http://localhost:8002
+- Frontend: http://localhost:3001
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
+## 📊 Supported Formats
 
-## Project Structure
+- **Audio:** WAV, MP3, M4A, FLAC
+- **Video:** MP4, AVI, MOV (audio extracted)
+- **Size:** Up to 500MB
+- **Duration:** Up to 4 hours
 
-```
-src/
-├── components/           # React components
-│   ├── AudioPlayer.tsx
-│   ├── TranscriptItem.tsx
-│   ├── TranscriptTab.tsx
-│   ├── SummaryTab.tsx
-│   ├── AnalyticsTab.tsx
-│   ├── UploadSection.tsx
-│   └── ProcessingSection.tsx
-├── data/                # Sample data and constants
-│   └── sampleData.ts
-├── utils/               # Utility functions
-│   └── helpers.ts
-├── types.ts             # TypeScript type definitions
-├── App.tsx              # Main application component
-├── main.tsx             # Application entry point
-└── index.css            # Global styles
-```
+## 🎉 Ready to Demo!
 
-## Component Architecture
-
-### Main Components
-
-- **App.tsx**: Main application component managing global state
-- **UploadSection**: File upload with drag & drop functionality
-- **ProcessingSection**: AI processing simulation with progress bar
-- **AudioPlayer**: Audio controls with seek functionality
-- **TranscriptTab**: Transcript display with search and filtering
-- **SummaryTab**: Meeting summary, action items, and decisions
-- **AnalyticsTab**: Speaker statistics and meeting insights
-
-### Key Features Implementation
-
-#### State Management
-The application uses React's `useState` and `useEffect` hooks for state management, with a centralized state object containing:
-- Upload/processing/results visibility
-- Active tab selection
-- Search query and filters
-- Transcript data and filtered results
-
-#### Audio Player Integration
-The audio player component provides:
-- Play/pause functionality
-- Progress bar with seek capability
-- Time display (current/total)
-- Integration with transcript timestamps
-
-#### Search and Filtering
-Advanced filtering capabilities:
-- Text search across transcript content
-- Speaker-based filtering
-- Tag-based filtering (action items, decisions, etc.)
-- Real-time filter application
-
-## Future Enhancements
-
-- [ ] Real AI integration (Whisper AI for transcription)
-- [ ] Speaker diarization with actual ML models
-- [ ] Cloud storage integration
-- [ ] Real-time collaboration features
-- [ ] Export functionality (PDF, DOCX)
-- [ ] Meeting scheduling integration
-- [ ] Multiple language support
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if necessary
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License.
+Your AI Meeting Transcription system is now **clean, organized, and ready to use**!

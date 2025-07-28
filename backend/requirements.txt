@@ -1,0 +1,21 @@
+# AI Processing Dependencies
+faster-whisper==1.1.1
+deepgram-sdk==4.8.0
+pyannote.audio==3.1.1
+mistralai==0.4.2
+torch==2.1.1
+torchaudio==2.1.1
+
+# Web Framework
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+
+# File Processing
+ffmpeg-python==0.2.0
+pydub==0.25.1
+
+# Utilities
+python-dotenv==1.0.0
+aiofiles==23.2.1
+httpx==0.25.2

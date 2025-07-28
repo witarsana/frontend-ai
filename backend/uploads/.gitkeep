@@ -1,0 +1,17 @@
+# Upload Directory
+
+Directory ini digunakan untuk menyimpan file audio yang diupload untuk diproses.
+
+File-file akan otomatis dibersihkan setelah processing selesai.
+
+## Supported Formats
+- MP3, WAV, MP4, M4A, AAC, FLAC, OGG
+- Maximum file size: 150MB
+- Audio akan dikonversi ke format yang sesuai untuk AI processing
+
+## File Naming Convention
+- `job_{timestamp}_{random}.{ext}` - Original uploaded file
+- `job_{timestamp}_{random}_temp.wav` - Temporary converted file  
+- `job_{timestamp}_{random}_processed.wav` - Final processed audio
+
+File temporary akan dihapus otomatis setelah processing.
