@@ -49,6 +49,16 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# Large media files
+backend/source/*.mp3
+backend/source/*.wav
+backend/source/*.mp4
+backend/source/*.avi
+backend/source/*.mov
+backend/results/*.mp3
+backend/results/*.wav
+backend/results/*.mp4
+
 # Runtime data
 pids
 *.pid
