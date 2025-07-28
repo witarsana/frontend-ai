@@ -5,6 +5,7 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 ## 🌟 Features
 
 ### 🎯 Core Capabilities
+
 - **Audio Transcription**: High-quality speech-to-text using OpenAI Whisper
 - **Speaker Diarization**: Automatic speaker identification and separation
 - **AI-Powered Summaries**: Intelligent meeting analysis using Mistral AI
@@ -13,6 +14,7 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - **Real-time Processing**: Live progress tracking during transcription
 
 ### 🔧 Technical Features
+
 - **Dual Transcription Engine**: Choose between Faster-Whisper (local/free) or Deepgram (cloud/paid)
 - **FFmpeg-Free Processing**: Uses librosa and pydub for audio processing
 - **Flexible Audio Formats**: Support for MP3, MP4, AAC, M4A, WAV
@@ -22,7 +24,7 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 
 ### 🚀 Transcription Engines
 
-#### **Faster-Whisper** (Local Engine)
+#### **Faster-Whisper** (Default - Local Engine)
 - ✅ **Completely FREE** - No API costs
 - ✅ **Privacy-focused** - Offline processing
 - ✅ **No API limits** - Process unlimited audio
@@ -31,7 +33,7 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - ✅ **Large file support** - No size/duration limits
 - 🎯 **Best for**: Privacy, cost control, large files
 
-#### **Deepgram Nova-2** (Cloud Engine) 
+#### **Deepgram Nova-2** (Optional - Cloud Engine)
 - ✅ **Highest accuracy** available
 - ✅ **Ultra-fast** cloud processing  
 - ✅ **Advanced speaker diarization** - AI-powered speaker detection
@@ -47,21 +49,21 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - **Multi-factor Analysis**: Time gaps, text patterns, response indicators
 - **No Static Assumptions**: Works for podcasts, meetings, interviews, discussions
 - **Conversation Flow**: Natural speaker switching based on dialogue patterns
-```
 
 ### **Option 2: PowerShell**
 ```powershell
 # Klik kanan → Run with PowerShell:
 START_APP.ps1
-```
+````
 
 ### **Option 3: Manual (Step-by-step)**
+
 ```cmd
 # Terminal 1 - Backend
 cd ai-backend
 python ffmpeg_free_main.py
 
-# Terminal 2 - Frontend  
+# Terminal 2 - Frontend
 cd frontend-ai
 npm run dev
 
@@ -107,6 +109,7 @@ voiceNote/
 ## 🔧 Configuration
 
 ### Environment Variables
+
 Copy `.env.example` to `.env` and configure:
 
 ```env
@@ -124,18 +127,22 @@ DEEPGRAM_API_KEY=your_deepgram_api_key_here
 ### Transcription Engine Selection
 
 #### Option 1: Faster-Whisper (Default - FREE)
+
 ```env
 TRANSCRIPTION_ENGINE=faster-whisper
 ```
+
 - ✅ No additional API keys needed
 - ✅ Completely free and private
 - ✅ Works offline
 
 #### Option 2: Deepgram (Premium - PAID)
+
 ```env
 TRANSCRIPTION_ENGINE=deepgram
 DEEPGRAM_API_KEY=your_key_here
 ```
+
 - 🆓 12,000 minutes/month FREE
 - ⚡ Ultra-fast cloud processing
 - 🎯 Highest accuracy available
@@ -144,7 +151,7 @@ DEEPGRAM_API_KEY=your_key_here
 ### Getting API Keys
 
 1. **Mistral AI**: [mistral.ai](https://mistral.ai) → Console → API Keys
-2. **Hugging Face**: [huggingface.co](https://huggingface.co) → Settings → Tokens  
+2. **Hugging Face**: [huggingface.co](https://huggingface.co) → Settings → Tokens
 3. **Deepgram** (optional): [deepgram.com](https://deepgram.com) → API Keys
 
 ### Dynamic Engine Switching
@@ -157,7 +164,7 @@ curl -X POST "http://localhost:8000/api/config/engine" \
   -H "Content-Type: application/json" \
   -d '"deepgram"'
 
-# Switch back to Faster-Whisper  
+# Switch back to Faster-Whisper
 curl -X POST "http://localhost:8000/api/config/engine" \
   -H "Content-Type: application/json" \
   -d '"faster-whisper"'
@@ -175,6 +182,7 @@ curl "http://localhost:8000/api/config"
 ## 🆘 Troubleshooting
 
 **Backend not starting?**
+
 ```cmd
 cd ai-backend
 pip install -r requirements.txt
@@ -182,6 +190,7 @@ python ffmpeg_free_main.py
 ```
 
 **Frontend not starting?**
+
 ```cmd
 cd frontend-ai
 npm install
@@ -189,6 +198,7 @@ npm run dev
 ```
 
 **Port conflicts?**
+
 - Backend: http://localhost:8002
 - Frontend: http://localhost:3001
 

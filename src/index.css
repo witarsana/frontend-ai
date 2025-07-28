@@ -1,0 +1,351 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f8fafc;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.header {
+  background: #ffffff;
+  color: #1f2937;
+  padding: 32px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header h1 {
+  font-size: 2.25rem;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.header p {
+  font-size: 1rem;
+  color: #6b7280;
+}
+
+.main-content {
+  padding: 30px;
+}
+
+.upload-section {
+  background: #f9fafb;
+  border: 2px dashed #d1d5db;
+  border-radius: 12px;
+  padding: 48px 32px;
+  text-align: center;
+  margin-bottom: 32px;
+  transition: all 0.2s ease;
+}
+
+.upload-section:hover {
+  border-color: #9ca3af;
+  background: #f3f4f6;
+}
+
+.upload-section.dragover {
+  border-color: #6b7280;
+  background: #f3f4f6;
+  transform: scale(1.01);
+}
+
+.upload-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  color: #9ca3af;
+}
+
+.upload-button {
+  background: #374151;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-button:hover {
+  background: #1f2937;
+  transform: translateY(-1px);
+}
+
+.processing {
+  display: none;
+  text-align: center;
+  padding: 32px;
+  background: #f9fafb;
+  border-radius: 12px;
+  margin-bottom: 32px;
+  border: 1px solid #e5e7eb;
+}
+
+.processing.active {
+  display: block;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top: 3px solid #6b7280;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.results {
+  display: none;
+}
+
+.results.active {
+  display: block;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 24px;
+  background: #f9fafb;
+  border-radius: 8px 8px 0 0;
+}
+
+.tab {
+  padding: 12px 20px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.tab.active {
+  color: #374151;
+  border-bottom-color: #374151;
+  background: white;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.summary-box {
+  background: #f9fafb;
+  border-left: 4px solid #6b7280;
+  padding: 24px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+.summary-box h3 {
+  color: #374151;
+  margin-bottom: 12px;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.transcript-item {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+.transcript-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: #d1d5db;
+}
+
+.speaker-info {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.speaker-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+}
+
+.speaker-1 { background: #6b7280; }
+.speaker-2 { background: #9ca3af; }
+.speaker-3 { background: #4b5563; }
+
+.timestamp {
+  background: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.timestamp:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.tags {
+  margin-top: 10px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  margin-right: 8px;
+  margin-bottom: 5px;
+}
+
+.tag.action-item { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.tag.decision { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.tag.question { background: #f0f9ff; color: #1e40af; border: 1px solid #dbeafe; }
+.tag.follow-up { background: #fffbeb; color: #b45309; border: 1px solid #fed7aa; }
+
+.controls {
+  background: #f9fafb;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+.search-box {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  margin-bottom: 16px;
+  transition: border-color 0.2s ease;
+}
+
+.search-box:focus {
+  outline: none;
+  border-color: #6b7280;
+}
+
+.filters {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #6b7280;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-btn.active {
+  background: #374151;
+  color: white;
+  border-color: #374151;
+}
+
+.audio-player {
+  background: #374151;
+  color: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.play-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #6b7280;
+  border: none;
+  color: white;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.play-btn:hover {
+  background: #9ca3af;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: #4b5563;
+  border-radius: 2px;
+  position: relative;
+  cursor: pointer;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #9ca3af;
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.1s ease;
+}
+
+.time-display {
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .header h1 { font-size: 2rem; }
+  .main-content { padding: 20px; }
+  .filters { justify-content: center; }
+}
