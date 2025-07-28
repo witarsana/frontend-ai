@@ -225,22 +225,19 @@ async def get_processing_status(job_id: str):
 
 @app.get("/api/result/{job_id}")
 async def get_result(job_id: str):
-    if job_id not in processing_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    job_status = processing_jobs[job_id]
-    if job_status["status"] != "completed":
-        raise HTTPException(status_code=400, detail=f"Job status: {job_status['status']}")
-    
+    # Check results file directly from filesystem
     results_dir = os.path.join(os.path.dirname(__file__), "results")
     result_file = os.path.join(results_dir, f"{job_id}_result.json")
+    
     if not os.path.exists(result_file):
         raise HTTPException(status_code=404, detail="Result file not found")
     
-    with open(result_file, 'r', encoding='utf-8') as f:
-        result = json.load(f)
-    
-    return result
+    try:
+        with open(result_file, 'r', encoding='utf-8') as f:
+            result = json.load(f)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading result file: {str(e)}")
 
 @app.get("/api/config")
 async def get_config():

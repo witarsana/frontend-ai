@@ -1,6 +1,6 @@
 // API configuration for connecting to Python FastAPI backend
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8002', // FFmpeg-free backend
+  BASE_URL: 'http://localhost:8000', // FFmpeg-free backend
   ENDPOINTS: {
     UPLOAD: '/api/upload-and-process',
     STATUS: '/api/status',
