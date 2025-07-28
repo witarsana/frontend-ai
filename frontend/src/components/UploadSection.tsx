@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { validateFile } from '../utils/helpers';
+import EngineSelector from './EngineSelector';
 
 interface UploadSectionProps {
   onFileSelect: (file: File) => void;
@@ -47,27 +48,37 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
   };
 
   return (
-    <div 
-      className="upload-section"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      <div className="upload-icon">📁</div>
-      <h3>Drop file audio/video di sini atau klik untuk upload</h3>
-      <p style={{ margin: '15px 0', color: '#6b7280' }}>
-        Mendukung: MP3, WAV, MP4, MKV, M4A (Max: 100MB)
-      </p>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*,video/*"
-        style={{ display: 'none' }}
-        onChange={handleFileInputChange}
+    <div className="upload-container">
+      {/* File Upload - STEP 1 */}
+      <div 
+        className="upload-section"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <div className="upload-icon">📁</div>
+        <h3>Drop file audio/video di sini atau klik untuk upload</h3>
+        <p style={{ margin: '15px 0', color: '#6b7280' }}>
+          Mendukung: MP3, WAV, MP4, MKV, M4A (Max: 100MB)
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*,video/*"
+          style={{ display: 'none' }}
+          onChange={handleFileInputChange}
+        />
+        <button className="upload-button" onClick={handleUploadClick}>
+          📂 Pilih File
+        </button>
+      </div>
+      
+      {/* Engine Selection - STEP 2 */}
+      <EngineSelector 
+        onEngineChange={(engine) => {
+          console.log('Engine changed to:', engine);
+        }}
       />
-      <button className="upload-button" onClick={handleUploadClick}>
-        📂 Pilih File
-      </button>
     </div>
   );
 };

@@ -9,20 +9,26 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "backend": "cd ai-backend && python ffmpeg_free_main.py",
-    "backend:setup": "cd ai-backend && python -m venv ../.venv && source ../.venv/bin/activate && pip install -r requirements.txt",
+    "backend": "cd ../backend && python ffmpeg_free_main.py",
+    "backend:setup": "cd ../backend && python -m venv ../.venv && source ../.venv/bin/activate && pip install -r requirements.txt",
     "dev:full": "concurrently \"npm run backend\" \"npm run dev\"",
     "start": "npm run dev:full",
     "setup": "npm install && npm run backend:setup",
-    "clean": "rm -rf node_modules dist ai-backend/uploads/* ai-backend/results/*"
+    "clean": "rm -rf node_modules dist ../backend/uploads/* ../backend/results/*"
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.4",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@typescript-eslint/eslint-plugin": "^6.14.0",
@@ -32,8 +38,10 @@
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "jsdom": "^26.1.0",
     "typescript": "^5.2.2",
-    "vite": "^5.0.8"
+    "vite": "^5.0.8",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=16.0.0",

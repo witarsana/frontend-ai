@@ -1,10 +1,14 @@
 // API configuration for connecting to Python FastAPI backend
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8000', // FFmpeg-free backend
+  BASE_URL: 'http://localhost:8002', // FFmpeg-free backend
   ENDPOINTS: {
     UPLOAD: '/api/upload-and-process',
     STATUS: '/api/status',
-    RESULT: '/api/result'
+    RESULT: '/api/result',
+    CONFIG: '/api/config',
+    ENGINES: '/api/engines',
+    SET_ENGINE: '/api/config/engine',
+    COMPLETED_JOBS: '/api/jobs/completed'
   }
 };
 
@@ -24,6 +28,22 @@ export interface APIStatusResponse {
   error?: string;
   word_count?: number;
   duration?: number;
+  auto_fallback?: {
+    reason: string;
+    message: string;
+    details?: {
+      file_size_mb: number;
+      duration_minutes: number;
+      max_size_mb: number;
+      max_duration_min: number;
+    };
+    recommendation?: string;
+  };
+  timeout_fallback?: {
+    reason: string;
+    message: string;
+    original_error?: string;
+  };
 }
 
 export interface APIResultResponse {
@@ -56,6 +76,63 @@ export interface APIResultResponse {
     channels: number;
   };
   processed_at: string;
+}
+
+export interface CompletedJob {
+  job_id: string;
+  filename: string;
+  processed_at: string;
+  duration: number;
+  word_count: number;
+  summary_preview?: string;
+}
+
+export interface CompletedJobsResponse {
+  jobs: CompletedJob[];
+}
+
+// Engine Configuration Types
+export interface EngineConfig {
+  transcription_engine: string;
+  engines_available: {
+    faster_whisper: boolean;
+    deepgram: boolean;
+  };
+  deepgram_sdk_available: boolean;
+  fallback_enabled: boolean;
+}
+
+export interface EngineInfo {
+  name: string;
+  type: 'local' | 'cloud';
+  cost: 'free' | 'paid';
+  speed: 'fast' | 'very_fast';
+  accuracy: 'high' | 'very_high';
+  languages: string;
+  features: string[];
+  available: boolean;
+  quota?: string;
+}
+
+export interface EnginesResponse {
+  engines: {
+    'faster-whisper': EngineInfo;
+    deepgram: EngineInfo;
+  };
+  current_engine: string;
+  recommendations: {
+    for_privacy: string;
+    for_accuracy: string;
+    for_cost: string;
+    for_speed: string;
+  };
+}
+
+export interface EngineChangeResponse {
+  status: string;
+  previous_engine: string;
+  current_engine: string;
+  message: string;
 }
 
 // API service class
@@ -100,6 +177,17 @@ export class AITranscriptionAPI {
 
     if (!response.ok) {
       throw new Error(`Get result failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Get list of completed jobs
+  async getCompletedJobs(): Promise<CompletedJobsResponse> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.COMPLETED_JOBS}`);
+
+    if (!response.ok) {
+      throw new Error(`Get completed jobs failed: ${response.statusText}`);
     }
 
     return response.json();
@@ -208,4 +296,49 @@ export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
     duration: apiResult.duration,
     jobId: apiResult.job_id
   };
+}
+
+// Engine Configuration Methods
+export class EngineAPI {
+  private baseUrl: string;
+
+  constructor(baseUrl: string = API_CONFIG.BASE_URL) {
+    this.baseUrl = baseUrl;
+  }
+
+  // Get current engine configuration
+  async getConfig(): Promise<EngineConfig> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.CONFIG}`);
+    
+    if (!response.ok) {
+      throw new Error(`Config fetch failed: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // Get all available engines
+  async getEngines(): Promise<EnginesResponse> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.ENGINES}`);
+    
+    if (!response.ok) {
+      throw new Error(`Engines fetch failed: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // Switch transcription engine
+  async setEngine(engine: 'faster-whisper' | 'deepgram'): Promise<EngineChangeResponse> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.SET_ENGINE}?engine=${engine}`, {
+      method: 'POST',
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `Engine change failed: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
 }

@@ -45,6 +45,12 @@ body {
   padding: 30px;
 }
 
+/* Upload Container */
+.upload-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
 .upload-section {
   background: #f9fafb;
   border: 2px dashed #d1d5db;

@@ -5,10 +5,12 @@ import { aiAPI, convertAPIResultToFrontendFormat, APIStatusResponse } from './se
 
 import UploadSection from './components/UploadSection';
 import ProcessingSection from './components/ProcessingSection';
+import ResultsHistory from './components/ResultsHistory';
 import AudioPlayer from './components/AudioPlayer';
 import SummaryTab from './components/SummaryTab';
 import TranscriptTab from './components/TranscriptTab';
 import AnalyticsTab from './components/AnalyticsTab';
+import EngineSelector from './components/EngineSelector';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>({
@@ -28,6 +30,8 @@ const App: React.FC = () => {
     status: ''
   });
 
+  // Navigation states
+  const [currentView, setCurrentView] = useState<'upload' | 'history' | 'results'>('upload');
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [apiData, setApiData] = useState<any>(null);
   const [useRealAPI, setUseRealAPI] = useState<boolean>(true);
@@ -183,7 +187,9 @@ const App: React.FC = () => {
           setProcessingState({
             isProcessing: status.status !== 'completed',
             progress: Math.max(progressValue, status.progress),
-            status: statusMessage
+            status: statusMessage,
+            autoFallback: status.auto_fallback,
+            timeoutFallback: status.timeout_fallback
           });
         }
       );
@@ -192,7 +198,7 @@ const App: React.FC = () => {
       const frontendData = convertAPIResultToFrontendFormat(result);
       setApiData(frontendData);
 
-      // Update transcript in app state
+      // Update transcript in app state and switch to results view
       setAppState(prev => ({ 
         ...prev, 
         transcript: frontendData.transcript,
@@ -200,6 +206,8 @@ const App: React.FC = () => {
         showProcessing: false, 
         showResults: true 
       }));
+
+      setCurrentView('results'); // Switch to results view
 
       setProcessingState({
         isProcessing: false,
@@ -264,6 +272,7 @@ const App: React.FC = () => {
             showProcessing: false, 
             showResults: true 
           }));
+          setCurrentView('results'); // Switch to results view
         }, 1000);
       }
     }, 1500);
@@ -289,6 +298,54 @@ const App: React.FC = () => {
   const handleRetryWithAPI = () => {
     setUseRealAPI(true);
     checkAPIConnection();
+  };
+
+  const handleNavigateToUpload = () => {
+    setCurrentJobId(null);
+    setApiData(null);
+    setCurrentView('upload');
+    setAppState({
+      showUpload: true,
+      showProcessing: false,
+      showResults: false,
+      activeTab: 'summary',
+      searchQuery: '',
+      activeFilter: 'all',
+      transcript: sampleTranscript,
+      filteredTranscript: sampleTranscript
+    });
+    setProcessingState({
+      isProcessing: false,
+      progress: 0,
+      status: ''
+    });
+  };
+
+  const handleNavigateToHistory = () => {
+    setCurrentView('history');
+  };
+
+  const handleSelectJobFromHistory = async (historyJobId: string) => {
+    setCurrentJobId(historyJobId);
+    setCurrentView('results');
+    
+    // Fetch the results for this job
+    try {
+      const result = await aiAPI.getResult(historyJobId);
+      const frontendData = convertAPIResultToFrontendFormat(result);
+      setApiData(frontendData);
+      
+      // Update transcript in app state
+      setAppState(prev => ({ 
+        ...prev, 
+        transcript: frontendData.transcript,
+        filteredTranscript: frontendData.transcript,
+        showResults: true 
+      }));
+    } catch (error) {
+      console.error('Failed to fetch job results:', error);
+      // Handle error - maybe show notification or fallback
+    }
   };
 
   const renderTabContent = () => {
@@ -334,6 +391,64 @@ const App: React.FC = () => {
         <h1>📄 AI Meeting Transcription</h1>
         <p>Upload audio/video → Transkrip dengan Speaker Diarization → Summary & Auto Tagging</p>
         
+        {/* Navigation Bar */}
+        <div className="navigation-bar" style={{
+          display: 'flex',
+          gap: '10px',
+          marginTop: '15px',
+          marginBottom: '10px'
+        }}>
+          <button 
+            onClick={handleNavigateToUpload}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: currentView === 'upload' ? '#007acc' : '#f0f0f0',
+              color: currentView === 'upload' ? 'white' : '#333',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            🎤 Upload
+          </button>
+          <button 
+            onClick={handleNavigateToHistory}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: currentView === 'history' ? '#007acc' : '#f0f0f0',
+              color: currentView === 'history' ? 'white' : '#333',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            📁 History
+          </button>
+          {currentJobId && (
+            <button 
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentView === 'results' ? '#007acc' : '#f0f0f0',
+                color: currentView === 'results' ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+              onClick={() => setCurrentView('results')}
+            >
+              📊 Results
+            </button>
+          )}
+        </div>
+        
+        {/* Compact Engine Selector in Header */}
+        <EngineSelector 
+          compact={true}
+          onEngineChange={() => {
+            console.log('Engine changed');
+          }} 
+        />
+        
         {/* API Status Indicator */}
         <div className="api-status" style={{ 
           padding: '8px 12px', 
@@ -369,17 +484,23 @@ const App: React.FC = () => {
       </div>
 
       <div className="main-content">
-        {appState.showUpload && (
+        {/* Processing Section - Show on all views when processing */}
+        <ProcessingSection processingState={processingState} />
+        
+        {/* Conditional rendering based on currentView */}
+        {currentView === 'upload' && (
           <UploadSection onFileSelect={handleFileSelect} />
         )}
 
-        <ProcessingSection processingState={processingState} />
+        {currentView === 'history' && (
+          <ResultsHistory onSelectJob={handleSelectJobFromHistory} />
+        )}
 
-        {appState.showResults && (
+        {currentView === 'results' && currentJobId && (
           <div className="results active">
             <AudioPlayer 
               onSeekToTime={handleSeekToTime} 
-              audioUrl={currentJobId ? `http://localhost:8000/api/audio/${currentJobId}` : undefined}
+              audioUrl={`http://localhost:8002/api/audio/${currentJobId}`}
               duration={apiData?.duration}
             />
 
