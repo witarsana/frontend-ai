@@ -22,20 +22,31 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 
 ### 🚀 Transcription Engines
 
-#### **Faster-Whisper** (Default - Local)
-- ✅ **Completely FREE**
-- ✅ **Privacy-focused** (offline processing)
-- ✅ **No API limits**
+#### **Faster-Whisper** (Local Engine)
+- ✅ **Completely FREE** - No API costs
+- ✅ **Privacy-focused** - Offline processing
+- ✅ **No API limits** - Process unlimited audio
 - ✅ **4x faster** than OpenAI Whisper
 - ✅ **High accuracy** multilingual support
+- ✅ **Large file support** - No size/duration limits
+- 🎯 **Best for**: Privacy, cost control, large files
 
-#### **Deepgram Nova-2** (Optional - Cloud)
+#### **Deepgram Nova-2** (Cloud Engine) 
 - ✅ **Highest accuracy** available
-- ✅ **Ultra-fast** cloud processing
-- ✅ **Advanced speaker diarization**
-- ✅ **Smart formatting** and punctuation
+- ✅ **Ultra-fast** cloud processing  
+- ✅ **Advanced speaker diarization** - AI-powered speaker detection
+- ✅ **Smart formatting** - Auto punctuation & capitalization
 - ✅ **12,000 minutes/month FREE** tier
+- ✅ **Real-time processing** - Streaming support
 - 💰 **Paid** service after free quota
+- ⚠️ **Auto-fallback** to Faster-Whisper for files >45min or >80MB
+- 🎯 **Best for**: Speed, accuracy, professional formatting
+
+### 🧠 Dynamic Speaker Detection
+- **Adaptive Algorithm**: Automatically detects 2-4 speakers based on conversation patterns
+- **Multi-factor Analysis**: Time gaps, text patterns, response indicators
+- **No Static Assumptions**: Works for podcasts, meetings, interviews, discussions
+- **Conversation Flow**: Natural speaker switching based on dialogue patterns
 ```
 
 ### **Option 2: PowerShell**

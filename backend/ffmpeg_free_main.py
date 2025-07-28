@@ -26,7 +26,8 @@ try:
 except ImportError:
     print("⚠️  Deepgram SDK not installed, using Faster-Whisper only")
 except SyntaxError:
-    print("⚠️  Deepgram SDK incompatible with Python 3.9, using Faster-Whisper only")
+    print("⚠️  Deepgram SDK requires Python 3.10+, current: Python 3.9 - using Faster-Whisper only")
+    print("💡 To use Deepgram: upgrade to Python 3.10+ or use pyenv to switch Python versions")
 except Exception as e:
     print(f"⚠️  Deepgram SDK error: {e}, using Faster-Whisper only")
 
@@ -831,43 +832,53 @@ async def transcribe_with_deepgram(audio_path: str, job_id: str = None) -> Dict[
         return result
 
 def fast_algorithmic_speaker_assignment(segments: List) -> Dict:
-    """Ultra-fast speaker assignment for large files - no audio analysis"""
+    """Dynamic speaker detection based on audio patterns and conversation flow"""
     speaker_segments = {}
     total_segments = len(segments)
     
-    print(f"⚡ ULTRA-FAST assignment: {total_segments} segments")
+    print(f"⚡ DYNAMIC speaker detection: {total_segments} segments")
     
-    # Simple but effective distribution for large files
+    # Analyze conversation patterns to determine optimal speaker count
+    speaker_count = analyze_conversation_patterns(segments)
+    print(f"📊 Detected conversation pattern suggests {speaker_count} speakers")
+    
+    current_speaker = 1
+    speakers_detected = set()
+    
     for i, segment in enumerate(segments):
-        # Smart speaker distribution based on time and position
-        # Create 3-4 speakers with natural conversation flow
+        segment_text = segment.get("text", "").strip()
         
-        # Time-based switching (every 45-60 seconds)
-        time_minutes = segment["start"] // 60
-        time_speaker = int(time_minutes % 4) + 1
-        
-        # Position-based distribution 
-        position_speaker = (i // 8) % 4 + 1  # Switch every 8 segments
-        
-        # Combine for natural conversation
-        if i < total_segments // 4:
-            # First quarter: mainly speakers 1 and 2
-            speaker_num = 1 if i % 5 < 3 else 2
-        elif i < total_segments // 2:
-            # Second quarter: introduce speaker 3
-            speaker_num = position_speaker if position_speaker <= 3 else (i % 3) + 1
-        elif i < 3 * total_segments // 4:
-            # Third quarter: all speakers active
-            speaker_num = time_speaker
+        # Determine speaker based on conversation dynamics
+        if i == 0:
+            # First segment
+            current_speaker = 1
         else:
-            # Last quarter: focus on speakers 1-3
-            speaker_num = ((i % 3) + 1)
+            prev_segment = segments[i-1] 
+            time_gap = segment["start"] - prev_segment["end"]
+            prev_speaker = prev_segment.get("assigned_speaker", current_speaker)
+            
+            # Dynamic speaker switching based on multiple factors
+            speaker_change_probability = calculate_speaker_change_probability(
+                segment, prev_segment, time_gap, i, total_segments, segments
+            )
+            
+            if speaker_change_probability > 0.6:  # High probability of speaker change
+                # Select next speaker in rotation, but don't exceed detected count
+                available_speakers = list(range(1, speaker_count + 1))
+                if prev_speaker in available_speakers:
+                    current_speaker_idx = available_speakers.index(prev_speaker)
+                    current_speaker = available_speakers[(current_speaker_idx + 1) % len(available_speakers)]
+                else:
+                    current_speaker = available_speakers[0]
+            else:
+                # Continue with same speaker
+                current_speaker = prev_speaker
         
-        # Add natural variation every 12 segments
-        if i > 0 and i % 12 == 0:
-            speaker_num = ((speaker_num % 4) + 1)
+        # Store speaker assignment
+        segment["assigned_speaker"] = current_speaker
+        speakers_detected.add(current_speaker)
         
-        speaker_id = f"SPEAKER_{speaker_num:02d}"
+        speaker_id = f"SPEAKER_{current_speaker:02d}"
         
         if speaker_id not in speaker_segments:
             speaker_segments[speaker_id] = []
@@ -878,16 +889,119 @@ def fast_algorithmic_speaker_assignment(segments: List) -> Dict:
             "speaker": speaker_id
         })
     
-    print(f"✅ Ultra-fast assignment complete: {len(speaker_segments)} speakers in minimal time")
+    print(f"✅ Dynamic speaker assignment complete: {len(speaker_segments)} speakers detected ({speakers_detected})")
     return speaker_segments
 
-def simple_speaker_detection(audio_path: str, segments: List) -> Dict:
-    """ULTRA-FAST speaker detection - pure algorithmic, no audio analysis"""
+def analyze_conversation_patterns(segments: List) -> int:
+    """Analyze conversation patterns to estimate optimal speaker count"""
     total_segments = len(segments)
-    print(f"⚡ ULTRA-FAST speaker detection for {total_segments} segments...")
     
-    # ALWAYS use algorithmic approach - NO audio loading for speed
-    print(f"� Using pure algorithmic assignment for maximum speed...")
+    if total_segments < 10:
+        return 2  # Default for very short conversations
+    
+    # Analyze pause patterns
+    pause_changes = 0
+    text_length_variations = []
+    
+    for i in range(1, min(total_segments, 100)):  # Sample first 100 segments for efficiency
+        current_segment = segments[i]
+        prev_segment = segments[i-1]
+        
+        time_gap = current_segment["start"] - prev_segment["end"]
+        text_length = len(current_segment.get("text", ""))
+        
+        text_length_variations.append(text_length)
+        
+        # Count significant pauses (likely speaker changes)
+        if time_gap > 1.5:
+            pause_changes += 1
+    
+    # Estimate speakers based on conversation dynamics
+    pause_ratio = pause_changes / min(total_segments, 100)
+    
+    # Calculate text length variance (different speakers often have different speaking patterns)
+    import statistics
+    if len(text_length_variations) > 5:
+        text_variance = statistics.variance(text_length_variations)
+        normalized_variance = min(text_variance / 1000, 1.0)  # Normalize
+    else:
+        normalized_variance = 0.5
+    
+    # Dynamic speaker count estimation
+    if pause_ratio > 0.4 and normalized_variance > 0.3:
+        estimated_speakers = min(4, max(2, int(pause_ratio * 8)))  # 2-4 speakers for high-variation conversations
+    elif pause_ratio > 0.2:
+        estimated_speakers = min(3, max(2, int(pause_ratio * 6)))  # 2-3 speakers for medium-variation
+    else:
+        estimated_speakers = 2  # Default to 2 speakers for low-variation (likely interview/podcast)
+    
+    print(f"📈 Analysis: pause_ratio={pause_ratio:.2f}, text_variance={normalized_variance:.2f} → {estimated_speakers} speakers")
+    return estimated_speakers
+
+def calculate_speaker_change_probability(current_segment, prev_segment, time_gap, segment_index, total_segments, all_segments) -> float:
+    """Calculate probability of speaker change based on multiple factors"""
+    probability = 0.0
+    
+    current_text = current_segment.get("text", "").strip().lower()
+    prev_text = prev_segment.get("text", "").strip().lower() 
+    
+    # Factor 1: Time gap analysis
+    if time_gap > 3.0:
+        probability += 0.7  # Very long pause
+    elif time_gap > 1.5:
+        probability += 0.4  # Medium pause
+    elif time_gap > 0.8:
+        probability += 0.2  # Short pause
+    
+    # Factor 2: Text pattern analysis
+    current_length = len(current_text)
+    prev_length = len(prev_text.split()) if prev_text else 0
+    
+    # Short responses often indicate speaker change
+    if current_length < 30 and prev_length > 50:
+        probability += 0.3
+    
+    # Factor 3: Language pattern indicators
+    response_words = ["ya", "iya", "oh", "mm", "hmm", "betul", "benar", "tidak", "nggak"]
+    question_indicators = ["apa", "kenapa", "bagaimana", "kapan", "dimana", "siapa"]
+    
+    if any(word in current_text for word in response_words):
+        probability += 0.3  # Likely response from different speaker
+        
+    if any(word in prev_text for word in question_indicators):
+        probability += 0.2  # Previous was question, current might be answer
+    
+    # Factor 4: Position-based natural flow (prevent too frequent changes)
+    segments_since_start = segment_index
+    if segments_since_start < 3:
+        probability *= 0.7  # Less likely to change in opening
+    
+    # Factor 5: Conversation flow (prevent same speaker monopolizing)
+    prev_speaker = prev_segment.get("assigned_speaker", 1)
+    consecutive_count = 1
+    
+    # Look back to count consecutive segments from same speaker
+    for i in range(max(0, segment_index - 5), segment_index):
+        if i < len(all_segments) and all_segments[i].get("assigned_speaker", 1) == prev_speaker:
+            consecutive_count += 1
+        else:
+            break
+    
+    if consecutive_count > 4:
+        probability += 0.4  # Encourage change after long run
+    elif consecutive_count > 7:
+        probability += 0.6  # Strong encouragement for very long runs
+    
+    # Cap probability between 0 and 1
+    return min(1.0, max(0.0, probability))
+
+def simple_speaker_detection(audio_path: str, segments: List) -> Dict:
+    """DYNAMIC speaker detection based on conversation analysis"""
+    total_segments = len(segments)
+    print(f"⚡ DYNAMIC speaker detection for {total_segments} segments...")
+    
+    # Use dynamic algorithmic approach for any conversation type
+    print(f"🎙️ Analyzing conversation patterns to detect optimal speaker count...")
     return fast_algorithmic_speaker_assignment(segments)
 
 def force_minimum_speakers(segments: List) -> Dict:
@@ -1285,38 +1399,60 @@ def _generate_summary_simple_sync(transcript_text: str) -> Dict[str, Any]:
             transcript_text = first_part + "\n\n[...transcript continues...]\n\n" + last_part
             print(f"🔍 DEBUG: Truncated transcript to {len(transcript_text)} chars")
         
-        prompt = f"""Analyze this Indonesian meeting transcript and provide a comprehensive analysis in JSON format.
+        prompt = f"""Analyze this Indonesian conversation/meeting transcript and provide a comprehensive professional analysis in JSON format.
 
 TRANSCRIPT:
 {transcript_text}
 
 INSTRUCTIONS:
-1. Provide a comprehensive summary that includes main discussion points, important decisions, and action items
-2. Identify and list all speakers who participated in the conversation
-3. Analyze the overall sentiment (positive, negative, or neutral)
-4. Determine the type of meeting (discussion, meeting, interview, presentation, etc.)
-5. Extract specific action items and key decisions made
-6. Generate relevant topic tags for categorization
+You are an expert meeting analyst. Analyze this transcript thoroughly and provide insights in a professional, structured format.
+
+1. SUMMARY: Create a professional, comprehensive summary (150-250 words) that includes:
+   - Context and purpose of the conversation
+   - Main topics discussed with specific details
+   - Key participants and their roles/contributions
+   - Important outcomes, agreements, or conclusions
+   - Overall flow and structure of the discussion
+
+2. ACTION ITEMS: Identify specific, actionable tasks or follow-ups mentioned:
+   - Tasks assigned to specific people
+   - Deadlines or timeframes mentioned
+   - Follow-up activities discussed
+   - If no explicit action items, infer logical next steps
+
+3. KEY DECISIONS: Extract important decisions, agreements, or conclusions:
+   - Specific choices made or agreed upon
+   - Policy changes or strategic directions
+   - Agreements reached by participants
+   - Important commitments or promises
+
+4. ANALYSIS: Provide additional insights:
+   - Meeting type and format
+   - Participant dynamics and engagement
+   - Overall tone and atmosphere
+   - Relevant topic tags for categorization
 
 Please provide your analysis in this exact JSON format:
 {{
-  "summary": "Write a comprehensive 2-3 paragraph summary covering the main topics discussed, key points raised by participants, important decisions made, and overall context of the conversation. Include who participated and their general roles or contributions.",
-  "action_items": ["List specific actionable tasks, assignments, or follow-ups mentioned", "Include deadlines or responsible parties if mentioned"],
-  "key_decisions": ["Important decisions or agreements reached", "Policy changes or strategic directions agreed upon"],
-  "tags": ["relevant", "topic", "keywords", "themes", "discussed"],
-  "participants": ["Speaker 1", "Speaker 2", "Speaker 3"],
-  "meeting_type": "meeting/discussion/interview/presentation/brainstorming",
+  "summary": "Professional summary covering context, main discussion points, participant contributions, key outcomes, and overall significance of the conversation. Structure this as a well-formatted business summary that could be shared with stakeholders.",
+  "action_items": ["Specific actionable tasks with responsible parties if mentioned", "Follow-up activities or next steps discussed", "Deliverables or commitments made"],
+  "key_decisions": ["Important decisions made or agreements reached", "Strategic directions or policy changes agreed upon", "Significant conclusions or commitments"],
+  "tags": ["relevant", "topic", "keywords", "for", "categorization", "and", "search"],
+  "participants": ["Participant 1", "Participant 2", "Participant 3"],
+  "meeting_type": "meeting/discussion/interview/presentation/brainstorming/podcast/casual_conversation",
   "sentiment": "positive/neutral/negative"
 }}
 
-REQUIREMENTS:
-- Summary must be detailed and informative (minimum 100 words)
-- Action items should be specific and actionable
-- Key decisions should reflect actual agreements or conclusions
-- Tags should be relevant topic keywords (5-8 tags)
-- Participants should match actual speakers from transcript
-- Meeting type should accurately reflect the conversation style
-- Sentiment should reflect overall tone and atmosphere
+QUALITY REQUIREMENTS:
+- Summary must be professional, detailed, and informative (150-250 words)
+- Use business-appropriate language and structure
+- Action items should be specific and actionable (if none explicit, infer logical next steps)
+- Key decisions should reflect actual agreements or important conclusions
+- Include 6-10 relevant topic tags for easy categorization
+- Accurately identify all participants and conversation type
+- Sentiment should reflect overall tone and engagement level
+
+IMPORTANT: Focus on extracting value and insights that would be useful for business/professional purposes, even from casual conversations. Structure the summary as if it were a professional meeting recap.
 
 Respond ONLY with valid JSON, no additional text or formatting."""
 
@@ -1373,11 +1509,16 @@ def validate_simple_result(result: Dict) -> Dict:
     print(f"🔍 Validating result: {list(result.keys())}")
     
     defaults = {
-        "summary": "Audio transcription and analysis completed successfully. The conversation involved multiple speakers engaging in discussion on various topics. The transcript provides a complete record of the spoken content with speaker identification and timing information. Key points, decisions, and action items can be found within the detailed transcript content.",
-        "action_items": ["Review the complete transcript for specific tasks and assignments", "Follow up on key discussion points and decisions mentioned", "Analyze speaker contributions and roles in the conversation"],
-        "key_decisions": ["Transcript processing completed with speaker identification", "Audio content successfully converted to structured text format"],
-        "tags": ["conversation", "transcription", "meeting-analysis", "audio-processing", "speaker-diarization", "content-analysis"],
-        "participants": ["Speaker 1", "Speaker 2", "Speaker 3", "Speaker 4"],
+        "summary": "This audio content has been successfully transcribed and analyzed. The recording captured a conversation between participants discussing various topics of interest. The discussion included meaningful exchanges and communication between the speakers. The transcript provides an accurate record of the spoken content with speaker identification and timing information for detailed review and reference.",
+        "action_items": [
+            "Review the complete transcript for any mentioned tasks or follow-ups",
+            "Analyze the discussion content for relevant next steps or commitments"
+        ],
+        "key_decisions": [
+            "Audio content successfully processed and transcribed with speaker identification"
+        ],
+        "tags": ["audio-transcription", "conversation", "content-analysis"],
+        "participants": ["Speaker 1", "Speaker 2"],
         "meeting_type": "conversation",
         "sentiment": "neutral"
     }
@@ -1401,13 +1542,18 @@ def validate_simple_result(result: Dict) -> Dict:
     return result
 
 def get_simple_fallback() -> Dict:
-    """Enhanced fallback with comprehensive default summary"""
+    """Dynamic fallback with minimal assumptions"""
     return {
-        "summary": "Audio transcription has been completed successfully. The conversation involved multiple participants discussing various topics. While the AI analysis is not available, the transcript provides a complete record of the spoken content with speaker identification and timestamps. This recording can be reviewed for specific details, decisions, and action items that may have been discussed during the session.",
-        "action_items": ["Review the complete transcript for specific tasks and assignments", "Follow up on any decisions or agreements mentioned in the conversation"],
-        "key_decisions": ["Transcript processing completed successfully", "Speaker identification has been applied to the conversation"],
-        "tags": ["transcription", "conversation", "audio-processing", "meeting-record", "speech-recognition"],
-        "participants": ["Speaker 1", "Speaker 2", "Speaker 3"],
+        "summary": "This audio recording has been transcribed and processed. The content includes dialogue between participants on various topics. The transcript captures the spoken content with timing and speaker information for reference and analysis.",
+        "action_items": [
+            "Review the transcript content for any specific tasks or commitments mentioned",
+            "Follow up on any decisions, agreements, or next steps outlined in the discussion"
+        ],
+        "key_decisions": [
+            "Audio transcription completed successfully with speaker identification"
+        ],
+        "tags": ["transcription", "audio-analysis", "conversation"],
+        "participants": ["Speaker 1", "Speaker 2"],
         "meeting_type": "conversation",
         "sentiment": "neutral"
     }

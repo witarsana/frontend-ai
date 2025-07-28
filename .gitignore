@@ -211,3 +211,23 @@ build/
 .vscode/settings.json
 .idea/
 *.sublime-*
+
+# Audio/Media files (testing)
+backend/source/*.mp3
+backend/source/*.wav
+backend/source/*.m4a
+backend/uploads/*.mp3
+backend/uploads/*.wav
+backend/uploads/*.m4a
+
+# Results (testing - keep only .gitkeep)
+backend/results/*.json
+!backend/results/.gitkeep
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python virtual environments
+.venv_*/
