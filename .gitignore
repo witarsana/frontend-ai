@@ -18,6 +18,18 @@ eggs/
 lib/
 lib64/
 parts/
+
+# Testing and Debug files
+test_*.py
+debug_*.py
+*_test.py
+*_debug.py
+verify_*.py
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
 sdist/
 var/
 wheels/

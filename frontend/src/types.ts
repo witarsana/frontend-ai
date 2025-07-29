@@ -35,7 +35,7 @@ export interface ProcessingState {
   };
 }
 
-export type Tab = 'summary' | 'transcript' | 'analytics';
+export type Tab = 'summary' | 'transcript' | 'analytics' | 'chat';
 
 // export type FilterType = string;
 

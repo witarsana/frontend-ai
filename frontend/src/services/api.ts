@@ -8,7 +8,12 @@ export const API_CONFIG = {
     CONFIG: '/api/config',
     ENGINES: '/api/engines',
     SET_ENGINE: '/api/config/engine',
-    COMPLETED_JOBS: '/api/jobs/completed'
+    COMPLETED_JOBS: '/api/jobs/completed',
+    REGENERATE_SUMMARY: '/api/regenerate-summary',
+    CHAT: '/api/chat',
+    CHAT_SUGGESTIONS: '/api/chat/suggestions',
+    CHAT_STATUS: '/api/chat/status',
+    CHAT_LOAD: '/api/chat/load'
   }
 };
 
@@ -245,10 +250,24 @@ export class AITranscriptionAPI {
       return false;
     }
   }
-}
 
-// Export singleton instance
-export const aiAPI = new AITranscriptionAPI();
+  // Regenerate summary for existing job
+  async regenerateSummary(jobId: string): Promise<any> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.REGENERATE_SUMMARY}/${jobId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Summary regeneration failed: ${response.statusText} - ${errorData}`);
+    }
+    
+    return response.json();
+  }
+}
 
 // Utility function to convert API result to frontend format
 export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
@@ -341,4 +360,24 @@ export class EngineAPI {
     
     return response.json();
   }
+
+  // Regenerate summary for existing job
+  async regenerateSummary(jobId: string): Promise<any> {
+    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.REGENERATE_SUMMARY}/${jobId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Summary regeneration failed: ${response.statusText} - ${errorData}`);
+    }
+    
+    return response.json();
+  }
 }
+
+// Export singleton instance
+export const aiAPI = new AITranscriptionAPI();

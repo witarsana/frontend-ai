@@ -10,6 +10,7 @@ import AudioPlayer from './components/AudioPlayer';
 import SummaryTab from './components/SummaryTab';
 import TranscriptTab from './components/TranscriptTab';
 import AnalyticsTab from './components/AnalyticsTab';
+import ChatTab from './components/ChatTab';
 import EngineSelector from './components/EngineSelector';
 
 const App: React.FC = () => {
@@ -66,8 +67,7 @@ const App: React.FC = () => {
 
   const loadLatestCompletedJob = async () => {
     try {
-      const response = await fetch('http://localhost:8002/api/jobs/completed');
-      const data = await response.json();
+      const data = await aiAPI.getCompletedJobs();
       
       if (data.jobs && data.jobs.length > 0) {
         const latestJob = data.jobs[0]; // First job is the latest
@@ -348,6 +348,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSummaryUpdate = async () => {
+    if (!currentJobId) return;
+    
+    try {
+      // Fetch the updated results for this job
+      const result = await aiAPI.getResult(currentJobId);
+      const frontendData = convertAPIResultToFrontendFormat(result);
+      setApiData(frontendData);
+    } catch (error) {
+      console.error('Failed to update summary:', error);
+    }
+  };
+
   const renderTabContent = () => {
     // Pass real API data to components
     const summaryData = apiData?.summary ? {
@@ -359,11 +372,16 @@ const App: React.FC = () => {
       sentiment: apiData.summary.sentiment,
       duration: apiData.summary.duration,
       word_count: apiData.summary.wordCount
-    } : undefined;
+    } : {
+      // Fallback to direct data structure from backend
+      summary: apiData?.summary,
+      action_items: apiData?.action_items || [],
+      key_decisions: apiData?.key_decisions || []
+    };
     
     switch (appState.activeTab) {
       case 'summary':
-        return <SummaryTab summaryData={summaryData} />;
+        return <SummaryTab summaryData={summaryData} jobId={currentJobId || undefined} onSummaryRegenerated={handleSummaryUpdate} />;
       case 'transcript':
         return (
           <>
@@ -380,8 +398,10 @@ const App: React.FC = () => {
         );
       case 'analytics':
         return <AnalyticsTab />;
+      case 'chat':
+        return <ChatTab currentFileId={currentJobId || undefined} isTranscriptionReady={!!apiData} />;
       default:
-        return <SummaryTab summaryData={summaryData} />;
+        return <SummaryTab summaryData={summaryData} jobId={currentJobId || undefined} onSummaryRegenerated={handleSummaryUpdate} />;
     }
   };
 
@@ -522,6 +542,12 @@ const App: React.FC = () => {
                 onClick={() => handleTabChange('analytics')}
               >
                 📊 Analytics
+              </button>
+              <button 
+                className={`tab ${appState.activeTab === 'chat' ? 'active' : ''}`}
+                onClick={() => handleTabChange('chat')}
+              >
+                🤖 AI Chat
               </button>
             </div>
 

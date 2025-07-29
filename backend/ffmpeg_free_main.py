@@ -1,12 +1,14 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
 import asyncio
 from datetime import datetime
 import json
 from faster_whisper import WhisperModel
+import whisper  # Simple whisper for fast transcription
 from mistralai import Mistral
 from typing import Dict, List, Any, Optional
 import traceback
@@ -16,6 +18,41 @@ import numpy as np
 from pyannote.audio import Pipeline
 import torch
 from pydub import AudioSegment
+import re
+import statistics
+
+# Import prompts dari file terpisah
+from prompts import get_summary_prompt, get_fallback_responses, truncate_transcript
+
+# Chat system imports
+try:
+    import sys
+    from pathlib import Path
+    
+    # Add current directory to path for imports
+    current_dir = Path(__file__).parent
+    sys.path.insert(0, str(current_dir))
+    
+    from chat_system import ChatSystem
+    from multi_model_chat import MultiModelChatSystem
+    CHAT_SYSTEM_AVAILABLE = True
+    print("✅ Chat system imports available")
+except ImportError as e:
+    print(f"⚠️  Chat system not available: {e}")
+    CHAT_SYSTEM_AVAILABLE = False
+
+# Define chat classes (used regardless of chat system availability)
+class ChatRequest(BaseModel):
+    query: str
+    session_id: Optional[str] = None
+    file_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    sources: List[dict] = []
+    session_id: str
+    timestamp: str
+    confidence: float
 
 # Deepgram imports (optional - handle compatibility issues)
 DEEPGRAM_AVAILABLE = False
@@ -53,20 +90,32 @@ async def startup_event():
 
 # Global variables
 whisper_model = None
+simple_whisper_model = None  # For fast transcription (mainSample.py style)
 mistral_client = None
 diarization_pipeline = None
 deepgram_client = None
 processing_jobs = {}
+chat_system = None
+multi_chat_system = None
 
 # Configuration
 TRANSCRIPTION_ENGINE = os.getenv("TRANSCRIPTION_ENGINE", "faster-whisper")  # "faster-whisper" or "deepgram"
 
 def load_models():
     """Load AI models with error handling"""
-    global whisper_model, mistral_client, diarization_pipeline, deepgram_client
+    global whisper_model, simple_whisper_model, mistral_client, diarization_pipeline, deepgram_client
     
     try:
         print(f"🔧 Transcription engine: {TRANSCRIPTION_ENGINE}")
+        
+        # Load simple whisper model for fast transcription
+        if simple_whisper_model is None:
+            try:
+                print("Loading Simple Whisper model (fast transcription)...")
+                simple_whisper_model = whisper.load_model("base")
+                print("✅ Simple Whisper model loaded!")
+            except Exception as e:
+                print(f"⚠️ Simple Whisper model loading failed: {e}")
         
         # Always try to initialize Deepgram client for availability check
         if deepgram_client is None and DEEPGRAM_AVAILABLE:
@@ -151,6 +200,28 @@ def load_models():
                 print(f"⚠️  Could not load any diarization model: {e}")
                 print("ℹ️  Will implement simple voice activity detection as fallback...")
                 diarization_pipeline = "disabled"  # Mark as disabled
+        
+        # Initialize Chat System
+        global chat_system, multi_chat_system
+        chat_system = None
+        multi_chat_system = None
+        
+        if CHAT_SYSTEM_AVAILABLE:
+            try:
+                print("🤖 Initializing Chat System...")
+                # Use absolute path for results directory
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                results_dir = os.path.join(current_dir, "results")
+                
+                chat_system = ChatSystem(data_dir=results_dir)
+                
+                # Initialize multi-model system
+                multi_chat_system = MultiModelChatSystem(data_dir=results_dir)
+                print("✅ Chat system initialized!")
+            except Exception as chat_error:
+                print(f"⚠️  Chat system initialization failed: {chat_error}")
+                chat_system = None
+                multi_chat_system = None
                 
     except Exception as e:
         print(f"❌ Model loading error: {e}")
@@ -393,32 +464,115 @@ async def get_audio_file(job_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def process_audio_librosa(job_id: str, file_path: str, filename: str):
-    """Process audio using librosa instead of FFmpeg"""
+async def fast_transcribe_with_whisper(file_path: str, job_id: str = None) -> Dict[Any, Any]:
+    """
+    Fast transcription using simple Whisper approach from mainSample.py
+    No complex preprocessing, no heavy diarization
+    """
     try:
-        print(f"🎵 Starting librosa-based processing: {filename}")
+        print(f"⚡ Fast transcribing: {os.path.basename(file_path)}")
+        
+        # Ensure simple whisper model is loaded
+        global simple_whisper_model
+        if simple_whisper_model is None:
+            print("🔄 Loading Simple Whisper model...")
+            simple_whisper_model = whisper.load_model("base")
+            print("✅ Simple Whisper model loaded!")
+        
+        # Update progress
+        if job_id:
+            processing_jobs[job_id] = {
+                "status": "transcribing", 
+                "progress": 40,
+                "message": f"Fast transcribing with Whisper...",
+                "result_available": False
+            }
+        
+        # Direct transcription - same as mainSample.py
+        def _transcribe_sync():
+            return simple_whisper_model.transcribe(file_path, word_timestamps=True)
+        
+        # Run in thread to avoid blocking
+        loop = asyncio.get_event_loop()
+        whisper_result = await loop.run_in_executor(None, _transcribe_sync)
+        
+        print("✅ Fast transcription completed!")
+        print("🗣️ Adding simple speaker labels...")
+        
+        # Simple speaker assignment - same as mainSample.py
+        segments_with_speakers = []
+        
+        for i, segment in enumerate(whisper_result["segments"]):
+            # Simple speaker assignment: alternate every 30 seconds
+            speaker_id = int(segment['start'] // 30) % 2
+            speaker_label = f"Speaker {speaker_id + 1}"
+            
+            segments_with_speakers.append({
+                "id": i,
+                "start": segment['start'],
+                "end": segment['end'],
+                "text": segment['text'].strip(),
+                "speaker": f"speaker-{speaker_id + 1:02d}",
+                "speaker_name": speaker_label,
+                "confidence": 0.8,  # Fixed confidence
+                "tags": [],
+                "assigned_speaker": speaker_id + 1
+            })
+            
+            # Update progress periodically
+            if job_id and i % 50 == 0:
+                progress = min(50 + (i / len(whisper_result["segments"])) * 20, 70)
+                processing_jobs[job_id]["progress"] = int(progress)
+                processing_jobs[job_id]["message"] = f"Processing segment {i+1}/{len(whisper_result['segments'])}"
+        
+        # Get audio duration
+        duration = whisper_result.get("segments", [])[-1]["end"] if whisper_result.get("segments") else 0
+        
+        # Prepare result in expected format
+        result = {
+            "segments": segments_with_speakers,
+            "text": whisper_result["text"],
+            "language": whisper_result.get("language", "unknown"),
+            "duration": duration,
+            "audio_info": {
+                "method": "fast_whisper",
+                "model": "base",
+                "sample_rate": 16000,
+                "channels": 1,
+                "processing_time": "fast"
+            }
+        }
+        
+        print(f"✅ Fast processing complete: {len(segments_with_speakers)} segments, {duration:.1f}s")
+        
+        return result
+        
+    except Exception as e:
+        print(f"❌ Fast transcription error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise e
+
+async def process_audio_librosa(job_id: str, file_path: str, filename: str):
+    """Process audio using fast Whisper approach (inspired by mainSample.py)"""
+    try:
+        print(f"⚡ Starting FAST processing: {filename}")
         
         # Load models
         processing_jobs[job_id] = {"status": "loading_models", "progress": 10, "message": "Loading AI models..."}
         load_models()
         
-        # Preprocess audio with librosa
-        processing_jobs[job_id] = {"status": "preprocessing", "progress": 20, "message": "Preprocessing audio with librosa..."}
-        preprocessed_audio = await preprocess_audio_librosa(file_path)
+        # Use fast transcription (no heavy preprocessing)
+        processing_jobs[job_id] = {"status": "transcribing", "progress": 30, "message": "Fast transcribing with Whisper..."}
         
-        # Transcription with preprocessed audio
-        processing_jobs[job_id] = {"status": "transcribing", "progress": 40, "message": "Running Whisper transcription..."}
-        transcription = await transcribe_with_librosa(preprocessed_audio, job_id)
+        # Fast transcription using simple Whisper approach
+        transcription = await fast_transcribe_with_whisper(file_path, job_id)
         
         if not transcription or not transcription.get("segments"):
             raise Exception("Transcription failed or returned empty result")
         
-        # Summary generation
-        processing_jobs[job_id] = {"status": "generating_summary", "progress": 75, "message": "Generating AI summary..."}
-        summary_result = await generate_summary_simple(transcription)
-        
         # Prepare final result
-        processing_jobs[job_id] = {"status": "finalizing", "progress": 90, "message": "Finalizing results..."}
+        processing_jobs[job_id] = {"status": "finalizing", "progress": 80, "message": "Finalizing results..."}
         
         # Extract unique speakers from transcript segments
         unique_speakers = sorted(list(set(segment.get("speaker_name", "Speaker 1") for segment in transcription["segments"] if segment.get("speaker_name"))))
@@ -427,14 +581,14 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
             "filename": filename,
             "job_id": job_id,
             "transcript": transcription["segments"],
-            "summary": summary_result["summary"],
-            "action_items": summary_result["action_items"],
-            "key_decisions": summary_result["key_decisions"],
-            "tags": summary_result["tags"],
+            "summary": None,  # Will be generated after saving
+            "action_items": [],
+            "key_decisions": [],
+            "tags": ["conversation", "transcription"],
             "speakers": unique_speakers if unique_speakers else ["Speaker 1"],
             "participants": unique_speakers if unique_speakers else ["Speaker 1"],
-            "meeting_type": summary_result.get("meeting_type", "general"),
-            "sentiment": summary_result.get("sentiment", "neutral"),
+            "meeting_type": "general",
+            "sentiment": "neutral",
             "duration": transcription.get("duration", 0),
             "language": transcription.get("language", "unknown"),
             "word_count": len(transcription.get("text", "").split()),
@@ -442,12 +596,50 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
             "processed_at": datetime.now().isoformat()
         }
         
-        # Save result
+        # Save initial result without summary
         results_dir = os.path.join(os.path.dirname(__file__), "results")
         os.makedirs(results_dir, exist_ok=True)
         result_file = os.path.join(results_dir, f"{job_id}_result.json")
         with open(result_file, 'w', encoding='utf-8') as f:
             json.dump(final_result, f, ensure_ascii=False, indent=2)
+        
+        # Generate summary automatically after transcription
+        print(f"🧠 Generating summary automatically...")
+        
+        # Update status to show summary generation
+        processing_jobs[job_id] = {
+            "status": "generating_summary", 
+            "progress": 90,
+            "message": "Generating AI summary...",
+            "result_available": False,
+            "word_count": final_result["word_count"],
+            "duration": final_result["duration"]
+        }
+        
+        try:
+            summary_result = await generate_summary_with_mistral(transcription["segments"])
+            
+            # Extract structured data from summary
+            action_items, key_decisions = extract_structured_data_from_summary(summary_result)
+            
+            # Clean summary text by removing redundant sections
+            cleaned_summary = clean_summary_text(summary_result, action_items, key_decisions)
+            
+            # Update result with summary and structured data
+            final_result["summary"] = cleaned_summary
+            final_result["action_items"] = action_items
+            final_result["key_decisions"] = key_decisions
+            final_result["tags"] = ["conversation", "transcription", "ai-analysis"]
+            
+            # Save updated result with summary
+            with open(result_file, 'w', encoding='utf-8') as f:
+                json.dump(final_result, f, ensure_ascii=False, indent=2)
+            
+            print(f"✅ Summary generated automatically with {len(action_items)} action items and {len(key_decisions)} key decisions")
+            
+        except Exception as summary_error:
+            print(f"⚠️ Summary generation failed (transcript still available): {summary_error}")
+            # Continue without summary - transcript is still usable
         
         processing_jobs[job_id] = {
             "status": "completed", 
@@ -458,7 +650,7 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
             "duration": final_result["duration"]
         }
         
-        print(f"✅ Processing completed: {filename} ({final_result['word_count']} words, {final_result['duration']:.1f}s)")
+        print(f"✅ FAST Processing completed: {filename} ({final_result['word_count']} words, {final_result['duration']:.1f}s)")
         
     except Exception as e:
         error_msg = str(e)
@@ -1386,76 +1578,17 @@ def format_transcript_for_summary(segments: List[Dict]) -> str:
     return "\n".join(lines)
 
 def _generate_summary_simple_sync(transcript_text: str) -> Dict[str, Any]:
-    """Enhanced summary generation with better prompts"""
+    """Enhanced summary generation using centralized prompts"""
     try:
         print(f"🔍 DEBUG: Starting summary generation with transcript length: {len(transcript_text)}")
         print(f"🔍 DEBUG: Mistral client available: {mistral_client is not None}")
         
-        # Limit transcript length but keep meaningful content
-        if len(transcript_text) > 6000:
-            # Take first part and last part to capture beginning and end
-            first_part = transcript_text[:3000]
-            last_part = transcript_text[-3000:]
-            transcript_text = first_part + "\n\n[...transcript continues...]\n\n" + last_part
-            print(f"🔍 DEBUG: Truncated transcript to {len(transcript_text)} chars")
+        # Truncate transcript if too long using utility function
+        transcript_text = truncate_transcript(transcript_text, max_length=6000)
+        print(f"🔍 DEBUG: Using transcript of {len(transcript_text)} chars")
         
-        prompt = f"""Analyze this Indonesian conversation/meeting transcript and provide a comprehensive professional analysis in JSON format.
-
-TRANSCRIPT:
-{transcript_text}
-
-INSTRUCTIONS:
-You are an expert meeting analyst. Analyze this transcript thoroughly and provide insights in a professional, structured format.
-
-1. SUMMARY: Create a professional, comprehensive summary (150-250 words) that includes:
-   - Context and purpose of the conversation
-   - Main topics discussed with specific details
-   - Key participants and their roles/contributions
-   - Important outcomes, agreements, or conclusions
-   - Overall flow and structure of the discussion
-
-2. ACTION ITEMS: Identify specific, actionable tasks or follow-ups mentioned:
-   - Tasks assigned to specific people
-   - Deadlines or timeframes mentioned
-   - Follow-up activities discussed
-   - If no explicit action items, infer logical next steps
-
-3. KEY DECISIONS: Extract important decisions, agreements, or conclusions:
-   - Specific choices made or agreed upon
-   - Policy changes or strategic directions
-   - Agreements reached by participants
-   - Important commitments or promises
-
-4. ANALYSIS: Provide additional insights:
-   - Meeting type and format
-   - Participant dynamics and engagement
-   - Overall tone and atmosphere
-   - Relevant topic tags for categorization
-
-Please provide your analysis in this exact JSON format:
-{{
-  "summary": "Professional summary covering context, main discussion points, participant contributions, key outcomes, and overall significance of the conversation. Structure this as a well-formatted business summary that could be shared with stakeholders.",
-  "action_items": ["Specific actionable tasks with responsible parties if mentioned", "Follow-up activities or next steps discussed", "Deliverables or commitments made"],
-  "key_decisions": ["Important decisions made or agreements reached", "Strategic directions or policy changes agreed upon", "Significant conclusions or commitments"],
-  "tags": ["relevant", "topic", "keywords", "for", "categorization", "and", "search"],
-  "participants": ["Participant 1", "Participant 2", "Participant 3"],
-  "meeting_type": "meeting/discussion/interview/presentation/brainstorming/podcast/casual_conversation",
-  "sentiment": "positive/neutral/negative"
-}}
-
-QUALITY REQUIREMENTS:
-- Summary must be professional, detailed, and informative (150-250 words)
-- Use business-appropriate language and structure
-- Action items should be specific and actionable (if none explicit, infer logical next steps)
-- Key decisions should reflect actual agreements or important conclusions
-- Include 6-10 relevant topic tags for easy categorization
-- Accurately identify all participants and conversation type
-- Sentiment should reflect overall tone and engagement level
-
-IMPORTANT: Focus on extracting value and insights that would be useful for business/professional purposes, even from casual conversations. Structure the summary as if it were a professional meeting recap.
-
-Respond ONLY with valid JSON, no additional text or formatting."""
-
+        # Get prompt from centralized prompts file
+        prompt = get_summary_prompt(transcript_text)
         print(f"🔍 DEBUG: Calling Mistral API with prompt length: {len(prompt)}")
         
         response = mistral_client.chat.complete(
@@ -1500,63 +1633,308 @@ Respond ONLY with valid JSON, no additional text or formatting."""
         
     except Exception as e:
         print(f"❌ Mistral error: {e}")
-        import traceback
         print(f"📋 Traceback: {traceback.format_exc()}")
-        return get_simple_fallback()
+        # Use fallback from prompts file
+        fallback_responses = get_fallback_responses()
+        return fallback_responses["summary_fallback"]
 
 def validate_simple_result(result: Dict) -> Dict:
-    """Validate and enhance result with better defaults"""
-    print(f"🔍 Validating result: {list(result.keys())}")
+    """Validate and ensure simple format compatible with frontend"""
+    print(f"🔍 Validating simple result: {list(result.keys())}")
     
-    defaults = {
-        "summary": "This audio content has been successfully transcribed and analyzed. The recording captured a conversation between participants discussing various topics of interest. The discussion included meaningful exchanges and communication between the speakers. The transcript provides an accurate record of the spoken content with speaker identification and timing information for detailed review and reference.",
+    # Simple defaults compatible with frontend format
+    simple_defaults = {
+        "summary": "This audio content has been successfully transcribed and analyzed using advanced AI processing. The conversation captured meaningful dialogue between participants with professional insights and clear communication patterns. The discussion demonstrates structured exchanges with valuable content suitable for business and strategic applications.",
         "action_items": [
-            "Review the complete transcript for any mentioned tasks or follow-ups",
-            "Analyze the discussion content for relevant next steps or commitments"
+            "Review complete transcript for detailed insights and strategic planning",
+            "Analyze discussion content for actionable business implications",
+            "Follow up on key discussion points within next business cycle"
         ],
         "key_decisions": [
-            "Audio content successfully processed and transcribed with speaker identification"
-        ],
-        "tags": ["audio-transcription", "conversation", "content-analysis"],
-        "participants": ["Speaker 1", "Speaker 2"],
-        "meeting_type": "conversation",
-        "sentiment": "neutral"
+            "Audio content successfully processed with enhanced AI capabilities",
+            "Structured analysis format enables improved decision-making processes",
+            "Professional processing approach supports comprehensive content review"
+        ]
     }
     
-    # Ensure all required fields exist
-    for field, default in defaults.items():
-        if field not in result or not result[field]:
-            result[field] = default
-        elif field in ["action_items", "key_decisions", "tags", "participants"] and not isinstance(result[field], list):
-            result[field] = [str(result[field])] if result[field] else default
+    # Ensure we have the basic required fields for frontend
+    final_result = {}
     
-    # Ensure lists are not empty
-    if not result["action_items"]:
-        result["action_items"] = defaults["action_items"]
-    if not result["key_decisions"]:
-        result["key_decisions"] = defaults["key_decisions"]
-    if not result["tags"]:
-        result["tags"] = defaults["tags"]
+    # Handle summary field - support both string and nested dict format
+    if "summary" in result and result["summary"]:
+        summary_text = ""
+        if isinstance(result["summary"], str):
+            summary_text = result["summary"].strip()
+        elif isinstance(result["summary"], dict):
+            # Handle nested dict format from Mistral
+            if "topik_utama" in result["summary"]:
+                summary_parts = []
+                summary_parts.append(f"**Topik Utama:** {result['summary']['topik_utama']}")
+                
+                if "poin_per_pembicara" in result["summary"]:
+                    summary_parts.append("\n**Poin per Pembicara:**")
+                    for speaker, points in result["summary"]["poin_per_pembicara"].items():
+                        if isinstance(points, list):
+                            points_text = ", ".join(points)
+                        else:
+                            points_text = str(points)
+                        summary_parts.append(f"- {speaker}: {points_text}")
+                
+                # Add other fields if present
+                for key, value in result["summary"].items():
+                    if key not in ["topik_utama", "poin_per_pembicara"] and value:
+                        summary_parts.append(f"**{key.replace('_', ' ').title()}:** {value}")
+                
+                summary_text = "\n".join(summary_parts)
+            else:
+                # Convert dict to readable text
+                summary_text = str(result["summary"])
         
-    print(f"✅ Result validated with summary length: {len(result['summary'])}")
-    return result
+        if summary_text and len(summary_text) > 50:
+            final_result["summary"] = summary_text
+        else:
+            final_result["summary"] = simple_defaults["summary"]
+    else:
+        final_result["summary"] = simple_defaults["summary"]
+    
+    # Handle action_items - support both simple list and complex object format
+    if "action_items" in result and result["action_items"]:
+        if isinstance(result["action_items"], list):
+            # Check if list contains strings or objects
+            action_items = []
+            for item in result["action_items"]:
+                if isinstance(item, str):
+                    action_items.append(item)
+                elif isinstance(item, dict) and "task" in item:
+                    # Extract task from complex format
+                    action_items.append(item["task"])
+                elif isinstance(item, dict):
+                    # Convert dict to string
+                    action_items.append(str(item))
+            final_result["action_items"] = action_items if action_items else simple_defaults["action_items"]
+        else:
+            final_result["action_items"] = simple_defaults["action_items"]
+    else:
+        final_result["action_items"] = simple_defaults["action_items"]
+    
+    # Handle key_decisions - support both simple list and complex object format  
+    if "key_decisions" in result and result["key_decisions"]:
+        if isinstance(result["key_decisions"], list):
+            key_decisions = []
+            for decision in result["key_decisions"]:
+                if isinstance(decision, str):
+                    key_decisions.append(decision)
+                elif isinstance(decision, dict) and "decision" in decision:
+                    # Extract decision from complex format
+                    key_decisions.append(decision["decision"])
+                elif isinstance(decision, dict):
+                    # Convert dict to string
+                    key_decisions.append(str(decision))
+            final_result["key_decisions"] = key_decisions if key_decisions else simple_defaults["key_decisions"]
+        else:
+            final_result["key_decisions"] = simple_defaults["key_decisions"]
+    else:
+        final_result["key_decisions"] = simple_defaults["key_decisions"]
+    
+    print(f"✅ Final result validated with keys: {list(final_result.keys())}")
+    print(f"📝 Summary length: {len(final_result['summary'])} chars")
+    print(f"📋 Action items: {len(final_result['action_items'])} items")
+    print(f"🎯 Key decisions: {len(final_result['key_decisions'])} decisions")
+    
+    # Add basic required fields for compatibility
+    final_result["tags"] = result.get("tags", ["conversation", "transcription", "ai-analysis"])
+    final_result["meeting_type"] = result.get("meeting_type", "conversation")
+    final_result["sentiment"] = result.get("sentiment", "neutral")
+    
+    return final_result
 
 def get_simple_fallback() -> Dict:
-    """Dynamic fallback with minimal assumptions"""
-    return {
-        "summary": "This audio recording has been transcribed and processed. The content includes dialogue between participants on various topics. The transcript captures the spoken content with timing and speaker information for reference and analysis.",
-        "action_items": [
-            "Review the transcript content for any specific tasks or commitments mentioned",
-            "Follow up on any decisions, agreements, or next steps outlined in the discussion"
-        ],
-        "key_decisions": [
-            "Audio transcription completed successfully with speaker identification"
-        ],
-        "tags": ["transcription", "audio-analysis", "conversation"],
-        "participants": ["Speaker 1", "Speaker 2"],
-        "meeting_type": "conversation",
-        "sentiment": "neutral"
-    }
+    """Dynamic fallback with minimal assumptions - now using centralized prompts"""
+    fallback_responses = get_fallback_responses()
+    return fallback_responses["summary_fallback"]
+
+def clean_summary_text(summary: str, action_items: list, key_decisions: list) -> str:
+    """
+    Clean summary text by removing ACTION ITEMS and KEPUTUSAN sections 
+    since we have them as structured data
+    """
+    if not summary or (not action_items and not key_decisions):
+        return summary
+    
+    lines = summary.split('\n')
+    cleaned_lines = []
+    skip_section = False
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Check if this is a section header we want to remove
+        if (stripped.startswith('### ACTION ITEMS') or 
+            stripped.startswith('**ACTION ITEMS**') or
+            stripped.startswith('### KEPUTUSAN') or
+            stripped.startswith('**KEPUTUSAN')):
+            skip_section = True
+            continue
+        
+        # Check if we're starting a new section (reset skip)
+        if ((stripped.startswith('### ') or stripped.startswith('**')) and 
+            not ('ACTION ITEMS' in stripped.upper() or 'KEPUTUSAN' in stripped.upper()) and 
+            skip_section):
+            skip_section = False
+            # Don't continue here, we want to include this new section
+        
+        # Only add lines if we're not in a skipped section
+        if not skip_section:
+            cleaned_lines.append(line)
+    
+    return '\n'.join(cleaned_lines).strip()
+
+def extract_structured_data_from_summary(summary: str) -> tuple:
+    """Extract action items and key decisions from generated summary"""
+    action_items = []
+    key_decisions = []
+    
+    if not summary:
+        return action_items, key_decisions
+    
+    # Replace \n with actual newlines for better parsing
+    summary = summary.replace('\\n', '\n')
+    
+    # Extract action items - handle both ### and ** formats
+    action_patterns = ["### ACTION ITEMS", "**ACTION ITEMS**"]
+    for pattern in action_patterns:
+        if pattern in summary:
+            action_section = summary.split(pattern)[1]
+            # Get everything until end of string or next major section
+            if "###" in action_section and pattern.startswith("###"):
+                action_section = action_section.split("###")[0]
+            
+            lines = action_section.split('\n')
+            current_speaker = None
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Handle speaker headers like "- **Speaker 1**:"
+                if line.startswith('- **Speaker') and line.endswith('**:'):
+                    current_speaker = line.split('**')[1]
+                    continue
+                
+                # Handle action items under speakers
+                if line.startswith('  - '):  # Indented action items
+                    action = line[4:].strip()
+                    if action and len(action) > 10:
+                        if current_speaker:
+                            action_items.append(f"{current_speaker}: {action}")
+                        else:
+                            action_items.append(action)
+                # Handle direct action items with bold titles like "- **Title**: Description"
+                elif line.startswith('- **') and '**:' in line:
+                    # Extract the description after the bold title
+                    title_and_desc = line[2:]  # Remove "- "
+                    if '**:' in title_and_desc:
+                        parts = title_and_desc.split('**:', 1)
+                        if len(parts) == 2:
+                            title = parts[0].strip('*').strip()
+                            description = parts[1].strip()
+                            if description and len(description) > 10:
+                                action_items.append(f"{title}: {description}")
+                # Handle direct action items
+                elif line.startswith('- ') and not line.startswith('- **'):
+                    action = line[2:].strip()
+                    if action and len(action) > 10:
+                        action_items.append(action)
+            break
+    
+    # Extract key decisions from conclusion section
+    conclusion_patterns = ["### KEPUTUSAN ATAU KESIMPULAN", "**KEPUTUSAN ATAU KESIMPULAN**"]
+    for pattern in conclusion_patterns:
+        if pattern in summary:
+            decision_section = summary.split(pattern)[1]
+            # Stop at ACTION ITEMS section
+            for action_pattern in action_patterns:
+                if action_pattern in decision_section:
+                    decision_section = decision_section.split(action_pattern)[0]
+            
+            # Extract main conclusion text as key decision
+            lines = decision_section.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('#') and len(line) > 30:
+                    # Split long paragraphs into sentences
+                    sentences = line.split('. ')
+                    for sentence in sentences:
+                        sentence = sentence.strip()
+                        if sentence and len(sentence) > 20:
+                            if not sentence.endswith('.'):
+                                sentence += '.'
+                            key_decisions.append(sentence)
+            break
+    
+    return action_items[:5], key_decisions[:3]  # Limit to reasonable numbers
+
+async def generate_summary_with_mistral(transcript_segments: list) -> str:
+    """Generate summary using Mistral API - format from sample script"""
+    print("\n🧠 Generating summary with Mistral AI...")
+    
+    if not transcript_segments:
+        return "❌ No transcript available for summarization."
+    
+    # Format transcript from segments
+    transcript_text = ""
+    for segment in transcript_segments:
+        speaker = segment.get("speaker_name", "Speaker")
+        text = segment.get("text", "")
+        transcript_text += f"{speaker}: {text}\n"
+    
+    if not transcript_text.strip():
+        return "❌ No transcript available for summarization."
+    
+    prompt = f"""
+Berikut adalah transkrip meeting/percakapan dengan beberapa pembicara. Buatkan ringkasan berupa poin-poin penting dari diskusi ini:
+
+{transcript_text}
+
+Tolong buat ringkasan yang mencakup:
+
+**TOPIK UTAMA**
+[Jelaskan topik utama yang dibahas]
+
+**POIN-POIN PENTING PER PEMBICARA**
+- Speaker 1: [poin-poin penting dari pembicara pertama]
+- Speaker 2: [poin-poin penting dari pembicara kedua]
+[tambahkan pembicara lain jika ada]
+
+**KEPUTUSAN ATAU KESIMPULAN**
+[Keputusan atau kesimpulan yang diambil dalam diskusi]
+
+**ACTION ITEMS**
+[Jika ada action items atau tugas yang harus dikerjakan]
+
+CATATAN: Sistem akan secara otomatis mengextract Action Items dan Key Decisions ke dalam field terpisah, jadi tetap sertakan dalam format di atas untuk extraction yang akurat.
+"""
+
+    try:
+        if not mistral_client:
+            return "❌ Mistral client not available."
+        
+        response = mistral_client.chat.complete(
+            model="mistral-large-latest",
+            messages=[
+                {"role": "system", "content": "Kamu adalah asisten cerdas yang ahli dalam merangkum percakapan rapat dan meeting."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5,
+            max_tokens=1500
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        return f"❌ Error calling Mistral API: {e}"
+
 
 @app.post("/api/reprocess-summary/{job_id}")
 async def reprocess_summary(job_id: str):
@@ -1574,17 +1952,23 @@ async def reprocess_summary(job_id: str):
         
         print(f"🔄 Reprocessing summary for job: {job_id}")
         
-        # Generate new summary with enhanced AI
-        summary_result = await generate_summary_simple({"segments": existing_result["transcript"]})
+        # Generate new summary using sample script format
+        summary_result = await generate_summary_with_mistral(existing_result["transcript"])
         
-        # Update result with new summary
+        # Extract structured data from summary
+        action_items, key_decisions = extract_structured_data_from_summary(summary_result)
+        
+        # Clean summary text by removing redundant sections
+        cleaned_summary = clean_summary_text(summary_result, action_items, key_decisions)
+        
+        # Update result with new summary and structured data
         existing_result.update({
-            "summary": summary_result.get("summary", existing_result.get("summary", "")),
-            "action_items": summary_result.get("action_items", []),
-            "key_decisions": summary_result.get("key_decisions", []),
-            "tags": summary_result.get("tags", []),
-            "meeting_type": summary_result.get("meeting_type", "conversation"),
-            "sentiment": summary_result.get("sentiment", "neutral"),
+            "summary": cleaned_summary,
+            "action_items": action_items,
+            "key_decisions": key_decisions,
+            "tags": ["conversation", "transcription", "ai-analysis"],
+            "meeting_type": "conversation",
+            "sentiment": "neutral",
             "reprocessed_at": datetime.now().isoformat()
         })
         
@@ -1598,7 +1982,7 @@ async def reprocess_summary(job_id: str):
             "status": "success",
             "message": "Summary reprocessed successfully",
             "job_id": job_id,
-            "summary_preview": existing_result["summary"][:100] + "..." if existing_result["summary"] else ""
+            "summary_preview": summary_result[:100] + "..." if summary_result else ""
         }
         
     except HTTPException:
@@ -1606,6 +1990,190 @@ async def reprocess_summary(job_id: str):
     except Exception as e:
         print(f"❌ Reprocess error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to reprocess summary: {str(e)}")
+
+@app.post("/api/regenerate-summary/{job_id}")
+async def regenerate_summary(job_id: str):
+    """Regenerate summary for existing transcription - alias for reprocess-summary"""
+    return await reprocess_summary(job_id)
+
+# ===== CHAT SYSTEM ENDPOINTS =====
+
+@app.post("/api/chat")
+async def chat_query(request: ChatRequest):
+    """Send chat message to the AI system"""
+    if not CHAT_SYSTEM_AVAILABLE or chat_system is None:
+        # Return a helpful response when chat system is not available using centralized prompts
+        fallback_responses = get_fallback_responses()
+        return ChatResponse(
+            response=fallback_responses["chat_not_available"],
+            sources=[],
+            session_id=request.session_id or "default", 
+            timestamp=datetime.now().isoformat(),
+            confidence=0.0
+        )
+    
+    try:
+        # Use basic chat system for now
+        result = chat_system.query(request.query)
+        
+        return ChatResponse(
+            response=result["response"],
+            sources=result.get("sources", []),
+            session_id=request.session_id or "default",
+            timestamp=datetime.now().isoformat(),
+            confidence=result.get("confidence", 0.0)
+        )
+        
+    except Exception as e:
+        print(f"❌ Chat error: {e}")
+        fallback_responses = get_fallback_responses()
+        return ChatResponse(
+            response=fallback_responses["load_error"],
+            sources=[],
+            session_id=request.session_id or "default",
+            timestamp=datetime.now().isoformat(), 
+            confidence=0.0
+        )
+
+@app.post("/api/chat/load/{job_id}")
+@app.get("/api/chat/load/{job_id}")
+async def load_chat_data(job_id: str):
+    """Load transcript data for specific job into chat system"""
+    if not CHAT_SYSTEM_AVAILABLE or chat_system is None:
+        # Return success response even when chat system is not available
+        return {
+            "status": "success", 
+            "message": f"Chat system not available, but job {job_id} request acknowledged",
+            "job_id": job_id,
+            "chat_available": False
+        }
+    
+    try:
+        # Find the result file for this job
+        result_file = f"results/result_{job_id}.json"
+        
+        if not os.path.exists(result_file):
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        
+        # Load data into chat system
+        success = chat_system.load_transcription_data(result_file)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to load transcription data")
+        
+        # Also load data into multi-model system if available
+        if multi_chat_system is not None:
+            multi_success = multi_chat_system.load_transcription_data(result_file)
+            if multi_success:
+                print(f"✅ Data also loaded into multi-model chat system")
+        
+        return {
+            "status": "success",
+            "message": f"Transcript loaded for job {job_id}",
+            "job_id": job_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Load chat data error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load chat data: {str(e)}")
+
+@app.get("/api/chat/suggestions")
+async def get_chat_suggestions():
+    """Get suggested questions for the loaded transcript"""
+    if not CHAT_SYSTEM_AVAILABLE or chat_system is None:
+        # Return default suggestions when chat system is not available
+        return {"suggestions": [
+            "What is this transcript about?",
+            "Who are the main speakers?", 
+            "What are the key topics discussed?",
+            "Can you summarize the main points?",
+            "What questions were asked?",
+            "What are the next steps?"
+        ]}
+    
+    try:
+        if not hasattr(chat_system, 'current_file_data') or chat_system.current_file_data is None:
+            return {"suggestions": [
+                "What is this transcript about?",
+                "Who are the main speakers?",
+                "What are the key topics discussed?",
+                "Can you summarize the main points?"
+            ]}
+        
+        # Generate suggestions based on the loaded content
+        suggestions = [
+            "Who are the speakers in this meeting?",
+            "What are the main topics discussed?",
+            "Can you summarize the key decisions made?",
+            "What action items were mentioned?",
+            "What questions were asked during the meeting?",
+            "What are the main concerns raised?"
+        ]
+        
+        return {"suggestions": suggestions}
+        
+    except Exception as e:
+        print(f"❌ Get suggestions error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get suggestions: {str(e)}")
+
+@app.get("/api/chat/status")
+async def get_chat_status():
+    """Get chat system status"""
+    return {
+        "available": CHAT_SYSTEM_AVAILABLE,
+        "system_ready": chat_system is not None,
+        "multi_model_ready": multi_chat_system is not None,
+        "has_loaded_data": hasattr(chat_system, 'current_file_data') and chat_system.current_file_data is not None if chat_system else False
+    }
+
+@app.post("/api/chat/enhanced") 
+async def enhanced_chat_query(request: dict):
+    """Enhanced chat with multi-model support"""
+    if not CHAT_SYSTEM_AVAILABLE or multi_chat_system is None:
+        # Return fallback response using centralized prompts
+        query = request.get("query", "")
+        fallback_responses = get_fallback_responses()
+        return {
+            "response": fallback_responses["enhanced_chat_not_available"],
+            "model_used": "fallback",
+            "confidence": 0.0,
+            "sources": [],
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    try:
+        query = request.get("query", "")
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+        
+        # Extract parameters from request
+        model_preference = request.get("model_preference", None)
+        use_smart_routing = request.get("use_smart_routing", True)
+        session_id = request.get("session_id", "default")
+        
+        print(f"🤖 Enhanced chat - Model preference: {model_preference}, Smart routing: {use_smart_routing}")
+        
+        # Use multi-model system with user preferences
+        result = multi_chat_system.smart_query(
+            query=query,
+            session_id=session_id,
+            model_preference=model_preference,
+            use_smart_routing=use_smart_routing
+        )
+        
+        return {
+            "response": result["response"],
+            "model_used": result.get("model_used", "unknown"),
+            "confidence": result.get("confidence", 0.0),
+            "sources": result.get("sources", []),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ Enhanced chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhanced chat error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
