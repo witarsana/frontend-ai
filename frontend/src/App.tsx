@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppState, Tab, ProcessingState } from './types';
 import { sampleTranscript } from './data/sampleData';
 import { aiAPI, convertAPIResultToFrontendFormat, APIStatusResponse } from './services/api';
@@ -6,7 +6,7 @@ import { aiAPI, convertAPIResultToFrontendFormat, APIStatusResponse } from './se
 import UploadSection from './components/UploadSection';
 import ProcessingSection from './components/ProcessingSection';
 import ResultsHistory from './components/ResultsHistory';
-import AudioPlayer from './components/AudioPlayer';
+import AudioPlayer, { AudioPlayerRef } from './components/AudioPlayer';
 import SummaryTab from './components/SummaryTab';
 import TranscriptTab from './components/TranscriptTab';
 import AnalyticsTab from './components/AnalyticsTab';
@@ -14,6 +14,12 @@ import ChatTab from './components/ChatTab';
 import EngineSelector from './components/EngineSelector';
 
 const App: React.FC = () => {
+  // Audio Player ref for seeking
+  const audioPlayerRef = useRef<AudioPlayerRef>(null);
+  
+  // Current audio time tracking
+  const [currentAudioTime, setCurrentAudioTime] = useState<number>(0);
+
   const [appState, setAppState] = useState<AppState>({
     showUpload: true,
     showProcessing: false,
@@ -291,8 +297,24 @@ const App: React.FC = () => {
   };
 
   const handleSeekToTime = (seconds: number) => {
-    // This would integrate with the audio player to seek to specific time
-    console.log('Seeking to time:', seconds);
+    // Seek audio player to specific time and auto-play
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.seekTo(seconds);
+      audioPlayerRef.current.play();
+      
+      // Update current time state
+      setCurrentAudioTime(seconds);
+      
+      // Switch to transcript tab if user is not already there
+      if (appState.activeTab !== 'transcript') {
+        setAppState(prev => ({ ...prev, activeTab: 'transcript' }));
+      }
+    }
+  };
+
+  // Audio time update handler
+  const handleAudioTimeUpdate = (seconds: number) => {
+    setCurrentAudioTime(seconds);
   };
 
   const handleRetryWithAPI = () => {
@@ -393,6 +415,7 @@ const App: React.FC = () => {
               onSearchChange={handleSearchChange}
               onFilterChange={handleFilterChange}
               onSeekToTime={handleSeekToTime}
+              currentTime={currentAudioTime}
             />
           </>
         );
@@ -519,8 +542,10 @@ const App: React.FC = () => {
         {currentView === 'results' && currentJobId && (
           <div className="results active">
             <AudioPlayer 
-              onSeekToTime={handleSeekToTime} 
-              audioUrl={`http://localhost:8002/api/audio/${currentJobId}`}
+              ref={audioPlayerRef}
+              onSeekToTime={handleSeekToTime}
+              onTimeUpdate={handleAudioTimeUpdate}
+              audioUrl={`/api/audio/${currentJobId}`}
               duration={apiData?.duration}
             />
 

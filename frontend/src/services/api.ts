@@ -270,11 +270,19 @@ export class AITranscriptionAPI {
 }
 
 // Utility function to convert API result to frontend format
+// Helper function to convert seconds to MM:SS format
+function formatSecondsToTimestamp(seconds: number): string {
+  const totalSeconds = Math.floor(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
 export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
   return {
     transcript: apiResult.transcript.map(segment => ({
-      start: segment.start.toString(),
-      end: segment.end.toString(),
+      start: formatSecondsToTimestamp(segment.start),
+      end: formatSecondsToTimestamp(segment.end),
       speakerName: segment.speaker_name,
       speaker: segment.speaker,
       text: segment.text,

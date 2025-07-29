@@ -35,8 +35,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
   const [sessionId] = useState(`session_${Date.now()}`);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('mistral'); // Default ke Mistral
-  const [useEnhancedChat, setUseEnhancedChat] = useState(true);
-  const [chatStats, setChatStats] = useState<any>(null);
+  // Note: These variables are reserved for future enhanced chat features
+  const [_useEnhancedChat, _setUseEnhancedChat] = useState(true);
+  const [_chatStats, _setChatStats] = useState<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Load chat suggestions
@@ -197,14 +198,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
             <div>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>AI Meeting Assistant</h3>
               <p style={{ margin: '4px 0 0 0', fontSize: '14px', opacity: 0.9 }}>
-                {useEnhancedChat ? 'Enhanced chat dengan multi-model AI' : 'Tanya apa saja tentang isi meeting ini'}
+                {_useEnhancedChat ? 'Enhanced chat dengan multi-model AI' : 'Tanya apa saja tentang isi meeting ini'}
               </p>
             </div>
           </div>
           
           {/* Model Selector and Settings */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {useEnhancedChat && (
+            {_useEnhancedChat && (
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}

@@ -103,8 +103,9 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
           continue;
         }
         
-        // Check if we're starting a new section (reset skip)
-        if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**') && 
+        // Check if we're starting a new section (reset skip) - support both formats
+        if ((trimmedLine.startsWith('#### ') || 
+             (trimmedLine.startsWith('**') && trimmedLine.endsWith('**'))) && 
             !trimmedLine.toLowerCase().includes('action items') && 
             !trimmedLine.toLowerCase().includes('keputusan')) {
           skipSection = false;
@@ -137,8 +138,12 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
         continue;
       }
 
-      // Detect section headers
-      if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+      // Detect section headers - support both #### and ** formats
+      if ((trimmedLine.startsWith('#### ') && !trimmedLine.toLowerCase().includes('action items') && !trimmedLine.toLowerCase().includes('keputusan')) ||
+          (trimmedLine.startsWith('**') && trimmedLine.endsWith('**') && 
+           !trimmedLine.toLowerCase().includes('action items') && 
+           !trimmedLine.toLowerCase().includes('keputusan'))) {
+        
         // Save previous section
         if (currentSection && currentContent.length > 0) {
           sections.push({
@@ -148,8 +153,15 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
           });
         }
         
-        // Start new section
-        currentSection = trimmedLine.replace(/^\*\*/, '').replace(/\*\*$/, '').trim();
+        // Start new section - extract title from either format
+        let sectionTitle = '';
+        if (trimmedLine.startsWith('#### ')) {
+          sectionTitle = trimmedLine.replace(/^#### /, '').trim();
+        } else {
+          sectionTitle = trimmedLine.replace(/^\*\*/, '').replace(/\*\*$/, '').trim();
+        }
+        
+        currentSection = sectionTitle;
         currentContent = [];
       } else if (trimmedLine.length > 0) {
         // Add content to current section
@@ -284,6 +296,40 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
                 <div key={index} className="bullet-point">
                   <span className="bullet">•</span>
                   <span className="bullet-text">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {summaryData?.speaker_points && summaryData.speaker_points.length > 0 && (
+          <div className="summary-section structured-section">
+            <h3 className="section-title">
+              <span className="section-icon">👥</span>
+              KONTRIBUSI PEMBICARA
+            </h3>
+            <div className="section-content">
+              {summaryData.speaker_points.map((point: string, index: number) => (
+                <div key={index} className="bullet-point">
+                  <span className="bullet">•</span>
+                  <span className="bullet-text">{point}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {summaryData?.point_of_view && summaryData.point_of_view.length > 0 && (
+          <div className="summary-section structured-section">
+            <h3 className="section-title">
+              <span className="section-icon">💭</span>
+              POIN-POIN PENTING DARI SETIAP PEMBICARA
+            </h3>
+            <div className="section-content">
+              {summaryData.point_of_view.map((viewpoint: string, index: number) => (
+                <div key={index} className="bullet-point">
+                  <span className="bullet">•</span>
+                  <span className="bullet-text">{viewpoint}</span>
                 </div>
               ))}
             </div>

@@ -1,14 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { AudioPlayerState } from '../types';
 import { formatTime } from '../utils/helpers';
 
 interface AudioPlayerProps {
   onSeekToTime: (seconds: number) => void;
+  onTimeUpdate?: (seconds: number) => void; // Callback for time updates
   audioUrl?: string;
   duration?: number;
 }
 
-const AudioPlayer: React.FC<AudioPlayerProps> = ({ onSeekToTime, audioUrl, duration }) => {
+export interface AudioPlayerRef {
+  seekTo: (seconds: number) => void;
+  play: () => void;
+  pause: () => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+}
+
+const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ onSeekToTime, onTimeUpdate, audioUrl, duration }, ref) => {
   const [playerState, setPlayerState] = useState<AudioPlayerState>({
     isPlaying: false,
     currentTime: 0,
@@ -16,6 +25,34 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ onSeekToTime, audioUrl, durat
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    seekTo: (seconds: number) => {
+      if (audioRef.current) {
+        const clampedSeconds = Math.max(0, Math.min(seconds, playerState.duration));
+        audioRef.current.currentTime = clampedSeconds;
+        setPlayerState(prev => ({
+          ...prev,
+          currentTime: clampedSeconds
+        }));
+      }
+    },
+    play: () => {
+      if (audioRef.current && !playerState.isPlaying) {
+        audioRef.current.play().catch(e => {
+          console.error('Play error:', e);
+        });
+      }
+    },
+    pause: () => {
+      if (audioRef.current && playerState.isPlaying) {
+        audioRef.current.pause();
+      }
+    },
+    getCurrentTime: () => playerState.currentTime,
+    getDuration: () => playerState.duration
+  }), [playerState]);
 
   // Initialize audio element
   useEffect(() => {
@@ -31,10 +68,16 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ onSeekToTime, audioUrl, durat
       });
 
       audio.addEventListener('timeupdate', () => {
+        const currentTime = audio.currentTime;
         setPlayerState(prev => ({
           ...prev,
-          currentTime: audio.currentTime
+          currentTime: currentTime
         }));
+        
+        // Call onTimeUpdate callback if provided
+        if (onTimeUpdate) {
+          onTimeUpdate(Math.floor(currentTime));
+        }
       });
 
       audio.addEventListener('ended', () => {
@@ -57,7 +100,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ onSeekToTime, audioUrl, durat
         audio.removeEventListener('error', () => {});
       };
     }
-  }, [audioUrl]);
+  }, [audioUrl, onTimeUpdate]);
 
   // Update duration if passed as prop
   useEffect(() => {
@@ -136,6 +179,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ onSeekToTime, audioUrl, durat
       )}
     </div>
   );
-};
+});
+
+AudioPlayer.displayName = 'AudioPlayer';
 
 export default AudioPlayer;

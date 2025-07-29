@@ -10,6 +10,7 @@ interface TranscriptTabProps {
   onSearchChange: (query: string) => void;
   onFilterChange: (filter: string) => void;
   onSeekToTime: (seconds: number) => void;
+  currentTime?: number; // Current audio time
 }
 
 const TranscriptTab: React.FC<TranscriptTabProps> = ({
@@ -19,7 +20,8 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
   participants,
   onSearchChange,
   onFilterChange,
-  onSeekToTime
+  onSeekToTime,
+  currentTime = 0
 }) => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,6 +142,7 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
               key={startIndex + index}
               item={item}
               onSeekToTime={onSeekToTime}
+              currentTime={currentTime}
             />
           ))
         ) : (

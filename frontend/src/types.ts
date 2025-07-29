@@ -54,4 +54,6 @@ export interface SummaryData {
   meetingSummary: string;
   actionItems: string[];
   keyDecisions: string[];
+  speakerPoints: string[];
+  pointOfView: string[];
 }
