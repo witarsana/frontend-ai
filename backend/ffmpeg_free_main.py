@@ -885,7 +885,7 @@ async def transcribe_with_deepgram(audio_path: str, job_id: str = None) -> Dict[
         # Configure options with timeout considerations
         options = PrerecordedOptions(
             model="nova-2",  # Latest high-accuracy model
-            language="id",  # Indonesian
+            language="en",  
             smart_format=True,
             punctuate=True,
             diarize=True,  # Speaker diarization
@@ -1800,7 +1800,7 @@ def clean_summary_text(summary: str, action_items: list, key_decisions: list) ->
     Clean summary text to be CONCISE by removing detailed sections that are now separated
     """
     if not summary:
-        return "Percakapan telah diproses dan siap untuk analisis."
+        return "Conversation has been processed and ready for analysis."
     
     # Replace \n with actual newlines
     summary = summary.replace('\\n', '\n')
@@ -1842,7 +1842,7 @@ async def extract_structured_data_from_summary(transcript_segments: list) -> tup
     global mistral_client
     
     if not transcript_segments:
-        return ["Review transcript untuk insight detail"], ["Audio berhasil diproses dengan teknologi AI"], ["Speaker 1: Poin utama dari perspektif pembicara"]
+        return ["Review transcript for detailed insights"], ["Audio successfully processed with AI technology"], ["Speaker 1: Main points from speaker's perspective"]
     
     # Format transcript for AI analysis
     transcript_text = ""
@@ -1852,7 +1852,7 @@ async def extract_structured_data_from_summary(transcript_segments: list) -> tup
         transcript_text += f"{speaker}: {text}\n"
     
     if not transcript_text.strip():
-        return ["Review transcript untuk insight detail"], ["Audio berhasil diproses dengan teknologi AI"], ["Speaker 1: Poin penting dari pembicara"]
+        return ["Review transcript for detailed insights"], ["Audio successfully processed with AI technology"], ["Speaker 1: Important points from speaker"]
     
     # Generate structured data using AI
     try:
@@ -1918,22 +1918,22 @@ async def extract_structured_data_from_summary(transcript_segments: list) -> tup
 def generate_basic_structured_data() -> tuple:
     """Generate basic structured data when AI is not available - only 3 fields"""
     action_items = [
-        "High Priority Action 1: Review transcript lengkap untuk mengidentifikasi action items spesifik",
-        "Medium Priority Action 2: Analisis diskusi untuk menemukan tindakan yang perlu diambil",
-        "Strategic Action 3: Buat rencana implementasi berdasarkan hasil diskusi",
-        "Quick Win Action 4: Implementasi tindakan cepat yang mudah dilakukan",
-        "Follow-up Action 5: Lakukan evaluasi dan follow up pada poin-poin penting yang dibahas"
+        "High Priority Action 1: Review complete transcript to identify specific action items",
+        "Medium Priority Action 2: Analyze discussion to find actions that need to be taken",
+        "Strategic Action 3: Create implementation plan based on discussion results",
+        "Quick Win Action 4: Implement quick and easy actions",
+        "Follow-up Action 5: Conduct evaluation and follow up on important points discussed"
     ]
     
     key_decisions = [
-        "Audio berhasil diproses dan ditranskripsi dengan akurasi tinggi",
-        "Transcript siap untuk analisis mendalam dan pengambilan keputusan",
-        "Sistem berhasil mengidentifikasi pembicara dan segmentasi waktu"
+        "Audio successfully processed and transcribed with high accuracy",
+        "Transcript ready for in-depth analysis and decision making",
+        "System successfully identified speakers and time segmentation"
     ]
     
     point_of_view = [
-        "Speaker 1: Menyampaikan perspektif utama dalam topik diskusi",
-        "Speaker 2: Memberikan sudut pandang alternatif yang konstruktif"
+        "Speaker 1: Presented main perspective in discussion topics",
+        "Speaker 2: Provided constructive alternative viewpoint"
     ]
     
     return action_items, key_decisions, point_of_view
@@ -1976,7 +1976,7 @@ async def generate_comprehensive_summary(transcript_segments: list) -> str:
         response = mistral_client.chat.complete(
             model="mistral-large-latest",
             messages=[
-                {"role": "system", "content": "Kamu adalah expert analyst yang sangat mahir dalam menganalisis percakapan dan membuat ringkasan yang komprehensif, detail, dan actionable. Kamu selalu memberikan insight yang mendalam dan format yang profesional seperti briefing meeting. PENTING: Kamu WAJIB mengikuti format lengkap 4 bagian dan TIDAK BOLEH melewatkan bagian 'Poin-Poin Penting dari Setiap Pembicara'."},
+                {"role": "system", "content": "You are an expert analyst who is very skilled at analyzing conversations and creating comprehensive, detailed, and actionable summaries. You always provide deep insights and professional format like meeting briefings. IMPORTANT: You MUST follow the complete 4-section format and CANNOT skip the 'Important Points from Each Speaker' section."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1,  # Even lower temperature for more consistent formatting
@@ -1995,9 +1995,9 @@ async def generate_comprehensive_summary(transcript_segments: list) -> str:
             
             # Validate that all 4 required sections are present
             required_sections = [
-                "Topik Utama yang Dibahas",
-                "Poin-Poin Penting dari Setiap Pembicara", 
-                "Keputusan atau Kesimpulan yang Diambil",
+                "Main Topics Discussed",
+                "Important Points from Each Speaker", 
+                "Decisions or Conclusions Made",
                 "Action Items"
             ]
             
@@ -2023,32 +2023,32 @@ async def generate_comprehensive_summary(transcript_segments: list) -> str:
         print(f"❌ Comprehensive summary error: {error_msg}")
         
         # Return a JSON-safe fallback with proper 4-section structure
-        fallback_summary = """### Ringkasan Percakapan
+        fallback_summary = """### Meeting Summary
 
-#### Topik Utama yang Dibahas
-1. **Analisis Audio Content**: Sistem telah berhasil menganalisis dan memproses content audio dengan teknologi AI terdepan
-2. **Segmentasi Speaker**: Identifikasi multiple speakers dengan akurasi tinggi menggunakan teknologi machine learning
-3. **Transcription Quality**: Hasil transcription berkualitas tinggi dengan word-level timestamps
+#### Main Topics Discussed
+1. **Audio Content Analysis**: System successfully analyzed and processed audio content with cutting-edge AI technology
+2. **Speaker Segmentation**: Identified multiple speakers with high accuracy using machine learning technology
+3. **Transcription Quality**: High-quality transcription results with word-level timestamps
 
-#### Poin-Poin Penting dari Setiap Pembicara
+#### Important Points from Each Speaker
 
 **Speaker 1**
-- **Content Leadership**: Memimpin diskusi dengan kontribusi substantial sepanjang percakapan
-- **Knowledge Sharing**: Menyampaikan informasi dan insight berharga untuk audience
+- **Content Leadership**: Led discussion with substantial contributions throughout the conversation
+- **Knowledge Sharing**: Presented valuable information and insights for the audience
 
 **Speaker 2**
-- **Active Participation**: Memberikan respons dan feedback yang konstruktif
-- **Collaborative Discussion**: Berkontribusi dalam menciptakan dialog yang meaningful
+- **Active Participation**: Provided constructive responses and feedback
+- **Collaborative Discussion**: Contributed to creating meaningful dialogue
 
-#### Keputusan atau Kesimpulan yang Diambil
-1. Audio content berhasil diproses dengan teknologi transcription terdepan
-2. Hasil transcription memenuhi standar kualitas tinggi untuk analisis lanjutan
-3. Sistem menunjukkan performa yang stabil dan reliable
+#### Decisions or Conclusions Made
+1. Audio content successfully processed with cutting-edge transcription technology
+2. Transcription results meet high quality standards for further analysis
+3. System demonstrates stable and reliable performance
 
 #### Action Items
-1. **Review**: Lakukan review menyeluruh terhadap hasil transcription untuk mendapatkan insight detail
-2. **Analysis**: Analisis content untuk aplikasi bisnis, pembelajaran, atau strategic planning
-3. **Documentation**: Gunakan hasil transcription untuk dokumentasi dan referensi future projects"""
+1. **Review**: Conduct comprehensive review of transcription results to gain detailed insights
+2. **Analysis**: Analyze content for business applications, learning, or strategic planning
+3. **Documentation**: Use transcription results for documentation and future project references"""
 
         # Validate fallback is JSON-safe
         try:
@@ -2076,53 +2076,53 @@ async def generate_summary_with_mistral(transcript_segments: list) -> str:
         return "❌ No transcript available for summarization."
     
     prompt = f"""
-Berikut adalah transkrip meeting/percakapan dengan beberapa pembicara. Buatkan ringkasan KOMPREHENSIF dan TERSTRUKTUR yang mencakup analisis mendalam:
+Here is a meeting/conversation transcript with multiple speakers. Create a COMPREHENSIVE and STRUCTURED summary that includes in-depth analysis:
 
 {transcript_text}
 
-Tolong buat ringkasan dengan format LENGKAP seperti berikut:
+Please create a summary with the following COMPLETE format:
 
-### Ringkasan Percakapan
+### Meeting Summary
 
-#### Topik Utama yang Dibahas
-1. **[Topik 1]**: [Penjelasan detail topik pertama]
-2. **[Topik 2]**: [Penjelasan detail topik kedua]  
-3. **[Topik 3]**: [Penjelasan detail topik ketiga]
-[tambahkan topik lain sesuai content]
+#### Main Topics Discussed
+1. **[Topic 1]**: [Detailed explanation of first topic]
+2. **[Topic 2]**: [Detailed explanation of second topic]  
+3. **[Topic 3]**: [Detailed explanation of third topic]
+[add other topics according to content]
 
-#### Poin-Poin Penting dari Setiap Pembicara
+#### Important Points from Each Speaker
 
 **Speaker 1**
-- **[Aspek 1]**: [Detail kontribusi speaker 1 pada aspek ini]
-- **[Aspek 2]**: [Detail kontribusi speaker 1 pada aspek ini]
-- **[Aspek 3]**: [Detail kontribusi speaker 1 pada aspek ini]
+- **[Aspect 1]**: [Details of speaker 1's contribution on this aspect]
+- **[Aspect 2]**: [Details of speaker 1's contribution on this aspect]
+- **[Aspect 3]**: [Details of speaker 1's contribution on this aspect]
 
 **Speaker 2** 
-- **[Aspek 1]**: [Detail kontribusi speaker 2 pada aspek ini]
-- **[Aspek 2]**: [Detail kontribusi speaker 2 pada aspek ini]
-- **[Aspek 3]**: [Detail kontribusi speaker 2 pada aspek ini]
+- **[Aspect 1]**: [Details of speaker 2's contribution on this aspect]
+- **[Aspect 2]**: [Details of speaker 2's contribution on this aspect]
+- **[Aspect 3]**: [Details of speaker 2's contribution on this aspect]
 
-[tambahkan speaker lain jika ada]
+[add other speakers if any]
 
-#### Keputusan atau Kesimpulan yang Diambil
-1. **[Kesimpulan 1]**: [Detail kesimpulan pertama]
-2. **[Kesimpulan 2]**: [Detail kesimpulan kedua]
-3. **[Kesimpulan 3]**: [Detail kesimpulan ketiga]
-[tambahkan kesimpulan lain sesuai content]
+#### Decisions or Conclusions Made
+1. **[Conclusion 1]**: [Details of first conclusion]
+2. **[Conclusion 2]**: [Details of second conclusion]
+3. **[Conclusion 3]**: [Details of third conclusion]
+[add other conclusions according to content]
 
 #### Action Items
-1. **[Action 1]**: [Detail action item pertama yang specific dan actionable]
-2. **[Action 2]**: [Detail action item kedua yang specific dan actionable]
-3. **[Action 3]**: [Detail action item ketiga yang specific dan actionable]
-4. **[Action 4]**: [Detail action item keempat yang specific dan actionable]
-5. **[Action 5]**: [Detail action item kelima yang specific dan actionable]
+1. **[Action 1]**: [Details of first action item that is specific and actionable]
+2. **[Action 2]**: [Details of second action item that is specific and actionable]
+3. **[Action 3]**: [Details of third action item that is specific and actionable]
+4. **[Action 4]**: [Details of fourth action item that is specific and actionable]
+5. **[Action 5]**: [Details of fifth action item that is specific and actionable]
 
-PENTING: 
-- Analisis dengan mendalam dan berikan insight yang valuable
-- Identifikasi nama speaker jika disebutkan dalam percakapan
-- Buat action items yang specific, measurable, dan actionable
-- Berikan kesimpulan yang meaningful dan dapat diimplementasikan
-- Gunakan format yang rapi dan profesional
+IMPORTANT: 
+- Analyze deeply and provide valuable insights
+- Identify speaker names if mentioned in the conversation
+- Create action items that are specific, measurable, and actionable
+- Provide meaningful and implementable conclusions
+- Use neat and professional formatting
 """
 
     try:
@@ -2132,7 +2132,7 @@ PENTING:
         response = mistral_client.chat.complete(
             model="mistral-large-latest",
             messages=[
-                {"role": "system", "content": "Kamu adalah asisten cerdas yang ahli dalam merangkum percakapan rapat dan meeting."},
+                {"role": "system", "content": "You are an intelligent assistant who is expert in summarizing meeting and conversation transcripts."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.5,
@@ -2147,26 +2147,26 @@ PENTING:
         
         # Provide intelligent fallback based on transcript content
         if "service tier capacity exceeded" in error_msg.lower() or "429" in error_msg:
-            return """**TOPIK UTAMA**
-Sistem telah berhasil memproses dan menganalisis content audio dengan teknologi AI terdepan. Percakapan mencakup diskusi mendalam dengan durasi signifikan dan multiple speakers.
+            return """**MAIN TOPICS**
+System has successfully processed and analyzed audio content with cutting-edge AI technology. The conversation includes in-depth discussion with significant duration and multiple speakers.
 
-**POIN-POIN PENTING PER PEMBICARA**
-- Speaker 1: Menyampaikan informasi utama dan leading discussion sepanjang percakapan
-- Speaker 2: Memberikan feedback, respons, dan kontribusi berharga dalam diskusi
+**IMPORTANT POINTS PER SPEAKER**
+- Speaker 1: Presented main information and led discussion throughout the conversation
+- Speaker 2: Provided feedback, responses, and valuable contributions to the discussion
 
-**KEPUTUSAN ATAU KESIMPULAN**
-- Content audio berhasil ditranskripsi dengan akurasi tinggi menggunakan teknologi Whisper
-- Sistem berhasil mengidentifikasi multiple speakers dengan segmentasi yang tepat
-- Hasil transcription siap untuk analisis mendalam dan aplikasi praktis
+**DECISIONS OR CONCLUSIONS**
+- Audio content successfully transcribed with high accuracy using Whisper technology
+- System successfully identified multiple speakers with proper segmentation
+- Transcription results ready for in-depth analysis and practical applications
 
 **ACTION ITEMS**
-- Review transcript detail untuk mendapatkan insights spesifik
-- Analisis content untuk implementasi strategis atau pembelajaran
-- Gunakan hasil transcription untuk dokumentasi komprehensif
-- Pertimbangkan regenerasi summary ketika API tersedia kembali
+- Review detailed transcript to get specific insights
+- Analyze content for strategic implementation or learning
+- Use transcription results for comprehensive documentation
+- Consider regenerating summary when API becomes available again
 """
         else:
-            return f"**RINGKASAN OTOMATIS**\n\nSistem telah berhasil memproses audio content dengan teknologi AI. Transcription lengkap tersedia untuk review dan analisis.\n\n**STATUS**: {error_msg}\n\n**SOLUSI**: Gunakan fitur regenerate summary atau review transcript manual untuk insight detail."
+            return f"**AUTOMATIC SUMMARY**\n\nSystem has successfully processed audio content with AI technology. Complete transcription is available for review and analysis.\n\n**STATUS**: {error_msg}\n\n**SOLUTION**: Use regenerate summary feature or review transcript manually for detailed insights."
 
 
 @app.post("/api/reprocess-summary/{job_id}")

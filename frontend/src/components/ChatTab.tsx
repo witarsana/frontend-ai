@@ -34,7 +34,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [sessionId] = useState(`session_${Date.now()}`);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>('mistral'); // Default ke Mistral
+  const [selectedModel, setSelectedModel] = useState<string>('faiss'); // Default ke FAISS (offline)
   // Note: These variables are reserved for future enhanced chat features
   const [_useEnhancedChat, _setUseEnhancedChat] = useState(true);
   const [_chatStats, _setChatStats] = useState<any>(null);
@@ -87,24 +87,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
       let endpoint = '';
       let requestBody: any = {};
 
-      if (selectedModel === 'faiss') {
-        // Gunakan basic chat endpoint untuk FAISS
-        endpoint = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CHAT}`;
-        requestBody = {
-          query: userQuery,
-          session_id: sessionId,
-          file_id: currentFileId
-        };
-      } else {
-        // Gunakan enhanced chat untuk Mistral/OpenAI
-        endpoint = `${API_CONFIG.BASE_URL}/api/chat/enhanced`;
-        requestBody = {
-          query: userQuery,
-          session_id: sessionId,
-          model_preference: selectedModel,
-          use_smart_routing: false  // Tidak pakai smart routing, langsung pakai model yang dipilih
-        };
-      }
+      // Gunakan enhanced chat untuk semua model
+      endpoint = `${API_CONFIG.BASE_URL}/api/chat/enhanced`;
+      requestBody = {
+        query: userQuery,
+        session_id: sessionId,
+        model_preference: selectedModel || 'faiss', // Default ke FAISS jika tidak ada preferensi
+        use_smart_routing: !selectedModel  // Hanya gunakan smart routing jika tidak ada model spesifik
+      };
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -220,9 +210,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
                 }}
               >
                 <option value="" style={{ color: 'black' }}>Smart Auto</option>
-                <option value="faiss" style={{ color: 'black' }}>🔍 FAISS (Free)</option>
+                <option value="faiss" style={{ color: 'black' }}>🔍 FAISS (Offline Free)</option>
                 <option value="mistral" style={{ color: 'black' }}>⚡ Mistral AI</option>
-                <option value="deepseek" style={{ color: 'black' }}>🧠 DeepSeek AI</option>
               </select>
             )}
             

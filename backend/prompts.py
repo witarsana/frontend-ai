@@ -15,217 +15,203 @@ Memudahkan maintenance dan customization prompt tanpa edit kode utama.
 def get_summary_prompt(transcript_text):
     """Simple but effective prompt based on proven sample script"""
     return f"""
-Berikut adalah transkrip meeting/percakapan dengan beberapa pembicara. Buatkan ringkasan berupa poin-poin penting dari diskusi ini:
+Here is a meeting/conversation transcript with multiple speakers. Create a comprehensive summary of the key points from this discussion:
 
 {transcript_text}
 
-Tolong buat ringkasan yang mencakup:
-1. Topik utama yang dibahas
-2. Poin-poin penting dari setiap pembicara
-3. Keputusan atau kesimpulan yang diambil
-4. Action items (jika ada)
+Please create a summary that includes:
+1. Main topics discussed
+2. Important points from each speaker
+3. Decisions or conclusions made
+4. Action items (if any)
 
-Format output dalam JSON:
+Format output in JSON:
 {{
-  "summary": "Ringkasan lengkap dengan topik utama, poin per pembicara, keputusan, dan action items",
+  "summary": "Complete summary with main topics, points per speaker, decisions, and action items",
   "action_items": ["Action item 1", "Action item 2"],
-  "key_decisions": ["Keputusan 1", "Keputusan 2"]
+  "key_decisions": ["Decision 1", "Decision 2"]
 }}
 
-Pastikan summary detail dan informatif seperti briefing meeting yang komprehensif.
+Ensure the summary is detailed and informative like a comprehensive meeting briefing. Output everything in ENGLISH.
 """
 
 def get_comprehensive_summary_prompt(transcript_text):
     """Enhanced prompt for generating comprehensive summary with professional structure like mainSample.py"""
     return f"""
-Berdasarkan transkrip meeting/percakapan berikut, buatkan ringkasan komprehensif seperti format mainSample.py:
+Based on the following meeting/conversation transcript, create a comprehensive summary like mainSample.py format:
 
-TRANSKRIP:
+TRANSCRIPT:
 {transcript_text[:5000]}
 
-TUGAS: Buat ringkasan lengkap dalam format yang mudah dibaca dan informatif seperti briefing meeting yang professional.
+TASK: Create a complete summary in an easy-to-read and informative format like a professional meeting briefing.
 
-Format output dalam BAHASA INDONESIA dengan struktur berikut yang WAJIB LENGKAP 4 BAGIAN:
+Format output in ENGLISH with the following COMPLETE 4 SECTIONS structure:
 
-### Ringkasan Percakapan
+### Meeting Summary
 
-#### Topik Utama yang Dibahas
-1. **[Topik 1]**: Penjelasan singkat dan informatif tentang topik yang dibahas
-2. **[Topik 2]**: Penjelasan singkat dan informatif tentang topik yang dibahas  
-3. **[Topik 3]**: Penjelasan singkat dan informatif tentang topik yang dibahas
-4. **[Topik 4]**: Penjelasan singkat dan informatif tentang topik yang dibahas (jika ada)
-5. **[Topik 5]**: Penjelasan singkat dan informatif tentang topik yang dibahas (jika ada)
+#### Main Topics Discussed
+1. **[Topic 1]**: Brief and informative explanation of the topic discussed
+2. **[Topic 2]**: Brief and informative explanation of the topic discussed  
+3. **[Topic 3]**: Brief and informative explanation of the topic discussed
+4. **[Topic 4]**: Brief and informative explanation of the topic discussed (if any)
+5. **[Topic 5]**: Brief and informative explanation of the topic discussed (if any)
 
-#### Poin-Poin Penting dari Setiap Pembicara
+#### Important Points from Each Speaker
 
-**[Nama Speaker 1]**
-- **[Topik/Aspek 1]**: [Kontribusi dan pandangan speaker 1 tentang topik ini]
-- **[Topik/Aspek 2]**: [Kontribusi dan pandangan speaker 1 tentang topik ini]
-- **[Topik/Aspek 3]**: [Kontribusi dan pandangan speaker 1 tentang topik ini]
+**[Speaker 1 Name]**
+- **[Topic/Aspect 1]**: [Speaker 1's contribution and viewpoint on this topic]
+- **[Topic/Aspect 2]**: [Speaker 1's contribution and viewpoint on this topic]
+- **[Topic/Aspect 3]**: [Speaker 1's contribution and viewpoint on this topic]
 
-**[Nama Speaker 2]**
-- **[Topik/Aspek 1]**: [Kontribusi dan pandangan speaker 2 tentang topik ini]
-- **[Topik/Aspek 2]**: [Kontribusi dan pandangan speaker 2 tentang topik ini]
-- **[Topik/Aspek 3]**: [Kontribusi dan pandangan speaker 2 tentang topik ini]
+**[Speaker 2 Name]**
+- **[Topic/Aspect 1]**: [Speaker 2's contribution and viewpoint on this topic]
+- **[Topic/Aspect 2]**: [Speaker 2's contribution and viewpoint on this topic]
+- **[Topic/Aspect 3]**: [Speaker 2's contribution and viewpoint on this topic]
 
-#### Keputusan atau Kesimpulan yang Diambil
-1. [Keputusan penting pertama berdasarkan diskusi]
-2. [Keputusan penting kedua berdasarkan diskusi]
-3. [Keputusan penting ketiga berdasarkan diskusi]
-4. [Keputusan penting keempat berdasarkan diskusi (jika ada)]
-5. [Keputusan penting kelima berdasarkan diskusi (jika ada)]
-
-#### Action Items
-1. **[Prioritas]**: [Action item spesifik dan actionable]
-2. **[Prioritas]**: [Action item spesifik dan actionable]
-3. **[Prioritas]**: [Action item spesifik dan actionable]
-4. **[Prioritas]**: [Action item spesifik dan actionable]
-5. **[Prioritas]**: [Action item spesifik dan actionable]
-
-PERHATIAN: BAGIAN "Poin-Poin Penting dari Setiap Pembicara" WAJIB ADA DAN TIDAK BOLEH DILEWATKAN!
-1. [Keputusan penting pertama berdasarkan diskusi]
-2. [Keputusan penting kedua berdasarkan diskusi]
-3. [Keputusan penting ketiga berdasarkan diskusi]
-4. [Keputusan penting keempat berdasarkan diskusi (jika ada)]
-5. [Keputusan penting kelima berdasarkan diskusi (jika ada)]
+#### Decisions or Conclusions Made
+1. [First important decision based on discussion]
+2. [Second important decision based on discussion]
+3. [Third important decision based on discussion]
+4. [Fourth important decision based on discussion (if any)]
+5. [Fifth important decision based on discussion (if any)]
 
 #### Action Items
-1. **[Prioritas]**: [Action item spesifik dan actionable]
-2. **[Prioritas]**: [Action item spesifik dan actionable]
-3. **[Prioritas]**: [Action item spesifik dan actionable]
-4. **[Prioritas]**: [Action item spesifik dan actionable]
-5. **[Prioritas]**: [Action item spesifik dan actionable]
+1. **[Priority]**: [Specific and actionable item]
+2. **[Priority]**: [Specific and actionable item]
+3. **[Priority]**: [Specific and actionable item]
+4. **[Priority]**: [Specific and actionable item]
+5. **[Priority]**: [Specific and actionable item]
 
-ATURAN PENTING:
-1. WAJIB ada 4 bagian lengkap: (1) Topik Utama yang Dibahas, (2) Poin-Poin Penting dari Setiap Pembicara, (3) Keputusan atau Kesimpulan yang Diambil, (4) Action Items
-2. TIDAK BOLEH melewatkan bagian "Poin-Poin Penting dari Setiap Pembicara" - bagian ini WAJIB ada
-3. Setiap pembicara HARUS diidentifikasi dengan nama/jabatan dan kontribusinya dijelaskan
-4. Gunakan BAHASA INDONESIA yang komprehensif dan mudah dipahami
-5. Pastikan setiap bagian terisi dengan lengkap dan detail yang memadai
-6. OUTPUT dalam format MARKDOWN text, BUKAN JSON - summary disimpan sebagai string biasa
-7. BAGIAN "Poin-Poin Penting dari Setiap Pembicara" adalah WAJIB dan tidak boleh dilewatkan
-8. Pastikan text output aman untuk JSON encoding (hindari karakter khusus yang bisa corrupt JSON)
-9. URUTAN BAGIAN harus sesuai: Topik Utama → Poin Pembicara → Keputusan → Action Items
+IMPORTANT RULES:
+1. MUST have 4 complete sections: (1) Main Topics Discussed, (2) Important Points from Each Speaker, (3) Decisions or Conclusions Made, (4) Action Items
+2. CANNOT skip the "Important Points from Each Speaker" section - this section is MANDATORY
+3. Each speaker MUST be identified with name/role and their contributions explained
+4. Use comprehensive and easy-to-understand ENGLISH
+5. Ensure each section is filled with complete and adequate details
+6. OUTPUT in MARKDOWN text format, NOT JSON - summary saved as plain string
+7. "Important Points from Each Speaker" section is MANDATORY and cannot be skipped
+8. Ensure text output is safe for JSON encoding (avoid special characters that could corrupt JSON)
+9. SECTION ORDER must be: Main Topics → Speaker Points → Decisions → Action Items
 """
 
 def get_structured_data_extraction_prompt(transcript_text):
-    """Prompt for extracting structured data - HANYA 3 kategori yang diperlukan"""
+    """Prompt for extracting structured data - ONLY 3 categories needed"""
     return f"""
-Berdasarkan transkrip berikut, ekstrak dan buat 3 kategori data terstruktur:
+Based on the following transcript, extract and create 3 categories of structured data:
 
-TRANSKRIP:
+TRANSCRIPT:
 {transcript_text[:4000]}  
 
-TUGAS: Buat 3 kategori data dalam format JSON dengan struktur yang konsisten:
+TASK: Create 3 data categories in JSON format with consistent structure:
 
-1. ACTION ITEMS - WAJIB 5 item dengan priority levels
-2. KEY DECISIONS - 3-5 keputusan penting 
-3. POINT OF VIEW - Poin-poin penting dari setiap pembicara (KHUSUS untuk point of view)
+1. ACTION ITEMS - MUST have 5 items with priority levels
+2. KEY DECISIONS - 3-5 important decisions 
+3. POINT OF VIEW - Important points from each speaker (SPECIFIC for point of view)
 
-Format output JSON (IKUTI FORMAT INI PERSIS):
+JSON output format (FOLLOW THIS FORMAT EXACTLY):
 {{
   "action_items": [
-    "High Priority Action 1: [Tindakan prioritas tinggi berdasarkan diskusi]",
-    "Medium Priority Action 2: [Tindakan prioritas menengah berdasarkan diskusi]",
-    "Strategic Action 3: [Tindakan strategis jangka panjang berdasarkan diskusi]",
-    "Quick Win Action 4: [Tindakan mudah dan cepat berdasarkan diskusi]",
-    "Follow-up Action 5: [Tindakan follow-up berdasarkan diskusi]"
+    "High Priority Action 1: [High priority action based on discussion]",
+    "Medium Priority Action 2: [Medium priority action based on discussion]",
+    "Strategic Action 3: [Long-term strategic action based on discussion]",
+    "Quick Win Action 4: [Easy and quick action based on discussion]",
+    "Follow-up Action 5: [Follow-up action based on discussion]"
   ],
   "key_decisions": [
-    "[Keputusan penting 1 berdasarkan diskusi]",
-    "[Keputusan penting 2 berdasarkan diskusi]",
-    "[Keputusan penting 3 berdasarkan diskusi]",
-    "[Keputusan penting 4 berdasarkan diskusi (jika ada)]"
+    "[Important decision 1 based on discussion]",
+    "[Important decision 2 based on discussion]",
+    "[Important decision 3 based on discussion]",
+    "[Important decision 4 based on discussion (if any)]"
   ],
   "point_of_view": [
-    "Speaker 1: [Poin penting dari perspektif/kontribusi Speaker 1]",
-    "Speaker 1: [Poin penting lain dari perspektif/kontribusi Speaker 1]",
-    "Speaker 2: [Poin penting dari perspektif/kontribusi Speaker 2]",
-    "Speaker 2: [Poin penting lain dari perspektif/kontribusi Speaker 2]"
+    "Speaker 1: [Important point from Speaker 1's perspective/contribution]",
+    "Speaker 1: [Another important point from Speaker 1's perspective/contribution]",
+    "Speaker 2: [Important point from Speaker 2's perspective/contribution]",
+    "Speaker 2: [Another important point from Speaker 2's perspective/contribution]"
   ]
 }}
 
-ATURAN WAJIB:
-- Output HANYA dalam format JSON yang valid
-- JANGAN ada text di luar JSON
-- Semua content 100% berdasarkan transkrip aktual
-- Point of view harus fokus pada kontribusi unik masing-masing speaker
-- Action items harus spesifik dan actionable
-- Key decisions harus keputusan nyata dari diskusi
-- JANGAN ada speaker_points karena sudah ada di point_of_view
+MANDATORY RULES:
+- Output ONLY in valid JSON format
+- NO text outside JSON
+- All content 100% based on actual transcript
+- Point of view must focus on unique contribution of each speaker
+- Action items must be specific and actionable
+- Key decisions must be actual decisions from discussion
+- NO speaker_points because already exists in point_of_view
 """
 
 # ===== ENHANCED CHAT PROMPTS =====
 
 def get_enhanced_summary_prompt(context: str, query: str) -> str:
     """
-    Prompt untuk enhanced summary dengan format terstruktur
-    Digunakan di: multi_model_chat.py -> _build_mistral_prompt()
+    Prompt for enhanced summary with structured format
+    Used in: multi_model_chat.py -> _build_mistral_prompt()
     """
-    return f"""Berdasarkan transcript meeting/percakapan berikut, berikan analisis lengkap dan terstruktur dalam bahasa Indonesia.
+    return f"""Based on the following meeting/conversation transcript, provide a complete and structured analysis in English.
 
 CONTEXT:
 {context}
 
 USER QUERY: {query}
 
-INSTRUKSI:
-Analisis transcript ini dengan format yang rapi dan terstruktur. Berikan jawaban yang comprehensive dengan menggunakan format berikut:
+INSTRUCTIONS:
+Analyze this transcript with a neat and structured format. Provide a comprehensive answer using the following format:
 
-### 📋 TOPIK UTAMA YANG DIBAHAS
-- **Topik 1**: Penjelasan detail tentang topik ini
-- **Topik 2**: Penjelasan detail tentang topik ini
-[dst...]
+### 📋 MAIN TOPICS DISCUSSED
+- **Topic 1**: Detailed explanation about this topic
+- **Topic 2**: Detailed explanation about this topic
+[etc...]
 
-### 👥 KONTRIBUSI PEMBICARA
-- **Pembicara 1**:
-  - Poin utama yang disampaikan
-  - Peran dalam diskusi
-  - Kontribusi spesifik
+### 👥 SPEAKER CONTRIBUTIONS
+- **Speaker 1**:
+  - Main points presented
+  - Role in discussion
+  - Specific contributions
 
-- **Pembicara 2**:
-  - Poin utama yang disampaikan
-  - Peran dalam diskusi
-  - Kontribusi spesifik
+- **Speaker 2**:
+  - Main points presented
+  - Role in discussion
+  - Specific contributions
 
-### 🎯 POIN KUNCI & INSIGHT
-- **Insight 1**: Penjelasan insight penting
-- **Insight 2**: Penjelasan insight penting
-[dst...]
+### 🎯 KEY POINTS & INSIGHTS
+- **Insight 1**: Explanation of important insight
+- **Insight 2**: Explanation of important insight
+[etc...]
 
-### ✅ ACTION ITEMS & NEXT STEPS (jika ada)
-- Action item spesifik dengan PIC jika disebutkan
-- Timeline atau deadline jika ada
-- Follow-up yang perlu dilakukan
+### ✅ ACTION ITEMS & NEXT STEPS (if any)
+- Specific action item with assigned person if mentioned
+- Timeline or deadline if available
+- Follow-up needed
 
-PENTING:
-- Gunakan format markdown dengan emoji untuk struktur yang jelas
-- Berikan analisis yang mendalam dan professional
-- Fokus pada value dan insights yang berguna
-- Jika tidak ada action items eksplisit, tulis "Tidak ada action items yang secara eksplisit disebutkan dalam transcript."
+IMPORTANT:
+- Use markdown format with emojis for clear structure
+- Provide in-depth and professional analysis
+- Focus on valuable and useful insights
+- If no explicit action items, write "No action items were explicitly mentioned in the transcript."
 
-Jawab dengan format terstruktur di atas, jangan hanya jawaban singkat."""
+Answer with the structured format above, don't just give short answers."""
 
 def get_standard_chat_prompt(context: str, query: str) -> str:
     """
-    Prompt standar untuk chat biasa (bukan summary)
-    Digunakan di: multi_model_chat.py -> _build_mistral_prompt()
+    Standard prompt for regular chat (not summary)
+    Used in: multi_model_chat.py -> _build_mistral_prompt()
     """
-    return f"""Berdasarkan transcript meeting/percakapan berikut, jawab pertanyaan user dengan akurat dan helpful.
+    return f"""Based on the following meeting/conversation transcript, answer the user's question accurately and helpfully.
 
 CONTEXT:
 {context}
 
 USER QUESTION: {query}
 
-INSTRUKSI:
-- Jawab pertanyaan berdasarkan informasi yang ada di transcript
-- Berikan jawaban yang jelas dan informatif
-- Jika informasi tidak tersedia di transcript, jelaskan dengan sopan
-- Gunakan bahasa Indonesia yang natural dan professional
-- Sertakan contoh atau kutipan dari transcript jika relevan
+INSTRUCTIONS:
+- Answer the question based on information available in the transcript
+- Provide clear and informative answers
+- If information is not available in transcript, explain politely
+- Use natural and professional English
+- Include examples or quotes from transcript if relevant
 
-Jawab pertanyaan user dengan fokus pada informasi yang tersedia di transcript."""
+Answer the user's question focusing on information available in the transcript."""
 
 # ===== FALLBACK RESPONSES =====
 

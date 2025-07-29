@@ -22,6 +22,8 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - **RESTful API**: Clean backend API with FastAPI
 - **Modern Frontend**: React TypeScript with responsive design
 - **Real-time Updates**: WebSocket-like progress tracking
+- **Click-to-Jump Audio**: Click timestamps in transcript to jump to audio position
+- **Interactive Transcript**: Auto-highlight current segment with visual feedback
 
 ### 🚀 Transcription Engines
 
@@ -75,34 +77,94 @@ npm run dev
 
 - **Python 3.8+** dengan pip
 - **Node.js 16+** dengan npm
+- **macOS/Linux** (untuk shell scripts)
 - **Internet connection** (untuk AI models)
 
-## 📁 Project Structure (Cleaned)
+### First Time Setup
+```bash
+# Install Python dependencies
+cd backend
+pip install -r requirements.txt
+
+# Install Node.js dependencies  
+cd ../frontend
+npm install
+
+# Make scripts executable
+chmod +x ../quick-start.sh
+chmod +x ../scripts/*.sh
+```
+
+## 📁 Project Structure
 
 ```
-voiceNote/
-├── 🚀 START_APP.bat           # Quick launcher (Windows)
-├── 🚀 START_APP.ps1           # Quick launcher (PowerShell)
-├── ai-backend/                # Python FastAPI backend
-│   ├── ffmpeg_free_main.py    # Main backend server
-│   ├── requirements.txt       # Python dependencies
-│   └── .env                   # API keys configuration
-├── frontend-ai/               # React frontend application
-│   ├── src/                   # React source code
-│   ├── package.json           # Node.js dependencies
-│   └── public/                # Static assets
-├── demo/                      # Demo & presentation materials
-│   ├── stakeholder-presentation.html  # Interactive slides
-│   ├── integration-test.html          # Tech testing interface
-│   ├── docs/                          # Documentation
-│   └── scripts/                       # Utility scripts
-├── results/                   # AI processing results
-└── uploads/                   # Uploaded audio files
+frontend-ai/
+├── 🚀 quick-start.sh              # Quick launcher (macOS/Linux)
+├── 🚀 start-detached.sh           # Background process launcher
+├── 🚀 start.sh                    # Alternative launcher
+├── backend/                       # Python FastAPI backend
+│   ├── ffmpeg_free_main.py        # Main backend server
+│   ├── chat_system.py             # AI chat functionality
+│   ├── multi_model_chat.py        # Multi-model AI chat
+│   ├── prompts.py                 # AI prompt management
+│   ├── requirements.txt           # Python dependencies
+│   ├── results/                   # AI processing results
+│   ├── source/                    # Source audio files
+│   └── uploads/                   # Uploaded audio files
+├── frontend/                      # React TypeScript frontend
+│   ├── src/                       # React source code
+│   │   ├── components/            # React components
+│   │   ├── services/              # API services
+│   │   ├── utils/                 # Utility functions
+│   │   └── types.ts               # TypeScript definitions
+│   ├── package.json               # Node.js dependencies
+│   └── vite.config.ts             # Vite configuration
+├── scripts/                       # Utility scripts
+│   ├── start-backend.sh           # Backend launcher
+│   └── start-frontend.sh          # Frontend launcher
+└── docs/                          # Documentation
+    └── guides/                    # Implementation guides
+```
+
+## 🚀 Quick Start
+
+### **Option 1: Quick Start (macOS/Linux)**
+```bash
+# Run backend and frontend simultaneously
+./quick-start.sh
+```
+
+### **Option 2: Individual Scripts**
+```bash
+# Terminal 1 - Backend only
+./scripts/start-backend.sh
+
+# Terminal 2 - Frontend only  
+./scripts/start-frontend.sh
+```
+
+### **Option 3: Manual (Step-by-step)**
+```bash
+# Terminal 1 - Backend
+cd backend
+python ffmpeg_free_main.py
+
+# Terminal 2 - Frontend
+cd frontend  
+npm run dev
+
+# Browser: http://localhost:3001
+```
+
+### **Option 4: VS Code Task**
+```bash
+# In VS Code, run the task:
+# Ctrl+Shift+P → "Tasks: Run Task" → "Start Development Server"
 ```
 
 ## 🎯 How to Use
 
-1. **Start the app:** Run `START_APP.bat`
+1. **Start the app:** Run `./quick-start.sh` atau gunakan VS Code task
 2. **Upload audio:** Drag & drop your meeting recording
 3. **Wait for AI:** Real-time progress tracking
 4. **Get results:** Summary, action items, transcript
@@ -200,8 +262,17 @@ npm run dev
 
 **Port conflicts?**
 
-- Backend: http://localhost:8002
+- Backend: http://localhost:8000
 - Frontend: http://localhost:3001
+
+**Transcription not working?**
+
+Check your API keys in `.env` file:
+```bash
+cd backend
+cp .env.example .env
+# Edit .env with your API keys
+```
 
 ## 📊 Supported Formats
 
