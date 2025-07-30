@@ -18,6 +18,8 @@
   "license": "MIT",
   "dependencies": {
     "@deepgram/sdk": "^3.4.0",
+    "@huggingface/inference": "^4.6.1",
+    "@mistralai/mistralai": "^1.7.5",
     "axios": "^1.11.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",

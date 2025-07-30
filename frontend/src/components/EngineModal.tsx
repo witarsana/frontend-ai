@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { EngineAPI, EnginesResponse } from "../services/api";
+import {
+  EngineAPI,
+  EnginesResponse,
+  TranscriptionEngine,
+} from "../services/api";
 import "./EngineModal.css";
 
 interface EngineModalProps {
@@ -37,7 +41,7 @@ export const EngineModal: React.FC<EngineModalProps> = ({
     }
   };
 
-  const handleEngineChange = async (engine: "faster-whisper" | "deepgram") => {
+  const handleEngineChange = async (engine: TranscriptionEngine) => {
     if (!engines || engines.current_engine === engine) {
       onClose();
       return;

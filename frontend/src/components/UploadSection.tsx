@@ -78,37 +78,20 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
     if (!selectedFile) return;
 
     setIsUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(50);
 
-    // Simulate upload progress
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 95) {
-          clearInterval(progressInterval);
-          return 95;
-        }
-        return prev + Math.random() * 15;
-      });
-    }, 200);
+    // Call the parent callback with file and options immediately
+    onFileSelect(selectedFile, uploadOptions);
 
-    // Complete upload after 2 seconds
+    // Reset state after a brief delay to show completion
     setTimeout(() => {
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      // Call the parent callback with file and options
-      onFileSelect(selectedFile, uploadOptions);
-
-      // Reset state
-      setTimeout(() => {
-        setIsUploading(false);
-        setUploadProgress(0);
-        setSelectedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-      }, 500);
-    }, 2000);
+      setIsUploading(false);
+      setUploadProgress(0);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }, 1000);
   };
 
   const getFileIcon = (file: File) => {

@@ -1,27 +1,28 @@
-const OpenAI = require('openai');
+const OpenAI = require("openai");
 
 // Initialize OpenAI client
 let openaiClient = null;
 
 if (process.env.OPENAI_API_KEY) {
   openaiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+    apiKey: process.env.OPENAI_API_KEY,
   });
 }
 
 class AIService {
-  
   /**
    * Generate a comprehensive summary of the transcript
    */
   async generateSummary(segments) {
     try {
-      const fullText = segments.map(seg => `${seg.speaker_name}: ${seg.text}`).join('\n');
-      
+      const fullText = segments
+        .map((seg) => `${seg.speaker_name}: ${seg.text}`)
+        .join("\n");
+
       if (!openaiClient) {
         return this.generateMockSummary(segments);
       }
-      
+
       const prompt = `Please analyze this meeting transcript and provide a comprehensive summary that includes:
 
 1. Main Topics Discussed
@@ -33,224 +34,317 @@ Transcript:
 ${fullText}
 
 Please provide a well-structured summary that captures the essence of the conversation:`;
-      
+
       const response = await openaiClient.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
-            content: "You are an expert meeting analyst. Provide clear, concise, and well-structured summaries of meeting transcripts. Focus on extracting key information, decisions, and action items."
+            content:
+              "You are an expert meeting analyst. Provide clear, concise, and well-structured summaries of meeting transcripts. Focus on extracting key information, decisions, and action items.",
           },
           {
             role: "user",
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         max_tokens: 1000,
-        temperature: 0.3
+        temperature: 0.3,
       });
-      
+
       return response.choices[0].message.content.trim();
-      
     } catch (error) {
-      console.error('AI Summary error:', error);
+      console.error("AI Summary error:", error);
+
+      // Throw specific error for quota issues
+      if (error.message && error.message.includes("quota")) {
+        throw new Error(
+          "You exceeded your current quota, please check your plan and billing details."
+        );
+      }
+
+      // Throw specific error for rate limiting
+      if (error.status === 429) {
+        throw new Error(
+          "API rate limit exceeded. Please try again in a few minutes."
+        );
+      }
+
+      // Throw specific error for connection issues
+      if (
+        error.message &&
+        (error.message.includes("Connection") ||
+          error.message.includes("ECONNRESET"))
+      ) {
+        throw new Error("Connection error while generating summary.");
+      }
+
       return this.generateMockSummary(segments);
     }
   }
-  
+
   /**
    * Extract action items from the transcript
    */
   async extractActionItems(segments) {
     try {
-      const fullText = segments.map(seg => `${seg.speaker_name}: ${seg.text}`).join('\n');
-      
+      const fullText = segments
+        .map((seg) => `${seg.speaker_name}: ${seg.text}`)
+        .join("\n");
+
       if (!openaiClient) {
         return this.generateMockActionItems(segments);
       }
-      
+
       const prompt = `Please analyze this meeting transcript and extract all action items, tasks, and commitments mentioned. Format them as a JSON array of objects with 'task', 'assignee', and 'deadline' fields.
 
 Transcript:
 ${fullText}
 
 Return only the JSON array:`;
-      
+
       const response = await openaiClient.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
-            content: "You are an expert at extracting action items from meeting transcripts. Return only valid JSON arrays with task objects containing 'task', 'assignee', and 'deadline' fields."
+            content:
+              "You are an expert at extracting action items from meeting transcripts. Return only valid JSON arrays with task objects containing 'task', 'assignee', and 'deadline' fields.",
           },
           {
             role: "user",
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         max_tokens: 800,
-        temperature: 0.2
+        temperature: 0.2,
       });
-      
+
       try {
-        const actionItems = JSON.parse(response.choices[0].message.content.trim());
+        const actionItems = JSON.parse(
+          response.choices[0].message.content.trim()
+        );
         return Array.isArray(actionItems) ? actionItems : [];
       } catch (parseError) {
-        console.error('Failed to parse action items JSON:', parseError);
+        console.error("Failed to parse action items JSON:", parseError);
         return this.generateMockActionItems(segments);
       }
-      
     } catch (error) {
-      console.error('Action Items extraction error:', error);
+      console.error("Action Items extraction error:", error);
+
+      // Throw specific error for quota issues
+      if (error.message && error.message.includes("quota")) {
+        throw new Error(
+          "You exceeded your current quota, please check your plan and billing details."
+        );
+      }
+
+      // Throw specific error for rate limiting
+      if (error.status === 429) {
+        throw new Error(
+          "API rate limit exceeded. Please try again in a few minutes."
+        );
+      }
+
+      // Throw specific error for connection issues
+      if (
+        error.message &&
+        (error.message.includes("Connection") ||
+          error.message.includes("ECONNRESET"))
+      ) {
+        throw new Error("Connection error while extracting action items.");
+      }
+
       return this.generateMockActionItems(segments);
     }
   }
-  
+
   /**
    * Extract key decisions from the transcript
    */
   async extractKeyDecisions(segments) {
     try {
-      const fullText = segments.map(seg => `${seg.speaker_name}: ${seg.text}`).join('\n');
-      
+      const fullText = segments
+        .map((seg) => `${seg.speaker_name}: ${seg.text}`)
+        .join("\n");
+
       if (!openaiClient) {
         return this.generateMockKeyDecisions(segments);
       }
-      
+
       const prompt = `Please analyze this meeting transcript and extract all key decisions that were made. Format them as a JSON array of objects with 'decision', 'reasoning', and 'impact' fields.
 
 Transcript:
 ${fullText}
 
 Return only the JSON array:`;
-      
+
       const response = await openaiClient.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
-            content: "You are an expert at extracting key decisions from meeting transcripts. Return only valid JSON arrays with decision objects containing 'decision', 'reasoning', and 'impact' fields."
+            content:
+              "You are an expert at extracting key decisions from meeting transcripts. Return only valid JSON arrays with decision objects containing 'decision', 'reasoning', and 'impact' fields.",
           },
           {
             role: "user",
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         max_tokens: 800,
-        temperature: 0.2
+        temperature: 0.2,
       });
-      
+
       try {
-        const keyDecisions = JSON.parse(response.choices[0].message.content.trim());
+        const keyDecisions = JSON.parse(
+          response.choices[0].message.content.trim()
+        );
         return Array.isArray(keyDecisions) ? keyDecisions : [];
       } catch (parseError) {
-        console.error('Failed to parse key decisions JSON:', parseError);
+        console.error("Failed to parse key decisions JSON:", parseError);
         return this.generateMockKeyDecisions(segments);
       }
-      
     } catch (error) {
-      console.error('Key Decisions extraction error:', error);
+      console.error("Key Decisions extraction error:", error);
+
+      // Throw specific error for quota issues
+      if (error.message && error.message.includes("quota")) {
+        throw new Error(
+          "You exceeded your current quota, please check your plan and billing details."
+        );
+      }
+
+      // Throw specific error for rate limiting
+      if (error.status === 429) {
+        throw new Error(
+          "API rate limit exceeded. Please try again in a few minutes."
+        );
+      }
+
+      // Throw specific error for connection issues
+      if (
+        error.message &&
+        (error.message.includes("Connection") ||
+          error.message.includes("ECONNRESET"))
+      ) {
+        throw new Error("Connection error while extracting key decisions.");
+      }
+
       return this.generateMockKeyDecisions(segments);
     }
   }
-  
+
   /**
    * Analyze sentiment of the conversation
    */
   async analyzeSentiment(segments) {
     try {
-      const fullText = segments.map(seg => seg.text).join(' ');
-      
+      const fullText = segments.map((seg) => seg.text).join(" ");
+
       if (!openaiClient) {
         return "neutral";
       }
-      
+
       const prompt = `Analyze the overall sentiment of this conversation. Respond with only one word: "positive", "negative", or "neutral".
 
 Text: ${fullText.substring(0, 2000)}`;
-      
+
       const response = await openaiClient.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
-            content: "You are a sentiment analysis expert. Respond with only one word: positive, negative, or neutral."
+            content:
+              "You are a sentiment analysis expert. Respond with only one word: positive, negative, or neutral.",
           },
           {
             role: "user",
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         max_tokens: 10,
-        temperature: 0.1
+        temperature: 0.1,
       });
-      
-      const sentiment = response.choices[0].message.content.trim().toLowerCase();
-      return ["positive", "negative", "neutral"].includes(sentiment) ? sentiment : "neutral";
-      
+
+      const sentiment = response.choices[0].message.content
+        .trim()
+        .toLowerCase();
+      return ["positive", "negative", "neutral"].includes(sentiment)
+        ? sentiment
+        : "neutral";
     } catch (error) {
-      console.error('Sentiment analysis error:', error);
+      console.error("Sentiment analysis error:", error);
       return "neutral";
     }
   }
-  
+
   /**
    * Generate questions for the chat system
    */
   async generateQuestions(segments) {
     try {
-      const fullText = segments.map(seg => seg.text).join(' ');
-      
+      const fullText = segments.map((seg) => seg.text).join(" ");
+
       if (!openaiClient) {
         return this.generateMockQuestions();
       }
-      
+
       const prompt = `Based on this transcript, generate 5 relevant questions that someone might ask about the conversation. Format as a JSON array of strings.
 
 Transcript: ${fullText.substring(0, 2000)}
 
 Return only the JSON array:`;
-      
+
       const response = await openaiClient.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
-            content: "Generate relevant questions about meeting transcripts. Return only valid JSON arrays of question strings."
+            content:
+              "Generate relevant questions about meeting transcripts. Return only valid JSON arrays of question strings.",
           },
           {
             role: "user",
-            content: prompt
-          }
+            content: prompt,
+          },
         ],
         max_tokens: 300,
-        temperature: 0.5
+        temperature: 0.5,
       });
-      
+
       try {
-        const questions = JSON.parse(response.choices[0].message.content.trim());
-        return Array.isArray(questions) ? questions : this.generateMockQuestions();
+        const questions = JSON.parse(
+          response.choices[0].message.content.trim()
+        );
+        return Array.isArray(questions)
+          ? questions
+          : this.generateMockQuestions();
       } catch (parseError) {
-        console.error('Failed to parse questions JSON:', parseError);
+        console.error("Failed to parse questions JSON:", parseError);
         return this.generateMockQuestions();
       }
-      
     } catch (error) {
-      console.error('Questions generation error:', error);
+      console.error("Questions generation error:", error);
       return this.generateMockQuestions();
     }
   }
-  
+
   // Mock functions for when OpenAI is not available
-  
+
   generateMockSummary(segments) {
-    const speakers = [...new Set(segments.map(seg => seg.speaker_name))];
-    const wordCount = segments.reduce((count, seg) => count + seg.text.split(' ').length, 0);
-    
+    const speakers = [...new Set(segments.map((seg) => seg.speaker_name))];
+    const wordCount = segments.reduce(
+      (count, seg) => count + seg.text.split(" ").length,
+      0
+    );
+
     return `## Meeting Summary
 
-**Participants:** ${speakers.join(', ')}
-**Duration:** Approximately ${Math.round(segments[segments.length - 1]?.end || 60)} seconds
+**Participants:** ${speakers.join(", ")}
+**Duration:** Approximately ${Math.round(
+      segments[segments.length - 1]?.end || 60
+    )} seconds
 **Word Count:** ${wordCount} words
 
 ### Main Topics Discussed
@@ -267,49 +361,49 @@ The meeting provided valuable insights and helped establish clear next steps for
 
 *Note: This is a generated summary. AI analysis services are currently limited.*`;
   }
-  
+
   generateMockActionItems(segments) {
     return [
       {
-        "task": "Follow up on budget allocation discussion",
-        "assignee": "Team Lead",
-        "deadline": "Next week"
+        task: "Follow up on budget allocation discussion",
+        assignee: "Team Lead",
+        deadline: "Next week",
       },
       {
-        "task": "Review project timeline updates",
-        "assignee": "Project Manager",
-        "deadline": "End of week"
+        task: "Review project timeline updates",
+        assignee: "Project Manager",
+        deadline: "End of week",
       },
       {
-        "task": "Prepare next meeting agenda",
-        "assignee": "Meeting Organizer",
-        "deadline": "Before next meeting"
-      }
+        task: "Prepare next meeting agenda",
+        assignee: "Meeting Organizer",
+        deadline: "Before next meeting",
+      },
     ];
   }
-  
+
   generateMockKeyDecisions(segments) {
     return [
       {
-        "decision": "Proceed with current project timeline",
-        "reasoning": "Timeline aligns with available resources and team capacity",
-        "impact": "Maintains project momentum and team morale"
+        decision: "Proceed with current project timeline",
+        reasoning: "Timeline aligns with available resources and team capacity",
+        impact: "Maintains project momentum and team morale",
       },
       {
-        "decision": "Address budget concerns in next quarter planning",
-        "reasoning": "Need to ensure sustainable financial management",
-        "impact": "Better resource allocation and cost control"
-      }
+        decision: "Address budget concerns in next quarter planning",
+        reasoning: "Need to ensure sustainable financial management",
+        impact: "Better resource allocation and cost control",
+      },
     ];
   }
-  
+
   generateMockQuestions() {
     return [
       "What were the main topics discussed in this meeting?",
       "Who were the key participants and what were their roles?",
       "What decisions were made during the conversation?",
       "Are there any action items that need follow-up?",
-      "What was the overall tone and outcome of the meeting?"
+      "What was the overall tone and outcome of the meeting?",
     ];
   }
 }

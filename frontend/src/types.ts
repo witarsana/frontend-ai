@@ -17,6 +17,15 @@ export interface ProcessingState {
   isProcessing: boolean;
   progress: number;
   status: string;
+  error?: {
+    message: string;
+    type?:
+      | "quota_exceeded"
+      | "connection_error"
+      | "api_error"
+      | "general_error";
+    details?: string;
+  };
   autoFallback?: {
     reason: string;
     message: string;
@@ -35,7 +44,7 @@ export interface ProcessingState {
   };
 }
 
-export type Tab = 'summary' | 'transcript' | 'analytics' | 'chat';
+export type Tab = "summary" | "transcript" | "analytics" | "chat";
 
 // export type FilterType = string;
 

@@ -1,6 +1,6 @@
 // API configuration for connecting to Node.js Express backend
 export const API_CONFIG = {
-  BASE_URL: "http://localhost:8001", // Node.js backend
+  BASE_URL: import.meta.env.DEV ? "" : "http://localhost:8001", // Use proxy in dev, direct URL in production
   ENDPOINTS: {
     UPLOAD: "/api/upload-and-process",
     STATUS: "/api/status",
@@ -37,6 +37,12 @@ export interface APIStatusResponse {
   progress: number;
   message?: string;
   error?: string;
+  error_type?:
+    | "quota_exceeded"
+    | "connection_error"
+    | "api_error"
+    | "general_error";
+  error_details?: string;
   word_count?: number;
   duration?: number;
   auto_fallback?: {
@@ -113,12 +119,19 @@ export interface EngineConfig {
   fallback_enabled: boolean;
 }
 
+// Supported transcription engines
+export type TranscriptionEngine =
+  | "faster-whisper"
+  | "deepgram"
+  | "huggingface"
+  | "mistral";
+
 export interface EngineInfo {
   name: string;
   type: "local" | "cloud";
   cost: "free" | "paid";
-  speed: "fast" | "very_fast";
-  accuracy: "high" | "very_high";
+  speed: "fast" | "very_fast" | "medium";
+  accuracy: "high" | "very_high" | "experimental";
   languages: string;
   features: string[];
   available: boolean;
@@ -129,6 +142,8 @@ export interface EnginesResponse {
   engines: {
     "faster-whisper": EngineInfo;
     deepgram: EngineInfo;
+    huggingface: EngineInfo;
+    mistral: EngineInfo;
   };
   current_engine: string;
   recommendations: {
@@ -246,7 +261,14 @@ export class AITranscriptionAPI {
         }
 
         if (status.status === "error") {
-          throw new Error(status.error || "Processing failed");
+          const errorInfo = {
+            message: status.error || "Processing failed",
+            type: status.error_type || "general_error",
+            details: status.error_details || undefined,
+          };
+          const error = new Error(errorInfo.message);
+          (error as any).errorInfo = errorInfo;
+          throw error;
         }
 
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -402,9 +424,7 @@ export class EngineAPI {
   }
 
   // Switch transcription engine
-  async setEngine(
-    engine: "faster-whisper" | "deepgram"
-  ): Promise<EngineChangeResponse> {
+  async setEngine(engine: TranscriptionEngine): Promise<EngineChangeResponse> {
     const response = await fetch(
       `${this.baseUrl}${API_CONFIG.ENDPOINTS.SET_ENGINE}?engine=${engine}`,
       {

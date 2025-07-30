@@ -59,6 +59,25 @@ const App: React.FC = () => {
         await processFileWithAPI(newTranscription.id, file, options);
       } catch (error) {
         console.error("API processing failed:", error);
+
+        // Extract error information if available
+        const errorInfo = (error as any).errorInfo || {
+          message: error instanceof Error ? error.message : "Upload failed",
+          type: "general_error",
+        };
+
+        // Set processing state to show error
+        setProcessingState({
+          isProcessing: false,
+          progress: 0,
+          status: "Error",
+          error: {
+            message: errorInfo.message,
+            type: errorInfo.type,
+            details: errorInfo.details,
+          },
+        });
+
         // Update transcription to error state
         setSessionTranscriptions((prev) =>
           prev.map((t) =>
@@ -132,14 +151,31 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Real API processing failed:", error);
 
-      // Reset processing state
+      // Extract error information if available
+      const errorInfo = (error as any).errorInfo || {
+        message:
+          error instanceof Error ? error.message : "Unknown error occurred",
+        type: "general_error",
+      };
+
+      // Set processing state to show error
       setProcessingState({
         isProcessing: false,
         progress: 0,
         status: "Error",
+        error: {
+          message: errorInfo.message,
+          type: errorInfo.type,
+          details: errorInfo.details,
+        },
       });
 
-      throw error;
+      // Update transcription to error state
+      setSessionTranscriptions((prev) =>
+        prev.map((t) =>
+          t.id === transcriptionId ? { ...t, status: "error" as const } : t
+        )
+      );
     }
   };
 

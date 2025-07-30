@@ -3,17 +3,20 @@
 ## 🚀 Quick Start (Node.js Backend)
 
 ### Start Everything
+
 ```bash
 ./start-node.sh
 ```
 
 This will start:
+
 - **Node.js Backend** on `http://localhost:8001`
 - **React Frontend** on `http://localhost:3000`
 
 ### Manual Setup
 
 #### 1. Backend Setup
+
 ```bash
 cd backend-node
 npm install
@@ -23,6 +26,7 @@ npm start
 ```
 
 #### 2. Frontend Setup
+
 ```bash
 cd frontend
 npm install
@@ -32,6 +36,7 @@ npm run dev
 ## 🔧 Configuration
 
 ### Backend Environment Variables (.env)
+
 ```bash
 BACKEND_PORT=8001
 OPENAI_API_KEY=your_openai_api_key_here
@@ -39,6 +44,7 @@ DEEPGRAM_API_KEY=your_deepgram_api_key_here
 ```
 
 ### Frontend Environment Variables (.env)
+
 ```bash
 VITE_BACKEND_PORT=8001
 VITE_BACKEND_URL=http://localhost:8001
@@ -64,6 +70,7 @@ VITE_BACKEND_URL=http://localhost:8001
 ## 🐛 Troubleshooting
 
 ### Backend Not Starting
+
 ```bash
 # Check if port 8001 is available
 lsof -ti :8001
@@ -72,6 +79,7 @@ kill $(lsof -ti :8001)
 ```
 
 ### Frontend Not Connecting
+
 - Ensure backend is running on port 8001
 - Check browser console for CORS errors
 - Verify `.env` files are configured correctly
