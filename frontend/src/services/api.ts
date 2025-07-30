@@ -123,8 +123,7 @@ export interface EngineConfig {
 export type TranscriptionEngine =
   | "faster-whisper"
   | "deepgram"
-  | "huggingface"
-  | "mistral";
+  | "huggingface";
 
 export interface EngineInfo {
   name: string;
@@ -143,7 +142,6 @@ export interface EnginesResponse {
     "faster-whisper": EngineInfo;
     deepgram: EngineInfo;
     huggingface: EngineInfo;
-    mistral: EngineInfo;
   };
   current_engine: string;
   recommendations: {
@@ -170,9 +168,22 @@ export class AITranscriptionAPI {
   }
 
   // Upload and start processing
-  async uploadAndProcess(file: File): Promise<APIUploadResponse> {
+  async uploadAndProcess(
+    file: File,
+    options?: { engine?: TranscriptionEngine; language?: string }
+  ): Promise<APIUploadResponse> {
     const formData = new FormData();
     formData.append("file", file);
+
+    // Add engine preference if provided
+    if (options?.engine) {
+      formData.append("engine", options.engine);
+    }
+
+    // Add language preference if provided
+    if (options?.language) {
+      formData.append("language", options.language);
+    }
 
     const response = await fetch(
       `${this.baseUrl}${API_CONFIG.ENDPOINTS.UPLOAD}`,

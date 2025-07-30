@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ProcessingState } from "./types";
-import { aiAPI, EngineAPI } from "./services/api";
+import { aiAPI, EngineAPI, TranscriptionEngine } from "./services/api";
 import newLogoTranskribo from "./assets/new-logo-transkribo.png";
 
 import UploadSection from "./components/UploadSection";
@@ -107,8 +107,11 @@ const App: React.FC = () => {
         );
       }
 
-      // Upload and start processing
-      const uploadResponse = await aiAPI.uploadAndProcess(file);
+      // Upload and start processing with engine preference
+      const uploadResponse = await aiAPI.uploadAndProcess(file, {
+        engine: options?.engine as TranscriptionEngine,
+        language: options?.language,
+      });
       console.log("Upload response:", uploadResponse);
 
       // Poll for status updates with progress callback

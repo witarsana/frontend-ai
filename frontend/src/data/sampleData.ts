@@ -1,6 +1,13 @@
 import { TranscriptItem } from '../types';
 
-export const sampleTranscript: TranscriptItem[] = [
+export const sampleTranscript: Transcriexport const processingStatuses = [
+  "🔊 Mengekstrak audio dari file...",
+  "🎤 Melakukan speech-to-text dengan AI...",
+  "👥 Mengidentifikasi pembicara (Speaker Diarization)...",
+  "⚡ Menggenerate summary dengan AI...",
+  "🏷️ Menambahkan tags otomatis...",
+  "✅ Finalisasi hasil..."
+]; = [
   {
     start: "00:00:05",
     end: "00:00:12",
@@ -85,7 +92,7 @@ export const processingStatuses = [
   "🔊 Mengekstrak audio dari file...",
   "� Melakukan speech-to-text dengan Whisper AI...",
   "👥 Mengidentifikasi pembicara (Speaker Diarization)...",
-  "⚡ Menggenerate summary dengan Mistral AI...",
+  "⚡ Menggenerate summary dengan AI...",
   "🏷️ Menambahkan tags otomatis...",
   "✅ Finalisasi hasil..."
 ];

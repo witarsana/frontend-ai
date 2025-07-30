@@ -201,6 +201,60 @@ export const EngineModal: React.FC<EngineModalProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* Hugging Face Option */}
+                <div
+                  className={`engine-option ${
+                    engines.current_engine === "huggingface" ? "selected" : ""
+                  } ${
+                    !engines.engines["huggingface"]?.available ? "disabled" : ""
+                  }`}
+                  onClick={() =>
+                    engines.engines["huggingface"]?.available &&
+                    handleEngineChange("huggingface")
+                  }
+                >
+                  <div className="engine-header">
+                    <div className="engine-icon">🤗</div>
+                    <div className="engine-title">
+                      <h3>Hugging Face ASR</h3>
+                      <span className="engine-type">Cloud AI - FREE</span>
+                    </div>
+                    <div className="engine-status">
+                      {engines.engines["huggingface"]?.available ? (
+                        <span className="status-available">✅ Ready</span>
+                      ) : (
+                        <span className="status-unavailable">
+                          ❌ Unavailable
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="engine-details">
+                    <div className="pros">
+                      <strong>🤗 Advantages:</strong>
+                      <ul>
+                        <li>🆓 Free Hugging Face Inference</li>
+                        <li>🧠 Wav2Vec2 & Distil-Whisper models</li>
+                        <li>📚 Open source models</li>
+                        <li>🌍 Community-driven</li>
+                      </ul>
+                    </div>
+
+                    <div className="specs">
+                      <span className="spec">⚡ Speed: Medium</span>
+                      <span className="spec">🎯 Accuracy: High</span>
+                      <span className="spec">💰 Cost: FREE</span>
+                    </div>
+
+                    {!engines.engines["huggingface"]?.available && (
+                      <div className="unavailable-reason">
+                        <span>⚠️ Requires Hugging Face token</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="recommendations">
@@ -221,13 +275,26 @@ export const EngineModal: React.FC<EngineModalProps> = ({
                   <div className="recommendation">
                     <span className="rec-icon">💰</span>
                     <span>
-                      <strong>For Free Use:</strong> Faster-Whisper
+                      <strong>For Free Use:</strong> Faster-Whisper / Hugging
+                      Face
                     </span>
                   </div>
                   <div className="recommendation">
                     <span className="rec-icon">⚡</span>
                     <span>
                       <strong>For Speed:</strong> Deepgram
+                    </span>
+                  </div>
+                  <div className="recommendation">
+                    <span className="rec-icon">🤗</span>
+                    <span>
+                      <strong>For Open Source:</strong> Hugging Face
+                    </span>
+                  </div>
+                  <div className="recommendation">
+                    <span className="rec-icon">🔬</span>
+                    <span>
+                      <strong>For Experimentation:</strong> Mistral AI
                     </span>
                   </div>
                 </div>

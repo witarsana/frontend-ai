@@ -107,6 +107,12 @@ app.post("/api/upload-and-process", upload.single("file"), async (req, res) => {
       )}MB`
     );
 
+    // Capture engine preference from form data
+    const preferredEngine = req.body.engine;
+    console.log(
+      `🎯 Engine preference: ${preferredEngine || "default (faster-whisper)"}`
+    );
+
     // Generate job ID from filename
     const jobId = path.basename(
       req.file.filename,
@@ -120,6 +126,7 @@ app.post("/api/upload-and-process", upload.single("file"), async (req, res) => {
       message: "Initializing...",
       filename: req.file.originalname,
       filePath: req.file.path,
+      preferredEngine: preferredEngine,
     });
 
     console.log(
@@ -128,18 +135,21 @@ app.post("/api/upload-and-process", upload.single("file"), async (req, res) => {
       } (${fileSizeMB.toFixed(1)}MB)`
     );
 
-    // Start processing asynchronously
-    processAudioFile(jobId, req.file.path, req.file.originalname).catch(
-      (error) => {
-        console.error(`❌ Processing failed for ${jobId}:`, error);
-        processingJobs.set(jobId, {
-          status: "error",
-          progress: 0,
-          error: error.message,
-          message: `Processing failed: ${error.message}`,
-        });
-      }
-    );
+    // Start processing asynchronously with engine preference
+    processAudioFile(
+      jobId,
+      req.file.path,
+      req.file.originalname,
+      preferredEngine
+    ).catch((error) => {
+      console.error(`❌ Processing failed for ${jobId}:`, error);
+      processingJobs.set(jobId, {
+        status: "error",
+        progress: 0,
+        error: error.message,
+        message: `Processing failed: ${error.message}`,
+      });
+    });
 
     res.json({
       job_id: jobId,
@@ -244,7 +254,7 @@ app.get("/api/engines", (req, res) => {
         available: !!process.env.DEEPGRAM_API_KEY,
       },
       huggingface: {
-        name: "Hugging Face Whisper",
+        name: "Hugging Face ASR",
         type: "cloud",
         cost: "free",
         speed: "medium",
@@ -253,25 +263,10 @@ app.get("/api/engines", (req, res) => {
         features: [
           "open_source",
           "free_tier",
-          "whisper_large_v3",
-          "community_models",
+          "wav2vec2_models",
+          "distil_whisper",
         ],
         available: !!process.env.HUGGING_FACE_TOKEN,
-      },
-      mistral: {
-        name: "Mistral AI (Experimental)",
-        type: "cloud",
-        cost: "paid",
-        speed: "medium",
-        accuracy: "experimental",
-        languages: "multilingual",
-        features: [
-          "experimental",
-          "enhancement",
-          "post_processing",
-          "ai_powered",
-        ],
-        available: !!process.env.MISTRAL_API_KEY,
       },
     },
     current_engine: "faster-whisper",
@@ -280,7 +275,6 @@ app.get("/api/engines", (req, res) => {
       for_speed: "deepgram",
       for_free: "huggingface",
       for_multilingual: "faster-whisper",
-      for_experimental: "mistral",
     },
   });
 });
@@ -298,7 +292,6 @@ app.post("/api/config/engine", (req, res) => {
       "faster-whisper",
       "deepgram",
       "huggingface",
-      "mistral",
     ];
     if (!validEngines.includes(engine)) {
       return res.status(400).json({
@@ -506,9 +499,17 @@ app.get("/api/chat/suggestions", (req, res) => {
 });
 
 // Main audio processing function
-async function processAudioFile(jobId, filePath, filename) {
+async function processAudioFile(
+  jobId,
+  filePath,
+  filename,
+  preferredEngine = null
+) {
   try {
     console.log(`⚡ Starting processing: ${filename}`);
+    if (preferredEngine) {
+      console.log(`🎯 Using preferred engine: ${preferredEngine}`);
+    }
 
     // Update status
     processingJobs.set(jobId, {
@@ -527,7 +528,8 @@ async function processAudioFile(jobId, filePath, filename) {
 
     const transcription = await transcriptionService.transcribeAudio(
       filePath,
-      filename
+      filename,
+      preferredEngine
     );
 
     console.log(`🔍 Transcription result:`, {
