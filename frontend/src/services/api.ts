@@ -1,20 +1,20 @@
 // API configuration for connecting to Python FastAPI backend
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8000', // FFmpeg-free backend
+  BASE_URL: "http://localhost:8000", // FFmpeg-free backend
   ENDPOINTS: {
-    UPLOAD: '/api/upload-and-process',
-    STATUS: '/api/status',
-    RESULT: '/api/result',
-    CONFIG: '/api/config',
-    ENGINES: '/api/engines',
-    SET_ENGINE: '/api/config/engine',
-    COMPLETED_JOBS: '/api/jobs/completed',
-    REGENERATE_SUMMARY: '/api/regenerate-summary',
-    CHAT: '/api/chat',
-    CHAT_SUGGESTIONS: '/api/chat/suggestions',
-    CHAT_STATUS: '/api/chat/status',
-    CHAT_LOAD: '/api/chat/load'
-  }
+    UPLOAD: "/api/upload-and-process",
+    STATUS: "/api/status",
+    RESULT: "/api/result",
+    CONFIG: "/api/config",
+    ENGINES: "/api/engines",
+    SET_ENGINE: "/api/config/engine",
+    COMPLETED_JOBS: "/api/jobs/completed",
+    REGENERATE_SUMMARY: "/api/regenerate-summary",
+    CHAT: "/api/chat",
+    CHAT_SUGGESTIONS: "/api/chat/suggestions",
+    CHAT_STATUS: "/api/chat/status",
+    CHAT_LOAD: "/api/chat/load",
+  },
 };
 
 // Types for API responses
@@ -27,7 +27,13 @@ export interface APIUploadResponse {
 
 export interface APIStatusResponse {
   job_id: string;
-  status: 'pending' | 'preprocessing' | 'transcribing' | 'generating_summary' | 'completed' | 'error';
+  status:
+    | "pending"
+    | "preprocessing"
+    | "transcribing"
+    | "generating_summary"
+    | "completed"
+    | "error";
   progress: number;
   message?: string;
   error?: string;
@@ -109,10 +115,10 @@ export interface EngineConfig {
 
 export interface EngineInfo {
   name: string;
-  type: 'local' | 'cloud';
-  cost: 'free' | 'paid';
-  speed: 'fast' | 'very_fast';
-  accuracy: 'high' | 'very_high';
+  type: "local" | "cloud";
+  cost: "free" | "paid";
+  speed: "fast" | "very_fast";
+  accuracy: "high" | "very_high";
   languages: string;
   features: string[];
   available: boolean;
@@ -121,7 +127,7 @@ export interface EngineInfo {
 
 export interface EnginesResponse {
   engines: {
-    'faster-whisper': EngineInfo;
+    "faster-whisper": EngineInfo;
     deepgram: EngineInfo;
   };
   current_engine: string;
@@ -151,15 +157,29 @@ export class AITranscriptionAPI {
   // Upload and start processing
   async uploadAndProcess(file: File): Promise<APIUploadResponse> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.UPLOAD}`, {
-      method: 'POST',
-      body: formData,
-    });
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.UPLOAD}`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
 
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+      // Try to extract error message from response body
+      let errorMessage = `Upload failed: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          errorMessage = errorData.detail;
+        }
+      } catch (e) {
+        // If JSON parsing fails, use the status text
+        console.warn("Could not parse error response:", e);
+      }
+      throw new Error(errorMessage);
     }
 
     return response.json();
@@ -167,7 +187,9 @@ export class AITranscriptionAPI {
 
   // Check processing status
   async getStatus(jobId: string): Promise<APIStatusResponse> {
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.STATUS}/${jobId}`);
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.STATUS}/${jobId}`
+    );
 
     if (!response.ok) {
       throw new Error(`Status check failed: ${response.statusText}`);
@@ -178,7 +200,9 @@ export class AITranscriptionAPI {
 
   // Get final results
   async getResult(jobId: string): Promise<APIResultResponse> {
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.RESULT}/${jobId}`);
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.RESULT}/${jobId}`
+    );
 
     if (!response.ok) {
       throw new Error(`Get result failed: ${response.statusText}`);
@@ -189,7 +213,9 @@ export class AITranscriptionAPI {
 
   // Get list of completed jobs
   async getCompletedJobs(): Promise<CompletedJobsResponse> {
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.COMPLETED_JOBS}`);
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.COMPLETED_JOBS}`
+    );
 
     if (!response.ok) {
       throw new Error(`Get completed jobs failed: ${response.statusText}`);
@@ -200,7 +226,7 @@ export class AITranscriptionAPI {
 
   // Utility method to poll status until completion
   async waitForCompletion(
-    jobId: string, 
+    jobId: string,
     onProgress?: (status: APIStatusResponse) => void,
     maxAttempts: number = 240, // 20 minutes
     intervalMs: number = 5000 // 5 seconds
@@ -210,35 +236,34 @@ export class AITranscriptionAPI {
     while (attempts < maxAttempts) {
       try {
         const status = await this.getStatus(jobId);
-        
+
         if (onProgress) {
           onProgress(status);
         }
 
-        if (status.status === 'completed') {
+        if (status.status === "completed") {
           return await this.getResult(jobId);
         }
 
-        if (status.status === 'error') {
-          throw new Error(status.error || 'Processing failed');
+        if (status.status === "error") {
+          throw new Error(status.error || "Processing failed");
         }
 
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        attempts++;
+      } catch (error) {
+        console.error("Status check error:", error);
         attempts++;
 
-      } catch (error) {
-        console.error('Status check error:', error);
-        attempts++;
-        
         if (attempts >= maxAttempts) {
           throw error;
         }
-        
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
+
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
       }
     }
 
-    throw new Error('Processing timeout - maximum attempts reached');
+    throw new Error("Processing timeout - maximum attempts reached");
   }
 
   // Health check
@@ -253,18 +278,23 @@ export class AITranscriptionAPI {
 
   // Regenerate summary for existing job
   async regenerateSummary(jobId: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.REGENERATE_SUMMARY}/${jobId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.REGENERATE_SUMMARY}/${jobId}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
     if (!response.ok) {
       const errorData = await response.text();
-      throw new Error(`Summary regeneration failed: ${response.statusText} - ${errorData}`);
+      throw new Error(
+        `Summary regeneration failed: ${response.statusText} - ${errorData}`
+      );
     }
-    
+
     return response.json();
   }
 }
@@ -275,18 +305,20 @@ function formatSecondsToTimestamp(seconds: number): string {
   const totalSeconds = Math.floor(seconds);
   const minutes = Math.floor(totalSeconds / 60);
   const remainingSeconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+    .toString()
+    .padStart(2, "0")}`;
 }
 
 export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
   return {
-    transcript: apiResult.transcript.map(segment => ({
+    transcript: apiResult.transcript.map((segment) => ({
       start: formatSecondsToTimestamp(segment.start),
       end: formatSecondsToTimestamp(segment.end),
       speakerName: segment.speaker_name,
       speaker: segment.speaker,
       text: segment.text,
-      tags: segment.tags
+      tags: segment.tags,
     })),
     summary: {
       overview: apiResult.summary,
@@ -298,30 +330,40 @@ export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
       sentiment: apiResult.sentiment,
       duration: apiResult.duration,
       wordCount: apiResult.word_count,
-      language: apiResult.language
+      language: apiResult.language,
     },
     analytics: {
-      speakerDistribution: apiResult.speakers.map(speaker => ({
+      speakerDistribution: apiResult.speakers.map((speaker) => ({
         speaker,
-        percentage: Math.round((apiResult.transcript.filter(s => s.speaker_name === speaker).length / apiResult.transcript.length) * 100),
-        segments: apiResult.transcript.filter(s => s.speaker_name === speaker).length
+        percentage: Math.round(
+          (apiResult.transcript.filter((s) => s.speaker_name === speaker)
+            .length /
+            apiResult.transcript.length) *
+            100
+        ),
+        segments: apiResult.transcript.filter((s) => s.speaker_name === speaker)
+          .length,
       })),
       sentimentAnalysis: {
         overall: apiResult.sentiment,
-        positive: apiResult.sentiment === 'positive' ? 70 : 30,
-        neutral: apiResult.sentiment === 'neutral' ? 70 : 30,
-        negative: apiResult.sentiment === 'negative' ? 70 : 30
+        positive: apiResult.sentiment === "positive" ? 70 : 30,
+        neutral: apiResult.sentiment === "neutral" ? 70 : 30,
+        negative: apiResult.sentiment === "negative" ? 70 : 30,
       },
       topTopics: apiResult.tags.slice(0, 5),
       engagementMetrics: {
         totalWords: apiResult.word_count,
-        averageWordsPerMinute: Math.round(apiResult.word_count / (apiResult.duration / 60)),
+        averageWordsPerMinute: Math.round(
+          apiResult.word_count / (apiResult.duration / 60)
+        ),
         totalSpeakers: apiResult.speakers.length,
-        meetingDuration: `${Math.floor(apiResult.duration / 60)} minutes ${Math.floor(apiResult.duration % 60)} seconds`
-      }
+        meetingDuration: `${Math.floor(
+          apiResult.duration / 60
+        )} minutes ${Math.floor(apiResult.duration % 60)} seconds`,
+      },
     },
     duration: apiResult.duration,
-    jobId: apiResult.job_id
+    jobId: apiResult.job_id,
   };
 }
 
@@ -335,54 +377,70 @@ export class EngineAPI {
 
   // Get current engine configuration
   async getConfig(): Promise<EngineConfig> {
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.CONFIG}`);
-    
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.CONFIG}`
+    );
+
     if (!response.ok) {
       throw new Error(`Config fetch failed: ${response.statusText}`);
     }
-    
+
     return response.json();
   }
 
   // Get all available engines
   async getEngines(): Promise<EnginesResponse> {
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.ENGINES}`);
-    
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.ENGINES}`
+    );
+
     if (!response.ok) {
       throw new Error(`Engines fetch failed: ${response.statusText}`);
     }
-    
+
     return response.json();
   }
 
   // Switch transcription engine
-  async setEngine(engine: 'faster-whisper' | 'deepgram'): Promise<EngineChangeResponse> {
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.SET_ENGINE}?engine=${engine}`, {
-      method: 'POST',
-    });
-    
+  async setEngine(
+    engine: "faster-whisper" | "deepgram"
+  ): Promise<EngineChangeResponse> {
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.SET_ENGINE}?engine=${engine}`,
+      {
+        method: "POST",
+      }
+    );
+
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.detail || `Engine change failed: ${response.statusText}`);
+      throw new Error(
+        errorData.detail || `Engine change failed: ${response.statusText}`
+      );
     }
-    
+
     return response.json();
   }
 
   // Regenerate summary for existing job
   async regenerateSummary(jobId: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.REGENERATE_SUMMARY}/${jobId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.REGENERATE_SUMMARY}/${jobId}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
     if (!response.ok) {
       const errorData = await response.text();
-      throw new Error(`Summary regeneration failed: ${response.statusText} - ${errorData}`);
+      throw new Error(
+        `Summary regeneration failed: ${response.statusText} - ${errorData}`
+      );
     }
-    
+
     return response.json();
   }
 }

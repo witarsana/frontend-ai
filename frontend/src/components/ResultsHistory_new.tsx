@@ -311,7 +311,7 @@ const ResultsHistory: React.FC<ResultsHistoryProps> = ({
             </div>
           </div>
 
-          {historyItems.map((item) => (
+          {historyItems.map((item, index) => (
             <div
               key={item.job_id}
               className="history-item"

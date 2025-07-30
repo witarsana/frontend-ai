@@ -1,15 +1,34 @@
-import React, { useRef } from 'react';
-import { validateFile } from '../utils/helpers';
-import EngineSelector from './EngineSelector';
+import React, { useRef, useState } from "react";
+import { validateFile } from "../utils/helpers";
+import { EngineModal } from "./EngineModal";
 
 interface UploadSectionProps {
-  onFileSelect: (file: File) => void;
+  onFileSelect: (
+    file: File,
+    options?: { language?: string; engine?: string }
+  ) => void;
+}
+
+interface UploadOptions {
+  language: string;
+  engine: string;
 }
 
 const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadOptions, setUploadOptions] = useState<UploadOptions>({
+    language: "auto",
+    engine: "faster-whisper",
+  });
+  const [isEngineModalOpen, setIsEngineModalOpen] = useState<boolean>(false);
 
-  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     if (file) {
       processFile(file);
@@ -18,16 +37,17 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
 
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    event.currentTarget.classList.add('dragover');
+    setIsDragOver(true);
   };
 
   const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    event.currentTarget.classList.remove('dragover');
+    event.preventDefault();
+    setIsDragOver(false);
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    event.currentTarget.classList.remove('dragover');
+    setIsDragOver(false);
     const files = event.dataTransfer.files;
     if (files.length > 0) {
       processFile(files[0]);
@@ -40,44 +60,493 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
       alert(validation.error);
       return;
     }
-    onFileSelect(file);
+    setSelectedFile(file);
   };
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleStartTranscription = async () => {
+    if (!selectedFile) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    // Simulate upload progress
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => {
+        if (prev >= 95) {
+          clearInterval(progressInterval);
+          return 95;
+        }
+        return prev + Math.random() * 15;
+      });
+    }, 200);
+
+    // Complete upload after 2 seconds
+    setTimeout(() => {
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      // Call the parent callback with file and options
+      onFileSelect(selectedFile, uploadOptions);
+
+      // Reset state
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        setSelectedFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }, 500);
+    }, 2000);
+  };
+
+  const getFileIcon = (file: File) => {
+    if (file.type.startsWith("audio/")) return "🎵";
+    if (file.type.startsWith("video/")) return "🎬";
+    return "📁";
+  };
+
+  // Engine modal handlers
+  const openEngineModal = () => {
+    setIsEngineModalOpen(true);
+  };
+
+  const closeEngineModal = () => {
+    setIsEngineModalOpen(false);
+  };
+
+  const handleEngineChange = (engine: string) => {
+    setUploadOptions((prev) => ({
+      ...prev,
+      engine: engine.toLowerCase(),
+    }));
+    setIsEngineModalOpen(false);
+  };
+
+  const getEngineDisplayName = (engine: string) => {
+    if (engine === "faster-whisper") return "Faster-Whisper";
+    if (engine === "deepgram") return "Deepgram";
+    return engine;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
   return (
-    <div className="upload-container">
-      {/* File Upload - STEP 1 */}
-      <div 
-        className="upload-section"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <div className="upload-icon">📁</div>
-        <h3>Drop file audio/video di sini atau klik untuk upload</h3>
-        <p style={{ margin: '15px 0', color: '#6b7280' }}>
-          Mendukung: MP3, WAV, MP4, MKV, M4A (Max: 100MB)
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="audio/*,video/*"
-          style={{ display: 'none' }}
-          onChange={handleFileInputChange}
-        />
-        <button className="upload-button" onClick={handleUploadClick}>
-          📂 Pilih File
-        </button>
-      </div>
-      
-      {/* Engine Selection - STEP 2 */}
-      <EngineSelector 
-        onEngineChange={(engine) => {
-          console.log('Engine changed to:', engine);
-        }}
+    <div className="upload-modal-container">
+      {/* Step 1: File Upload (Initial View) */}
+      {!selectedFile && !isUploading && (
+        <div className="upload-step-1">
+          <div
+            className={`upload-dropzone ${isDragOver ? "drag-over" : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={handleUploadClick}
+          >
+            <div className="upload-icon">
+              <svg
+                width="64"
+                height="64"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M7 16C6.4 16 5.5 15.5 5.5 14.5C5.5 13.5 6.4 13 7 13H8.5V12C8.5 10 10 8.5 12 8.5C14 8.5 15.5 10 15.5 12V13H17C17.6 13 18.5 13.5 18.5 14.5C18.5 15.5 17.6 16 17 16H7Z"
+                  fill="#7c3aed"
+                />
+                <path
+                  d="M12 8.5V15.5"
+                  stroke="#7c3aed"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M9 12L12 9L15 12"
+                  stroke="#7c3aed"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <h3
+              style={{
+                fontSize: "1.5em",
+                fontWeight: "600",
+                color: "#2c3e50",
+                margin: "16px 0 8px 0",
+              }}
+            >
+              Drag & drop your audio/video file here
+            </h3>
+            <p
+              style={{
+                color: "#6b7280",
+                margin: "8px 0 24px 0",
+                fontSize: "1.1em",
+              }}
+            >
+              or click to browse files
+            </p>
+            <button
+              className="browse-button"
+              style={{
+                padding: "12px 32px",
+                backgroundColor: "#7c3aed",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "16px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+            >
+              Browse Files
+            </button>
+          </div>
+
+          <div
+            className="file-constraints"
+            style={{
+              marginTop: "24px",
+              textAlign: "center",
+              color: "#6b7280",
+              fontSize: "14px",
+            }}
+          >
+            <span>
+              Supports: MP3, WAV, MP4, MOV, M4A, FLAC, OGG, AVI, MKV | Max size:
+              1GB
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: File Configuration */}
+      {selectedFile && !isUploading && (
+        <div className="upload-step-2">
+          {/* File Confirmation */}
+          <div
+            className="file-confirmation"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "16px",
+              backgroundColor: "#f8fdf8",
+              border: "2px solid #d1fae5",
+              borderRadius: "12px",
+              marginBottom: "24px",
+            }}
+          >
+            <span style={{ fontSize: "24px" }}>
+              {getFileIcon(selectedFile)}
+            </span>
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontWeight: "600",
+                  color: "#2c3e50",
+                  fontSize: "16px",
+                }}
+              >
+                {selectedFile.name}
+              </div>
+              <div
+                style={{
+                  color: "#6b7280",
+                  fontSize: "14px",
+                }}
+              >
+                {formatFileSize(selectedFile.size)}
+              </div>
+            </div>
+            <button
+              onClick={handleRemoveFile}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#ef4444",
+                fontSize: "20px",
+                cursor: "pointer",
+                padding: "4px",
+                borderRadius: "4px",
+              }}
+              title="Remove file"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Configuration Options */}
+          <div className="configuration-section">
+            <h4
+              style={{
+                fontSize: "1.2em",
+                fontWeight: "600",
+                color: "#2c3e50",
+                margin: "0 0 16px 0",
+              }}
+            >
+              Transcription Settings
+            </h4>
+
+            {/* Language Selection */}
+            <div className="config-option" style={{ marginBottom: "20px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#374151",
+                  marginBottom: "8px",
+                }}
+              >
+                Spoken Language
+              </label>
+              <select
+                value={uploadOptions.language}
+                onChange={(e) =>
+                  setUploadOptions((prev) => ({
+                    ...prev,
+                    language: e.target.value,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  border: "2px solid #e5e7eb",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  backgroundColor: "white",
+                }}
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="en">English</option>
+                <option value="id">Indonesian</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                <option value="ja">Japanese</option>
+                <option value="zh">Chinese</option>
+              </select>
+            </div>
+
+            {/* Engine Selection */}
+            <div className="config-option" style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#374151",
+                  marginBottom: "8px",
+                }}
+              >
+                Processing Engine
+              </label>
+              <div
+                onClick={openEngineModal}
+                style={{
+                  padding: "12px",
+                  border: "2px solid #ddd6fe",
+                  borderRadius: "8px",
+                  backgroundColor: "#f8faff",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#ede9fe";
+                  e.currentTarget.style.borderColor = "#c4b5fd";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "#f8faff";
+                  e.currentTarget.style.borderColor = "#ddd6fe";
+                }}
+              >
+                <span style={{ fontSize: "18px" }}>�️</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: "600", color: "#7c3aed" }}>
+                    {getEngineDisplayName(uploadOptions.engine)}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                    Fast, high-quality local processing - FREE
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "4px 8px",
+                      backgroundColor: "#dcfce7",
+                      color: "#166534",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    FREE
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#7c3aed",
+                      fontWeight: "500",
+                    }}
+                  >
+                    ⚙️
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Start Button */}
+            <button
+              onClick={handleStartTranscription}
+              style={{
+                width: "100%",
+                padding: "16px",
+                backgroundColor: "#7c3aed",
+                color: "white",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: "700",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                transition: "all 0.2s ease",
+                boxShadow: "0 4px 12px rgba(124,58,237,0.3)",
+              }}
+            >
+              🚀 Start Transcription
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Upload Progress */}
+      {isUploading && (
+        <div className="upload-step-3">
+          <div
+            style={{
+              textAlign: "center",
+              padding: "32px 16px",
+            }}
+          >
+            <div
+              style={{
+                width: "64px",
+                height: "64px",
+                margin: "0 auto 24px",
+                border: "4px solid #ddd6fe",
+                borderTop: "4px solid #7c3aed",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+              }}
+            ></div>
+
+            <h3
+              style={{
+                fontSize: "1.4em",
+                fontWeight: "600",
+                color: "#2c3e50",
+                margin: "0 0 8px 0",
+              }}
+            >
+              {uploadProgress < 100
+                ? "Uploading your file..."
+                : "Upload complete!"}
+            </h3>
+
+            <p
+              style={{
+                color: "#6b7280",
+                margin: "0 0 24px 0",
+              }}
+            >
+              {uploadProgress < 100
+                ? "Please wait while we prepare your transcription"
+                : "Redirecting to dashboard..."}
+            </p>
+
+            {/* Progress Bar */}
+            <div
+              style={{
+                width: "100%",
+                height: "8px",
+                backgroundColor: "#e5e7eb",
+                borderRadius: "4px",
+                overflow: "hidden",
+                marginBottom: "16px",
+              }}
+            >
+              <div
+                style={{
+                  width: `${uploadProgress}%`,
+                  height: "100%",
+                  backgroundColor: "#7c3aed",
+                  transition: "width 0.3s ease",
+                  borderRadius: "4px",
+                }}
+              ></div>
+            </div>
+
+            <div
+              style={{
+                fontSize: "14px",
+                color: "#6b7280",
+              }}
+            >
+              {Math.round(uploadProgress)}%
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/*,video/*"
+        style={{ display: "none" }}
+        onChange={handleFileInputChange}
+      />
+
+      {/* Engine Modal */}
+      <EngineModal
+        isOpen={isEngineModalOpen}
+        onClose={closeEngineModal}
+        onEngineChange={handleEngineChange}
       />
     </div>
   );

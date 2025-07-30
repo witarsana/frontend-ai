@@ -1,12 +1,25 @@
 import React, { useState, useEffect } from "react";
-import { ProcessingState } from "./types";
+import { AppState, ProcessingState } from "./types";
+import { sampleTranscript } from "./data/sampleData";
 import { aiAPI } from "./services/api";
 import newLogoTranskribo from "./assets/new-logo-transkribo.png";
 
 import UploadSection from "./components/UploadSection";
+import ProcessingSection from "./components/ProcessingSection";
 import SessionTranscriptionCard from "./components/SessionTranscriptionCard";
 
 const App: React.FC = () => {
+  const [appState, setAppState] = useState<AppState>({
+    showUpload: true,
+    showProcessing: false,
+    showResults: false,
+    activeTab: "summary",
+    searchQuery: "",
+    activeFilter: "all",
+    transcript: sampleTranscript,
+    filteredTranscript: sampleTranscript,
+  });
+
   const [processingState, setProcessingState] = useState<ProcessingState>({
     isProcessing: false,
     progress: 0,
@@ -52,6 +65,13 @@ const App: React.FC = () => {
     };
 
     setSessionTranscriptions((prev) => [newTranscription, ...prev]);
+
+    setAppState((prev) => ({
+      ...prev,
+      showUpload: false,
+      showProcessing: true,
+      showResults: false,
+    }));
 
     // Start processing animation
     simulateProcessing(newTranscription.id, file);
@@ -253,6 +273,9 @@ This demonstrates how transcriptions will appear in your session feed once proce
             </p>
           </div>
         )}
+
+        {/* Processing Section */}
+        <ProcessingSection processingState={processingState} />
 
         {/* Session Content */}
         {sessionTranscriptions.length === 0 && !processingState.isProcessing ? (

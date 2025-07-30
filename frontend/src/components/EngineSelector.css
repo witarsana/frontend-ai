@@ -1,11 +1,149 @@
 /* Engine Selector Styles */
 .engine-selector {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: #faf5ff;
+  border: 1px solid #ddd6fe;
   border-radius: 12px;
   padding: 24px;
   margin: 20px 0;
   max-width: 800px;
+}
+
+/* Streamlined Mode - Shows only current engine */
+.engine-selector.streamlined {
+  padding: 0;
+  background: none;
+  border: none;
+  margin: 10px 0;
+  max-width: none;
+}
+
+/* Header-specific styling for streamlined mode */
+.engine-selector.streamlined.header {
+  margin: 8px 0;
+}
+
+.engine-selector.streamlined.header .current-engine-display {
+  padding: 10px 14px;
+  font-size: 0.85em;
+  border-radius: 8px;
+  border: 1px solid #ddd6fe;
+  background: #faf5ff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.engine-selector.streamlined.header .current-engine-display:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.engine-selector.streamlined.header .engine-icon {
+  font-size: 1.2em;
+}
+
+.engine-selector.streamlined.header .engine-name {
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.engine-selector.streamlined.header .engine-type {
+  font-size: 0.75em;
+  color: #6c757d;
+}
+
+.engine-selector.streamlined.header .status {
+  font-size: 1em;
+}
+
+.engine-selector.streamlined.header .change-button {
+  padding: 6px 12px;
+  font-size: 0.75em;
+  border-radius: 6px;
+}
+
+/* Default streamlined styling (for upload section) */
+.engine-selector.streamlined:not(.header) .current-engine-display {
+  padding: 16px 20px;
+  background: white;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+}
+
+.current-engine-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: white;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.current-engine-display:hover {
+  border-color: #007bff;
+  box-shadow: 0 4px 16px rgba(0, 123, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.engine-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.engine-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.engine-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1.1em;
+}
+
+.engine-type {
+  color: #6c757d;
+  font-size: 0.9em;
+}
+
+.engine-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status {
+  font-size: 1.2em;
+}
+
+.status.available {
+  color: #28a745;
+}
+
+.status.unavailable {
+  color: #ffc107;
+}
+
+.change-button {
+  background: #7c3aed;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.change-button:hover {
+  background: #6d28d9;
+  transform: translateY(-1px);
 }
 
 .engine-selector h3 {
@@ -229,8 +367,12 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Recommendations */
@@ -274,31 +416,31 @@
     padding: 16px;
     margin: 16px 0;
   }
-  
+
   .engine-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
-  
+
   .engine-icon {
     font-size: 2em;
   }
-  
+
   .specs {
     flex-direction: column;
   }
-  
+
   .recommendation-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .engine-selector.compact {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
-  
+
   .engine-label {
     font-size: 0.9em;
   }
