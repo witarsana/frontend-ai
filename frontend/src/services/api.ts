@@ -1,6 +1,6 @@
-// API configuration for connecting to Python FastAPI backend
+// API configuration for connecting to Node.js Express backend
 export const API_CONFIG = {
-  BASE_URL: "http://localhost:8000", // FFmpeg-free backend
+  BASE_URL: "http://localhost:8001", // Node.js backend
   ENDPOINTS: {
     UPLOAD: "/api/upload-and-process",
     STATUS: "/api/status",
