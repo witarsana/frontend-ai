@@ -7,7 +7,22 @@
       "command": "npm run dev",
       "group": "build",
       "isBackground": true,
-      "problemMatcher": []
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      }
+    },
+    {
+      "label": "Start Backend Server",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-c", "eval \"$(conda shell.bash hook)\" && conda activate transcription-ai && python ffmpeg_free_main.py"],
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      }
     }
   ]
 }

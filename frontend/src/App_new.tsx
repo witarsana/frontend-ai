@@ -1,25 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { AppState, ProcessingState } from "./types";
-import { sampleTranscript } from "./data/sampleData";
-import { aiAPI } from "./services/api";
+import { ProcessingState } from "./types";
+import { aiAPI, EngineAPI } from "./services/api";
 import newLogoTranskribo from "./assets/new-logo-transkribo.png";
 
 import UploadSection from "./components/UploadSection";
-import ProcessingSection from "./components/ProcessingSection";
 import SessionTranscriptionCard from "./components/SessionTranscriptionCard";
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>({
-    showUpload: true,
-    showProcessing: false,
-    showResults: false,
-    activeTab: "summary",
-    searchQuery: "",
-    activeFilter: "all",
-    transcript: sampleTranscript,
-    filteredTranscript: sampleTranscript,
-  });
-
   const [processingState, setProcessingState] = useState<ProcessingState>({
     isProcessing: false,
     progress: 0,
@@ -66,15 +53,94 @@ const App: React.FC = () => {
 
     setSessionTranscriptions((prev) => [newTranscription, ...prev]);
 
-    setAppState((prev) => ({
-      ...prev,
-      showUpload: false,
-      showProcessing: true,
-      showResults: false,
-    }));
+    // Use real API if connected, otherwise simulate
+    if (apiConnected) {
+      try {
+        await processFileWithAPI(newTranscription.id, file, options);
+      } catch (error) {
+        console.error("API processing failed:", error);
+        // Update transcription to error state
+        setSessionTranscriptions((prev) =>
+          prev.map((t) =>
+            t.id === newTranscription.id
+              ? { ...t, status: "error" as const }
+              : t
+          )
+        );
+      }
+    } else {
+      // Fall back to simulation
+      simulateProcessing(newTranscription.id, file);
+    }
+  };
 
-    // Start processing animation
-    simulateProcessing(newTranscription.id, file);
+  const processFileWithAPI = async (
+    transcriptionId: string,
+    file: File,
+    options?: { language?: string; engine?: string }
+  ) => {
+    try {
+      // Set engine if specified
+      if (options?.engine) {
+        const engineAPI = new EngineAPI();
+        await engineAPI.setEngine(
+          options.engine as "faster-whisper" | "deepgram"
+        );
+      }
+
+      // Upload and start processing
+      const uploadResponse = await aiAPI.uploadAndProcess(file);
+      console.log("Upload response:", uploadResponse);
+
+      // Poll for status updates with progress callback
+      const result = await aiAPI.waitForCompletion(
+        uploadResponse.job_id,
+        (status) => {
+          // Update processing state for visual feedback
+          setProcessingState({
+            isProcessing: true,
+            progress: status.progress,
+            status: status.message || `Status: ${status.status}`,
+          });
+        }
+      );
+
+      console.log("Processing result:", result);
+
+      // Update transcription with real results
+      setSessionTranscriptions((prev) =>
+        prev.map((t) =>
+          t.id === transcriptionId
+            ? {
+                ...t,
+                status: "completed" as const,
+                text: result.transcript
+                  ? result.transcript.map((seg) => seg.text).join(" ")
+                  : "No transcript available",
+                duration: result.duration || null,
+              }
+            : t
+        )
+      );
+
+      // Reset processing state
+      setProcessingState({
+        isProcessing: false,
+        progress: 100,
+        status: "Complete",
+      });
+    } catch (error) {
+      console.error("Real API processing failed:", error);
+
+      // Reset processing state
+      setProcessingState({
+        isProcessing: false,
+        progress: 0,
+        status: "Error",
+      });
+
+      throw error;
+    }
   };
 
   const simulateProcessing = async (transcriptionId: string, file: File) => {
@@ -273,9 +339,6 @@ This demonstrates how transcriptions will appear in your session feed once proce
             </p>
           </div>
         )}
-
-        {/* Processing Section */}
-        <ProcessingSection processingState={processingState} />
 
         {/* Session Content */}
         {sessionTranscriptions.length === 0 && !processingState.isProcessing ? (
