@@ -147,6 +147,14 @@ backend/uploads/*.m4a
 backend/uploads/*.aac
 backend/uploads/*.flac
 
+# Backend-Node uploads and results
+backend-node/uploads/*
+!backend-node/uploads/.gitkeep
+backend-node/results/*
+!backend-node/results/.gitkeep
+backend-node/temp/*
+!backend-node/temp/.gitkeep
+
 # Results (keep structure but not content)
 backend/results/*.json
 

@@ -288,11 +288,7 @@ app.post("/api/config/engine", (req, res) => {
       return res.status(400).json({ error: "Engine parameter is required" });
     }
 
-    const validEngines = [
-      "faster-whisper",
-      "deepgram",
-      "huggingface",
-    ];
+    const validEngines = ["faster-whisper", "deepgram", "huggingface"];
     if (!validEngines.includes(engine)) {
       return res.status(400).json({
         error: `Invalid engine. Supported engines: ${validEngines.join(", ")}`,

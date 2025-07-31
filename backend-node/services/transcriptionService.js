@@ -1,6 +1,5 @@
 const OpenAI = require("openai");
 const { createClient } = require("@deepgram/sdk");
-const { Mistral } = require("@mistralai/mistralai");
 const { HfInference } = require("@huggingface/inference");
 const fs = require("fs-extra");
 const path = require("path");
@@ -13,7 +12,6 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 // Initialize clients
 let openaiClient = null;
 let deepgramClient = null;
-let mistralClient = null;
 let hfClient = null;
 
 // Initialize OpenAI client if API key is available
@@ -26,13 +24,6 @@ if (process.env.OPENAI_API_KEY) {
 // Initialize Deepgram client if API key is available
 if (process.env.DEEPGRAM_API_KEY) {
   deepgramClient = createClient(process.env.DEEPGRAM_API_KEY);
-}
-
-// Initialize Mistral client if API key is available
-if (process.env.MISTRAL_API_KEY) {
-  mistralClient = new Mistral({
-    apiKey: process.env.MISTRAL_API_KEY,
-  });
 }
 
 // Initialize Hugging Face client if token is available
@@ -72,11 +63,13 @@ class TranscriptionService {
 
       // Check if user explicitly selected an engine
       const userSelectedEngine = preferredEngine && preferredEngine !== null;
-      
+
       // Try the preferred engine first
       if (targetEngine === "openai" && openaiClient) {
         console.log(
-          `🤖 Attempting OpenAI Whisper transcription ${userSelectedEngine ? '(user selected)' : '(default)'}...`
+          `🤖 Attempting OpenAI Whisper transcription ${
+            userSelectedEngine ? "(user selected)" : "(default)"
+          }...`
         );
         try {
           const result = await this.transcribeWithOpenAI(
@@ -90,24 +83,31 @@ class TranscriptionService {
           return result;
         } catch (error) {
           console.log(`⚠️ OpenAI Whisper failed: ${error.message}`);
-          
+
           // If user explicitly selected this engine, throw error instead of fallback
           if (userSelectedEngine) {
-            console.log(`🚫 User selected OpenAI specifically - not falling back to other engines`);
+            console.log(
+              `🚫 User selected OpenAI specifically - not falling back to other engines`
+            );
             throw error;
           }
-          
+
           // Only throw fatal errors immediately for auto-selection
           if (error.message && error.message.includes("quota")) {
             throw new Error(
               "OpenAI Whisper failed: You exceeded your current quota, please check your plan and billing details."
             );
           }
-          
-          if (error.message && error.message.includes("Invalid OpenAI API key")) {
-            throw new Error("OpenAI Whisper failed: Invalid API key configuration.");
+
+          if (
+            error.message &&
+            error.message.includes("Invalid OpenAI API key")
+          ) {
+            throw new Error(
+              "OpenAI Whisper failed: Invalid API key configuration."
+            );
           }
-          
+
           // For connection errors, log but continue to fallbacks only if auto-selected
           if (
             error.message &&
@@ -116,17 +116,21 @@ class TranscriptionService {
               error.message.includes("timeout") ||
               error.message.includes("ECONNRESET"))
           ) {
-            console.log(`🔄 OpenAI connection issue, will try fallback engines...`);
+            console.log(
+              `🔄 OpenAI connection issue, will try fallback engines...`
+            );
             // Continue to fallback - don't throw here
           }
-          
+
           // Continue to fallback for other errors too
         }
       }
 
       if (targetEngine === "deepgram" && deepgramClient) {
         console.log(
-          `🌊 Attempting Deepgram transcription ${userSelectedEngine ? '(user selected)' : '(default)'}...`
+          `🌊 Attempting Deepgram transcription ${
+            userSelectedEngine ? "(user selected)" : "(default)"
+          }...`
         );
         try {
           const result = await this.transcribeWithDeepgram(
@@ -140,13 +144,15 @@ class TranscriptionService {
           return result;
         } catch (error) {
           console.log(`⚠️ Deepgram failed: ${error.message}`);
-          
+
           // If user explicitly selected this engine, throw error instead of fallback
           if (userSelectedEngine) {
-            console.log(`🚫 User selected Deepgram specifically - not falling back to other engines`);
+            console.log(
+              `🚫 User selected Deepgram specifically - not falling back to other engines`
+            );
             throw error;
           }
-          
+
           // Check for specific Deepgram error types
           if (error.message && error.message.includes("quota")) {
             throw new Error(
@@ -166,7 +172,9 @@ class TranscriptionService {
 
       if (targetEngine === "huggingface" && hfClient) {
         console.log(
-          `🤗 Attempting Hugging Face transcription ${userSelectedEngine ? '(user selected)' : '(default)'}...`
+          `🤗 Attempting Hugging Face transcription ${
+            userSelectedEngine ? "(user selected)" : "(default)"
+          }...`
         );
         try {
           const result = await this.transcribeWithHuggingFace(
@@ -180,21 +188,27 @@ class TranscriptionService {
           return result;
         } catch (error) {
           console.log(`⚠️ Hugging Face failed: ${error.message}`);
-          
+
           // If user explicitly selected this engine, throw error instead of fallback
           if (userSelectedEngine) {
-            console.log(`🚫 User selected Hugging Face specifically - not falling back to other engines`);
+            console.log(
+              `🚫 User selected Hugging Face specifically - not falling back to other engines`
+            );
             throw error;
           }
-          
+
           // Continue to fallback
         }
       }
 
       // Only use fallbacks if user didn't explicitly select an engine
       if (userSelectedEngine) {
-        console.log(`🚫 User selected ${targetEngine} but it failed or is unavailable - not trying other engines`);
-        throw new Error(`Selected engine '${preferredEngine}' failed or is not available. Please check your configuration or try a different engine.`);
+        console.log(
+          `🚫 User selected ${targetEngine} but it failed or is unavailable - not trying other engines`
+        );
+        throw new Error(
+          `Selected engine '${preferredEngine}' failed or is not available. Please check your configuration or try a different engine.`
+        );
       }
 
       // Fallback to other engines only when no specific engine was selected by user
@@ -203,11 +217,9 @@ class TranscriptionService {
       );
 
       // Try transcription engines in fallback order (excluding the one we already tried)
-      const fallbackEngines = [
-        "openai",
-        "deepgram",
-        "huggingface",
-      ].filter((engine) => engine !== targetEngine);
+      const fallbackEngines = ["openai", "deepgram", "huggingface"].filter(
+        (engine) => engine !== targetEngine
+      );
 
       for (const engine of fallbackEngines) {
         if (engine === "openai" && openaiClient) {
@@ -226,18 +238,23 @@ class TranscriptionService {
             return result;
           } catch (error) {
             console.log(`⚠️ OpenAI Whisper fallback failed: ${error.message}`);
-            
+
             // Only throw fatal errors immediately
             if (error.message && error.message.includes("quota")) {
               throw new Error(
                 "OpenAI Whisper failed: You exceeded your current quota, please check your plan and billing details."
               );
             }
-            
-            if (error.message && error.message.includes("Invalid OpenAI API key")) {
-              throw new Error("OpenAI Whisper failed: Invalid API key configuration.");
+
+            if (
+              error.message &&
+              error.message.includes("Invalid OpenAI API key")
+            ) {
+              throw new Error(
+                "OpenAI Whisper failed: Invalid API key configuration."
+              );
             }
-            
+
             // For connection errors, log but continue to next fallback
             if (
               error.message &&
@@ -246,7 +263,9 @@ class TranscriptionService {
                 error.message.includes("timeout") ||
                 error.message.includes("ECONNRESET"))
             ) {
-              console.log(`🔄 OpenAI fallback connection issue, trying next engine...`);
+              console.log(
+                `🔄 OpenAI fallback connection issue, trying next engine...`
+              );
               // Continue to next engine - don't throw here
             }
           }
@@ -346,7 +365,7 @@ class TranscriptionService {
   async transcribeWithOpenAI(filePath, filename, audioInfo) {
     try {
       console.log(`🤖 OpenAI: Processing ${filename}...`);
-      
+
       // Convert to supported format if needed
       const processedFilePath = await this.preprocessAudioForOpenAI(filePath);
       console.log(`🔄 OpenAI: Using audio file: ${processedFilePath}`);
@@ -355,7 +374,7 @@ class TranscriptionService {
       const audioStream = fs.createReadStream(processedFilePath);
 
       console.log(`📡 OpenAI: Making API request to Whisper...`);
-      
+
       // Call OpenAI Whisper API with timeout
       const response = await Promise.race([
         openaiClient.audio.transcriptions.create({
@@ -364,9 +383,12 @@ class TranscriptionService {
           response_format: "verbose_json",
           timestamp_granularities: ["segment"],
         }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Request timeout after 60 seconds")), 60000)
-        )
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Request timeout after 60 seconds")),
+            60000
+          )
+        ),
       ]);
 
       console.log(`✅ OpenAI: API request successful`);
@@ -393,36 +415,51 @@ class TranscriptionService {
         code: error.code,
         type: error.type,
         status: error.status,
-        stack: error.stack?.split('\n')[0]
+        stack: error.stack?.split("\n")[0],
       });
 
       // Provide more specific error messages based on error type
       if (error.message?.includes("timeout")) {
         throw new Error("OpenAI API request timed out. Please try again.");
       }
-      
+
       if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED") {
-        throw new Error("Cannot connect to OpenAI API. Please check your internet connection.");
+        throw new Error(
+          "Cannot connect to OpenAI API. Please check your internet connection."
+        );
       }
-      
-      if (error.code === "ECONNRESET" || error.message?.includes("socket hang up")) {
-        throw new Error("Connection to OpenAI API was interrupted. Please try again.");
+
+      if (
+        error.code === "ECONNRESET" ||
+        error.message?.includes("socket hang up")
+      ) {
+        throw new Error(
+          "Connection to OpenAI API was interrupted. Please try again."
+        );
       }
-      
+
       if (error.status === 429) {
-        throw new Error("OpenAI API rate limit exceeded. Please wait and try again.");
+        throw new Error(
+          "OpenAI API rate limit exceeded. Please wait and try again."
+        );
       }
-      
+
       if (error.status === 401) {
-        throw new Error("Invalid OpenAI API key. Please check your configuration.");
+        throw new Error(
+          "Invalid OpenAI API key. Please check your configuration."
+        );
       }
-      
+
       if (error.status === 503) {
-        throw new Error("OpenAI API is temporarily unavailable. Please try again later.");
+        throw new Error(
+          "OpenAI API is temporarily unavailable. Please try again later."
+        );
       }
-      
+
       if (error.message?.includes("quota")) {
-        throw new Error("OpenAI API quota exceeded. Please check your billing and plan.");
+        throw new Error(
+          "OpenAI API quota exceeded. Please check your billing and plan."
+        );
       }
 
       // Generic fallback
@@ -858,28 +895,7 @@ class TranscriptionService {
     }
   }
 
-  /**
-   * Transcribe using Mistral AI (experimental - using chat completion)
-   */
-  async transcribeWithMistral(filePath, filename, audioInfo) {
-    try {
-      console.log(`🌟 Starting Mistral transcription: ${filename}`);
 
-      // Note: Mistral doesn't have direct audio transcription API
-      // This is a placeholder implementation that could be extended
-      // with audio-to-text preprocessing or integration with other services
-
-      throw new Error("Mistral direct audio transcription not yet implemented");
-
-      // Future implementation could:
-      // 1. Use another service to convert audio to text
-      // 2. Use Mistral to enhance/improve the transcription
-      // 3. Use Mistral for post-processing (summarization, etc.)
-    } catch (error) {
-      console.error(`❌ Mistral transcription error:`, error);
-      throw new Error(`Mistral transcription failed: ${error.message}`);
-    }
-  }
 
   /**
    * Helper method to create segments from plain text

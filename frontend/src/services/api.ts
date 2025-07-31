@@ -120,10 +120,7 @@ export interface EngineConfig {
 }
 
 // Supported transcription engines
-export type TranscriptionEngine =
-  | "faster-whisper"
-  | "deepgram"
-  | "huggingface";
+export type TranscriptionEngine = "faster-whisper" | "deepgram" | "huggingface";
 
 export interface EngineInfo {
   name: string;
