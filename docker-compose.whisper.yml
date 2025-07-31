@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  whisper-local:
+    build: ./whisper-local
+    container_name: whisper-local
+    ports:
+      - "8000:8000"
+    environment:
+      - WHISPER_MODEL=base  # Options: tiny, base, small, medium, large
+    volumes:
+      - whisper_models:/root/.cache/whisper  # Cache models to avoid redownloading
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+volumes:
+  whisper_models:
+    driver: local

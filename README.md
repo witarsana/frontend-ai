@@ -47,6 +47,16 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - ⚠️ **Auto-fallback** to Faster-Whisper for files >45min or >80MB
 - 🎯 **Best for**: Speed, accuracy, professional formatting
 
+#### **Local Whisper** (NEW - Docker Engine)
+- ✅ **100% Offline** - No internet required
+- ✅ **Privacy First** - Audio never leaves your machine
+- ✅ **OpenAI Compatible** - Drop-in replacement
+- ✅ **Cost Effective** - Zero API fees
+- ✅ **GPU Support** - Fast processing with NVIDIA GPUs
+- ✅ **Multiple Models** - tiny, base, small, medium, large
+- 🐳 **Docker Ready** - Easy setup with Docker Compose
+- 🎯 **Best for**: Privacy, offline use, unlimited processing
+
 ### 🧠 Dynamic Speaker Detection
 - **Adaptive Algorithm**: Automatically detects 2-4 speakers based on conversation patterns
 - **Multi-factor Analysis**: Time gaps, text patterns, response indicators
@@ -168,6 +178,53 @@ npm run dev
 2. **Upload audio:** Drag & drop your meeting recording
 3. **Wait for AI:** Real-time progress tracking
 4. **Get results:** Summary, action items, transcript
+
+## 🏠 Local Whisper Setup (Offline Transcription)
+
+For completely offline transcription without API costs:
+
+### **Quick Setup**
+```bash
+# 1. Start Local Whisper service
+./start-whisper.sh
+
+# 2. Configure environment
+echo "USE_LOCAL_WHISPER=true" >> .env
+
+# 3. Start your app
+./quick-start.sh
+```
+
+### **Docker Commands**
+```bash
+# Start service
+docker-compose -f docker-compose.whisper.yml up -d
+
+# Check status
+./test-whisper.sh
+
+# Stop service
+./stop-whisper.sh
+```
+
+### **Model Selection**
+```bash
+# Fast but basic quality
+WHISPER_MODEL=tiny ./start-whisper.sh
+
+# Balanced (default)
+WHISPER_MODEL=base ./start-whisper.sh
+
+# High quality (requires more RAM)
+WHISPER_MODEL=large ./start-whisper.sh
+```
+
+### **Benefits**
+- 🔒 **Complete Privacy** - Audio never leaves your machine
+- 💰 **Zero Costs** - No API fees ever
+- 🌐 **Offline Ready** - Works without internet
+- ⚡ **GPU Accelerated** - Fast with NVIDIA cards
+- 📝 **Full Documentation** - See `whisper-local/README.md`
 
 ## 🔧 Configuration
 
