@@ -272,7 +272,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
           <div className="summary-section structured-section">
             <h3 className="section-title">
               <span className="section-icon">✅</span>
-              KEPUTUSAN ATAU KESIMPULAN
+              KEY DECISIONS & CONCLUSIONS
             </h3>
             <div className="section-content">
               {summaryData.key_decisions.map((decision: string, index: number) => (
@@ -306,7 +306,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
           <div className="summary-section structured-section">
             <h3 className="section-title">
               <span className="section-icon">👥</span>
-              KONTRIBUSI PEMBICARA
+              SPEAKER CONTRIBUTIONS
             </h3>
             <div className="section-content">
               {summaryData.speaker_points.map((point: string, index: number) => (
@@ -323,7 +323,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
           <div className="summary-section structured-section">
             <h3 className="section-title">
               <span className="section-icon">💭</span>
-              POIN-POIN PENTING DARI SETIAP PEMBICARA
+              KEY POINTS FROM EACH SPEAKER
             </h3>
             <div className="section-content">
               {summaryData.point_of_view.map((viewpoint: string, index: number) => (
