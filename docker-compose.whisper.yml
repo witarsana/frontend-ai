@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   whisper-local:
@@ -7,9 +7,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - WHISPER_MODEL=base  # Options: tiny, base, small, medium, large
+      - WHISPER_MODEL=tiny # Options: tiny, base, small, medium, large
     volumes:
-      - whisper_models:/root/.cache/whisper  # Cache models to avoid redownloading
+      - whisper_models:/root/.cache/whisper # Cache models to avoid redownloading
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

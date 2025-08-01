@@ -14,22 +14,25 @@ This directory contains a Docker-based local Whisper service that provides an Op
 ## Quick Start
 
 1. **Build and start the local Whisper service:**
+
    ```bash
    # From the project root
    docker-compose -f docker-compose.whisper.yml up -d
    ```
 
 2. **Set environment variables:**
+
    ```bash
    # Copy example environment file
    cp .env.whisper.example .env.local
-   
+
    # Edit .env.local or add to your main .env file:
    USE_LOCAL_WHISPER=true
    LOCAL_WHISPER_URL=http://localhost:8000
    ```
 
 3. **Install dependencies:**
+
    ```bash
    cd backend-node
    npm install
@@ -52,13 +55,13 @@ This directory contains a Docker-based local Whisper service that provides an Op
 
 Choose the right model for your needs:
 
-| Model  | Size  | Speed | Quality | Use Case |
-|--------|-------|-------|---------|----------|
-| tiny   | 39MB  | ~32x  | Good    | Real-time, testing |
-| base   | 74MB  | ~16x  | Better  | General use |
-| small  | 244MB | ~6x   | Good    | Balanced |
-| medium | 769MB | ~2x   | Better  | High quality |
-| large  | 1550MB| ~1x   | Best    | Production |
+| Model  | Size   | Speed | Quality | Use Case           |
+| ------ | ------ | ----- | ------- | ------------------ |
+| tiny   | 39MB   | ~32x  | Good    | Real-time, testing |
+| base   | 74MB   | ~16x  | Better  | General use        |
+| small  | 244MB  | ~6x   | Good    | Balanced           |
+| medium | 769MB  | ~2x   | Better  | High quality       |
+| large  | 1550MB | ~1x   | Best    | Production         |
 
 ### GPU Support
 
@@ -91,6 +94,7 @@ The local service provides OpenAI-compatible endpoints:
 ## Usage Examples
 
 ### Basic Transcription
+
 ```bash
 curl -X POST http://localhost:8000/v1/audio/transcriptions \
   -H "Content-Type: multipart/form-data" \
@@ -100,6 +104,7 @@ curl -X POST http://localhost:8000/v1/audio/transcriptions \
 ```
 
 ### Verbose Response with Timestamps
+
 ```bash
 curl -X POST http://localhost:8000/v1/audio/transcriptions \
   -H "Content-Type: multipart/form-data" \
@@ -112,6 +117,7 @@ curl -X POST http://localhost:8000/v1/audio/transcriptions \
 ## Troubleshooting
 
 ### Service Not Starting
+
 ```bash
 # Check logs
 docker-compose -f docker-compose.whisper.yml logs whisper-local
@@ -121,6 +127,7 @@ docker-compose -f docker-compose.whisper.yml ps
 ```
 
 ### Out of Memory
+
 ```bash
 # Use smaller model
 WHISPER_MODEL=tiny docker-compose -f docker-compose.whisper.yml up -d
@@ -129,6 +136,7 @@ WHISPER_MODEL=tiny docker-compose -f docker-compose.whisper.yml up -d
 ```
 
 ### Slow Performance
+
 - Use GPU if available
 - Use smaller model (tiny/base)
 - Increase Docker memory allocation
@@ -146,13 +154,16 @@ The system gracefully falls back to cloud services if the local service is unava
 ## Development
 
 ### Building Custom Images
+
 ```bash
 cd whisper-local
 docker build -t my-whisper-service .
 ```
 
 ### Extending the Service
+
 The `whisper_server.py` can be modified to add:
+
 - Custom preprocessing
 - Additional response formats
 - Authentication

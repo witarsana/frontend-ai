@@ -7,7 +7,7 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 ### 🎯 Core Capabilities
 
 - **Audio Transcription**: High-quality speech-to-text using OpenAI Whisper
-- **Speaker Diarization**: Automatic speaker identification and separation  
+- **Speaker Diarization**: Automatic speaker identification and separation
 - **AI-Powered Summaries**: Intelligent meeting analysis using Mistral AI
 - **Enhanced Chat System**: Interactive AI chat for exploring meeting content
 - **Action Items Detection**: Automatic extraction of tasks and decisions
@@ -28,6 +28,7 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 ### 🚀 Transcription Engines
 
 #### **Faster-Whisper** (Default - Local Engine)
+
 - ✅ **Completely FREE** - No API costs
 - ✅ **Privacy-focused** - Offline processing
 - ✅ **No API limits** - Process unlimited audio
@@ -37,8 +38,9 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - 🎯 **Best for**: Privacy, cost control, large files
 
 #### **Deepgram Nova-2** (Optional - Cloud Engine)
+
 - ✅ **Highest accuracy** available
-- ✅ **Ultra-fast** cloud processing  
+- ✅ **Ultra-fast** cloud processing
 - ✅ **Advanced speaker diarization** - AI-powered speaker detection
 - ✅ **Smart formatting** - Auto punctuation & capitalization
 - ✅ **12,000 minutes/month FREE** tier
@@ -48,6 +50,7 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - 🎯 **Best for**: Speed, accuracy, professional formatting
 
 #### **Local Whisper** (NEW - Docker Engine)
+
 - ✅ **100% Offline** - No internet required
 - ✅ **Privacy First** - Audio never leaves your machine
 - ✅ **OpenAI Compatible** - Drop-in replacement
@@ -58,16 +61,18 @@ A comprehensive full-stack application for transcribing audio recordings and gen
 - 🎯 **Best for**: Privacy, offline use, unlimited processing
 
 ### 🧠 Dynamic Speaker Detection
+
 - **Adaptive Algorithm**: Automatically detects 2-4 speakers based on conversation patterns
 - **Multi-factor Analysis**: Time gaps, text patterns, response indicators
 - **No Static Assumptions**: Works for podcasts, meetings, interviews, discussions
 - **Conversation Flow**: Natural speaker switching based on dialogue patterns
 
 ### **Option 2: PowerShell**
+
 ```powershell
 # Klik kanan → Run with PowerShell:
 START_APP.ps1
-````
+```
 
 ### **Option 3: Manual (Step-by-step)**
 
@@ -91,12 +96,13 @@ npm run dev
 - **Internet connection** (untuk AI models)
 
 ### First Time Setup
+
 ```bash
 # Install Python dependencies
 cd backend
 pip install -r requirements.txt
 
-# Install Node.js dependencies  
+# Install Node.js dependencies
 cd ../frontend
 npm install
 
@@ -139,34 +145,38 @@ frontend-ai/
 ## 🚀 Quick Start
 
 ### **Option 1: Quick Start (macOS/Linux)**
+
 ```bash
 # Run backend and frontend simultaneously
 ./quick-start.sh
 ```
 
 ### **Option 2: Individual Scripts**
+
 ```bash
 # Terminal 1 - Backend only
 ./scripts/start-backend.sh
 
-# Terminal 2 - Frontend only  
+# Terminal 2 - Frontend only
 ./scripts/start-frontend.sh
 ```
 
 ### **Option 3: Manual (Step-by-step)**
+
 ```bash
 # Terminal 1 - Backend
 cd backend
 python ffmpeg_free_main.py
 
 # Terminal 2 - Frontend
-cd frontend  
+cd frontend
 npm run dev
 
 # Browser: http://localhost:3001
 ```
 
 ### **Option 4: VS Code Task**
+
 ```bash
 # In VS Code, run the task:
 # Ctrl+Shift+P → "Tasks: Run Task" → "Start Development Server"
@@ -184,6 +194,7 @@ npm run dev
 For completely offline transcription without API costs:
 
 ### **Quick Setup**
+
 ```bash
 # 1. Start Local Whisper service
 ./start-whisper.sh
@@ -196,6 +207,7 @@ echo "USE_LOCAL_WHISPER=true" >> .env
 ```
 
 ### **Docker Commands**
+
 ```bash
 # Start service
 docker-compose -f docker-compose.whisper.yml up -d
@@ -208,6 +220,7 @@ docker-compose -f docker-compose.whisper.yml up -d
 ```
 
 ### **Model Selection**
+
 ```bash
 # Fast but basic quality
 WHISPER_MODEL=tiny ./start-whisper.sh
@@ -220,6 +233,7 @@ WHISPER_MODEL=large ./start-whisper.sh
 ```
 
 ### **Benefits**
+
 - 🔒 **Complete Privacy** - Audio never leaves your machine
 - 💰 **Zero Costs** - No API fees ever
 - 🌐 **Offline Ready** - Works without internet
@@ -325,6 +339,7 @@ npm run dev
 **Transcription not working?**
 
 Check your API keys in `.env` file:
+
 ```bash
 cd backend
 cp .env.example .env
@@ -343,10 +358,12 @@ cp .env.example .env
 Comprehensive documentation is organized in the `docs/` folder:
 
 ### 📋 Testing & Results
+
 - `docs/testing/REAL_DATA_TEST_RESULTS.md` - Production test results
 - `docs/testing/AI_TESTING_README.md` - Testing procedures and guidelines
 
-### 📖 Implementation Guides  
+### 📖 Implementation Guides
+
 - `docs/guides/IMPLEMENTATION_SUMMARY.md` - Complete implementation overview
 - `docs/guides/CHAT_FEATURE_COMPLETE.md` - AI chat system documentation
 - `docs/guides/MULTI_MODEL_SETUP.md` - Multi-model AI configuration
@@ -354,6 +371,7 @@ Comprehensive documentation is organized in the `docs/` folder:
 - `docs/guides/CONFIG_GUIDE.md` - Configuration and setup guide
 
 ### 🔬 Research & Development
+
 - `docs/notebooks/AI_Chat_Feature_Analysis.ipynb` - Chat feature analysis
 - `docs/notebooks/improved_chat_analysis.ipynb` - Enhanced chat research
 

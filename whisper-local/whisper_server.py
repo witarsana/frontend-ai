@@ -17,7 +17,7 @@ app = FastAPI(title="Local Whisper API", version="1.0.0")
 
 # Global variables for model
 whisper_model = None
-model_name = "base"  # Default model
+DEFAULT_MODEL = "tiny"  # Use tiny model for faster loading and lower memory usage
 
 def load_whisper_model(model_size: str = "base"):
     """Load Whisper model"""
@@ -105,15 +105,36 @@ async def create_transcription(
             temp_file_path = temp_file.name
         
         try:
+            # Check file size before processing
+            file_size = len(content)
+            max_size = 25 * 1024 * 1024  # 25MB limit
+            if file_size > max_size:
+                raise HTTPException(
+                    status_code=413, 
+                    detail=f"File too large ({file_size/1024/1024:.1f}MB). Maximum size is {max_size/1024/1024}MB."
+                )
+            
             # Transcribe with Whisper
             print(f"🤖 Running Whisper transcription...")
+            print(f"📊 File size: {file_size/1024/1024:.1f}MB")
             start_time = time.time()
             
-            result = whisper_model.transcribe(
-                temp_file_path,
-                word_timestamps=True,
-                verbose=False
-            )
+            # Add timeout and memory management
+            try:
+                result = whisper_model.transcribe(
+                    temp_file_path,
+                    word_timestamps=True,
+                    verbose=False,
+                    fp16=False  # Disable FP16 for stability on CPU
+                )
+            except Exception as transcribe_error:
+                print(f"❌ Whisper transcribe error: {transcribe_error}")
+                # Force cleanup
+                import gc
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                raise transcribe_error
             
             end_time = time.time()
             print(f"✅ Transcription completed in {end_time - start_time:.2f}s")
@@ -162,7 +183,25 @@ async def create_transcription(
     
     except Exception as e:
         print(f"❌ Transcription error: {e}")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+        print(f"🔍 Error type: {type(e).__name__}")
+        
+        # More specific error handling
+        if "out of memory" in str(e).lower() or "cuda out of memory" in str(e).lower():
+            error_detail = "GPU/CPU memory exhausted. Try using a smaller model or reducing audio file size."
+        elif "no such file" in str(e).lower():
+            error_detail = "Audio file could not be processed. Check file format."
+        elif "runtime error" in str(e).lower():
+            error_detail = "Model processing failed. The audio file might be corrupted or too large."
+        else:
+            error_detail = f"Transcription failed: {str(e)}"
+            
+        # Force garbage collection to free memory
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @app.post("/v1/audio/translations")
 async def create_translation(
