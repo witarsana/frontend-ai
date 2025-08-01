@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, Loader2, FileText, Clock, User, Settings } from 'lucide-react';
+import { MessageCircle, Send, Loader2, FileText, Clock, User, Settings, Database } from 'lucide-react';
 import SettingsModal from './SettingsModal';
 import { API_CONFIG } from '../services/api';
 
@@ -22,6 +22,15 @@ interface ChatMessage {
   reason?: string;
 }
 
+interface CompletedJob {
+  job_id: string;
+  filename: string;
+  duration: number;
+  word_count: number;
+  processed_at: string;
+  summary_preview?: string;
+}
+
 interface ChatTabProps {
   currentFileId?: string;
   isTranscriptionReady: boolean;
@@ -31,7 +40,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentQuery, setCurrentQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions] = useState<string[]>([
+    "Siapa saja speaker dalam meeting ini?",
+    "Apa topik utama yang dibahas?", 
+    "Keputusan apa yang dibuat?",
+    "Apa action items yang disebutkan?"
+  ]);
   const [sessionId] = useState(`session_${Date.now()}`);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('faiss'); // Default ke FAISS (offline)
@@ -40,13 +54,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
   const [_chatStats, _setChatStats] = useState<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Load chat suggestions
-  useEffect(() => {
-    fetch(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.CHAT_SUGGESTIONS)
-      .then(res => res.json())
-      .then(data => setSuggestions(data.suggestions || []))
-      .catch(err => console.error('Failed to load suggestions:', err));
-  }, []);
+  // New state for history management
+  const [completedJobs, setCompletedJobs] = useState<CompletedJob[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState<string>('');
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [loadedJobInfo, setLoadedJobInfo] = useState<CompletedJob | null>(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -60,6 +73,21 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
     }
   }, [currentFileId, isTranscriptionReady]);
 
+  // Load completed jobs for history
+  useEffect(() => {
+    loadCompletedJobs();
+  }, []);
+
+  const loadCompletedJobs = async () => {
+    try {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/jobs/completed`);
+      const data = await response.json();
+      setCompletedJobs(data.jobs || []);
+    } catch (error) {
+      console.error('Failed to load completed jobs:', error);
+    }
+  };
+
   const loadTranscriptForChat = async () => {
     if (!currentFileId) return;
     
@@ -67,7 +95,17 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
       const response = await fetch(`${API_CONFIG.BASE_URL}/api/chat/load/${currentFileId}`);
       const data = await response.json();
       
-      if (data.status === 'success') {
+      if (data.status === 'success' && data.job_info) {
+        const jobInfo = data.job_info;
+        const completedJob: CompletedJob = {
+          job_id: currentFileId || '',
+          filename: jobInfo.filename || `file_${currentFileId}`,
+          duration: jobInfo.duration || 0,
+          word_count: jobInfo.word_count || 0,
+          processed_at: new Date().toISOString(),
+          summary_preview: jobInfo.summary_preview
+        };
+        setLoadedJobInfo(completedJob);
         console.log('Transcript loaded for chat:', data);
       }
     } catch (error) {
@@ -92,8 +130,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
       requestBody = {
         query: userQuery,
         session_id: sessionId,
-        model_preference: selectedModel || 'faiss', // Default ke FAISS jika tidak ada preferensi
-        use_smart_routing: !selectedModel,  // Hanya gunakan smart routing jika tidak ada model spesifik
+        model_preference: selectedModel, // Selalu gunakan model yang dipilih (faiss atau mistral)
+        use_smart_routing: false,  // Tidak perlu smart routing karena user sudah pilih model
         job_id: currentFileId  // Tambahkan job_id untuk load transcript yang benar
       };
 
@@ -156,6 +194,29 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
     }
   };
 
+  const handleJobSelect = async (jobId: string) => {
+    setSelectedJobId(jobId);
+    setIsLoadingHistory(true);
+    try {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/chat/load/${jobId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        const selectedJob = completedJobs.find(job => job.job_id === jobId);
+        if (selectedJob) {
+          setLoadedJobInfo(selectedJob);
+        }
+        // Optionally clear current messages and load chat history for this job
+        setMessages([]);
+        setShowHistory(false);
+      }
+    } catch (error) {
+      console.error('Error loading job:', error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
   if (!isTranscriptionReady) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-500">
@@ -189,12 +250,36 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
             <div>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>AI Meeting Assistant</h3>
               <p style={{ margin: '4px 0 0 0', fontSize: '14px', opacity: 0.9 }}>
-                {currentFileId ? 
+                {loadedJobInfo ? 
+                  `🟢 ${loadedJobInfo}` :
+                  currentFileId ? 
                   `🟢 Connected to transcript: ${currentFileId.substring(0, 20)}...` : 
                   'Tanya apa saja tentang isi meeting ini'
                 }
               </p>
             </div>
+          </div>
+          
+          {/* History Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '16px' }}>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '8px',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title="Load previous transcripts"
+            >
+              <Database size={16} />
+              <span style={{ fontSize: '12px' }}>History</span>
+            </button>
           </div>
           
           {/* Model Selector and Settings */}
@@ -213,9 +298,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
                   cursor: 'pointer'
                 }}
               >
-                <option value="" style={{ color: 'black' }}>Smart Auto</option>
-                <option value="faiss" style={{ color: 'black' }}>🔍 FAISS (Offline Free)</option>
-                <option value="mistral" style={{ color: 'black' }}>⚡ Mistral AI</option>
+                <option value="faiss" style={{ color: 'black' }}>� FAISS (Offline Free)</option>
+                <option value="mistral" style={{ color: 'black' }}>🧠 Mistral AI</option>
               </select>
             )}
             
@@ -239,6 +323,109 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
           </div>
         </div>
       </div>
+
+      {/* History Dropdown */}
+      {showHistory && (
+        <div style={{
+          backgroundColor: 'white',
+          borderBottom: '1px solid #e0e0e0',
+          padding: '16px',
+          maxHeight: '300px',
+          overflowY: 'auto'
+        }}>
+          <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: '600' }}>
+            Select Transcript History
+          </h4>
+          {isLoadingHistory ? (
+            <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+              Loading history...
+            </div>
+          ) : completedJobs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+              No completed transcripts found
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {completedJobs.map((job) => (
+                <div
+                  key={job.job_id}
+                  onClick={() => handleJobSelect(job.job_id)}
+                  style={{
+                    padding: '12px',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    backgroundColor: selectedJobId === job.job_id ? '#e3f2fd' : 'white',
+                    borderColor: selectedJobId === job.job_id ? '#2196f3' : '#e0e0e0',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedJobId !== job.job_id) {
+                      e.currentTarget.style.backgroundColor = '#f5f5f5';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedJobId !== job.job_id) {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    marginBottom: '4px'
+                  }}>
+                    <span style={{ 
+                      fontWeight: '500', 
+                      fontSize: '14px',
+                      color: '#333'
+                    }}>
+                      {job.filename}
+                    </span>
+                    <span style={{ 
+                      fontSize: '12px', 
+                      color: '#666',
+                      backgroundColor: '#f0f0f0',
+                      padding: '2px 6px',
+                      borderRadius: '10px'
+                    }}>
+                      {job.word_count} words
+                    </span>
+                  </div>
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#888',
+                    display: 'flex',
+                    justifyContent: 'space-between'
+                  }}>
+                    <span>ID: {job.job_id}</span>
+                    <span>{new Date(job.processed_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Current Selection Info */}
+          {loadedJobInfo && (
+            <div style={{
+              marginTop: '16px',
+              padding: '12px',
+              backgroundColor: '#e8f5e8',
+              borderRadius: '6px',
+              border: '1px solid #4caf50'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: '500', color: '#2e7d32', marginBottom: '4px' }}>
+                Currently Loaded: {loadedJobInfo.filename}
+              </div>
+              <div style={{ fontSize: '12px', color: '#388e3c' }}>
+                {loadedJobInfo.word_count} words • ID: {loadedJobInfo.job_id}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Chat Messages */}
       <div style={{

@@ -459,6 +459,27 @@ async def get_completed_jobs():
     
     return {"jobs": completed_jobs}
 
+@app.get("/api/jobs/{job_id}/result")
+async def get_job_result(job_id: str):
+    """Get full result data for a completed job"""
+    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    result_file = os.path.join(results_dir, f"{job_id}_result.json")
+    
+    if not os.path.exists(result_file):
+        raise HTTPException(status_code=404, detail="Job result not found")
+    
+    try:
+        with open(result_file, 'r', encoding='utf-8') as f:
+            result = json.load(f)
+        
+        return {
+            "success": True,
+            "job_id": job_id,
+            "result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading result file: {str(e)}")
+
 @app.get("/api/audio/{job_id}")
 async def get_audio_file(job_id: str):
     """Serve processed audio file for playback"""
@@ -645,17 +666,23 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
             }
             
             try:
-                # Generate comprehensive summary using new enhanced format
-                summary_result = await generate_comprehensive_summary(transcription["segments"])
+                # Generate unified analysis using new no-redundancy approach
+                print(f"🧠 Generating unified analysis (no redundancy)...")
+                analysis_result = await generate_unified_analysis(transcription["segments"])
                 
-                # Extract structured data from transcript segments - now returns only 3 fields
-                action_items, key_decisions, point_of_view = await extract_structured_data_from_summary(transcription["segments"])
+                # Extract all data from unified analysis
+                narrative_summary = analysis_result.get("narrative_summary", "")
+                speaker_points = analysis_result.get("speaker_points", [])
+                action_items = analysis_result.get("action_items", [])
+                key_decisions = analysis_result.get("key_decisions", [])
                 
-                # Update result with structured summary and point_of_view field (NO speaker_points)
-                final_result["summary"] = summary_result  # Now using better formatted summary
-                final_result["action_items"] = action_items
-                final_result["key_decisions"] = key_decisions
-                final_result["point_of_view"] = point_of_view  # Contains "Poin-Poin Penting dari Setiap Pembicara"
+                # Update result with clean separated data (NO REDUNDANCY)
+                final_result["summary"] = narrative_summary  # Clean narrative summary only
+                final_result["clean_summary"] = narrative_summary  # Same as summary now
+                final_result["speaker_points"] = speaker_points  # Structured speaker data
+                final_result["action_items"] = action_items  # Structured action items
+                final_result["key_decisions"] = key_decisions  # Structured decisions
+                final_result["point_of_view"] = []  # Deprecated, data moved to speaker_points
                 final_result["tags"] = ["conversation", "transcription", "ai-analysis"]
                 
                 # Save updated result with summary - ensure clean JSON output
@@ -702,7 +729,7 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
                     with open(result_file, 'w', encoding='utf-8') as f:
                         json.dump(safe_result, f, ensure_ascii=False, indent=2)
                 
-                print(f"✅ Summary generated automatically with {len(action_items)} action items, {len(key_decisions)} key decisions, and {len(point_of_view)} point of view")
+                print(f"✅ Unified analysis generated with {len(action_items)} action items, {len(key_decisions)} key decisions, and {len(speaker_points)} speaker groups")
                 
             except Exception as e:
                 print(f"⚠️ Summary generation failed (transcript still available): {e}")
@@ -1857,6 +1884,135 @@ def clean_summary_text(summary: str, action_items: list, key_decisions: list) ->
     
     return cleaned_summary
 
+async def generate_unified_analysis(transcript_segments: list) -> dict:
+    """
+    Generate all analysis data in one AI call without redundancy
+    Returns: dict with narrative_summary, speaker_points, action_items, key_decisions
+    """
+    global api_providers
+    
+    print("\n🧠 Generating unified analysis (no redundancy)...")
+    
+    if not transcript_segments:
+        return {
+            "narrative_summary": "❌ No transcript available for analysis.",
+            "speaker_points": [],
+            "action_items": ["Review transcript for detailed insights"],
+            "key_decisions": ["Audio successfully processed with AI technology"]
+        }
+    
+    # Format transcript from segments with speaker context
+    transcript_lines = []
+    for segment in transcript_segments:
+        speaker = segment.get("speaker_name", "Speaker 1")
+        text = segment.get("text", "").strip()
+        if text:
+            transcript_lines.append(f"{speaker}: {text}")
+    
+    formatted_transcript = "\n".join(transcript_lines)
+    
+    try:
+        from prompts import get_unified_analysis_prompt
+        prompt = get_unified_analysis_prompt(formatted_transcript)
+        
+        # Use our multi-provider API system
+        response_text = call_api(prompt, providers=api_providers, max_tokens=2000)
+        
+        # Parse JSON response
+        try:
+            # Clean and parse JSON response
+            if "```json" in response_text:
+                start = response_text.find("```json") + 7
+                end = response_text.find("```", start)
+                json_str = response_text[start:end].strip() if end > start else response_text[start:].strip()
+            else:
+                start = response_text.find('{')
+                end = response_text.rfind('}') + 1
+                json_str = response_text[start:end] if start >= 0 and end > start else response_text
+            
+            result = json.loads(json_str)
+            
+            # Validate required fields
+            required_fields = ["narrative_summary", "speaker_points", "action_items", "key_decisions"]
+            for field in required_fields:
+                if field not in result:
+                    result[field] = [] if field != "narrative_summary" else "No summary available"
+            
+            print(f"✅ Unified analysis generated successfully!")
+            print(f"   - Narrative summary: {len(result.get('narrative_summary', ''))} chars")
+            print(f"   - Speaker points: {len(result.get('speaker_points', []))} speakers")
+            print(f"   - Action items: {len(result.get('action_items', []))} items")
+            print(f"   - Key decisions: {len(result.get('key_decisions', []))} decisions")
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON parsing failed: {e}")
+            print(f"Raw response: {response_text[:500]}...")
+            raise Exception(f"Invalid JSON from AI: {e}")
+            
+    except Exception as e:
+        print(f"❌ Unified analysis error: {e}")
+        return {
+            "narrative_summary": f"❌ Analysis generation failed: {str(e)}",
+            "speaker_points": [],
+            "action_items": ["Review transcript for detailed insights"],
+            "key_decisions": ["Audio successfully processed with AI technology"]
+        }
+
+
+def process_summary_sections(summary: str) -> tuple:
+    """
+    Process summary to create clean version and extract speaker points
+    Returns: (clean_summary, speaker_points)
+    """
+    if not summary:
+        return "", []
+    
+    # Remove redundant sections from summary
+    sections_to_remove = [
+        r'#### Action Items[\s\S]*?(?=####|$)',
+        r'#### Decisions or Conclusions Made[\s\S]*?(?=####|$)',
+        r'#### Important Points from Each Speaker[\s\S]*?(?=####|$)',
+    ]
+    
+    clean_summary = summary
+    for pattern in sections_to_remove:
+        clean_summary = re.sub(pattern, '', clean_summary, flags=re.IGNORECASE)
+    
+    # Clean up extra whitespace and newlines
+    clean_summary = re.sub(r'\n{3,}', '\n\n', clean_summary.strip())
+    
+    # Extract speaker points from summary
+    speaker_points = []
+    speaker_match = re.search(r'#### Important Points from Each Speaker\s*([\s\S]*?)(?=####|$)', summary, re.IGNORECASE)
+    
+    if speaker_match:
+        speaker_text = speaker_match.group(1).strip()
+        
+        # Split by speaker sections (looking for **Speaker pattern)
+        speaker_sections = re.split(r'\*\*Speaker\s+\d+.*?\*\*', speaker_text, flags=re.IGNORECASE)
+        speaker_headers = re.findall(r'\*\*Speaker\s+\d+.*?\*\*', speaker_text, flags=re.IGNORECASE)
+        
+        for i, speaker_content in enumerate(speaker_sections[1:], 0):
+            if i < len(speaker_headers):
+                speaker_name = speaker_headers[i].replace('**', '').strip()
+                content = speaker_content.strip()
+                
+                if content:
+                    # Extract bullet points or numbered items
+                    points = re.split(r'(?:\n|^)[-*]\s+|\d+\.\s+', content)
+                    points = [point.strip().replace('**', '') for point in points if point.strip()]
+                    
+                    if points:
+                        speaker_points.append({
+                            "speaker": speaker_name,
+                            "points": points
+                        })
+    
+    return clean_summary, speaker_points
+
+
 async def extract_structured_data_from_summary(transcript_segments: list) -> tuple:
     """Extract and separate detailed content into 3 distinct fields using AI - NO STATIC CONTENT"""
     global api_providers
@@ -2375,7 +2531,7 @@ if __name__ == "__main__":
     import uvicorn
     
     # Centralized port configuration
-    BACKEND_PORT = 8001
+    BACKEND_PORT = 8000
     BACKEND_HOST = "0.0.0.0"
     
     print("🚀 Starting FFmpeg-Free AI Transcription API...")

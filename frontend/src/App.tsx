@@ -5,6 +5,7 @@ import newLogoTranskribo from "./assets/new-logo-transkribo.png";
 
 import UploadSection from "./components/UploadSection";
 import SessionTranscriptionCard from "./components/SessionTranscriptionCard";
+import HistoryViewer from "./components/HistoryViewer";
 
 const App: React.FC = () => {
   const [processingState, setProcessingState] = useState<ProcessingState>({
@@ -15,6 +16,7 @@ const App: React.FC = () => {
 
   const [apiConnected, setApiConnected] = useState<boolean>(false);
   const [sessionTranscriptions, setSessionTranscriptions] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'upload' | 'history'>('upload');
 
   // Check API connection on mount
   useEffect(() => {
@@ -283,11 +285,6 @@ This demonstrates how transcriptions will appear in your session feed once proce
     setSessionTranscriptions((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const viewTranscriptionDetails = (id: string) => {
-    // Could navigate to detailed view or expand card
-    console.log("View details for:", id);
-  };
-
   return (
     <div className="two-panel-workspace">
       {/* Left Panel - Control Center */}
@@ -361,21 +358,76 @@ This demonstrates how transcriptions will appear in your session feed once proce
 
       {/* Right Panel - Session Feed */}
       <div className="session-feed">
-        {/* Only show session header if there are transcriptions */}
-        {sessionTranscriptions.length > 0 && (
-          <div className="session-header">
-            <h2
+        {/* Mode Toggle Header */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          marginBottom: '24px',
+          borderBottom: '1px solid #e0e0e0',
+          paddingBottom: '16px'
+        }}>
+          <div style={{
+            display: 'flex',
+            backgroundColor: '#f8f9fa',
+            borderRadius: '8px',
+            padding: '4px',
+            border: '1px solid #e0e0e0'
+          }}>
+            <button
+              onClick={() => setViewMode('upload')}
               style={{
-                fontSize: "1.5em",
-                fontWeight: "600",
-                color: "#2c3e50",
-                margin: "0 0 8px 0",
+                padding: '8px 16px',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                backgroundColor: viewMode === 'upload' ? '#007acc' : 'transparent',
+                color: viewMode === 'upload' ? 'white' : '#666',
+                transition: 'all 0.2s ease'
               }}
             >
-              Current Session
-            </h2>
-            <p
+              📤 New Upload
+            </button>
+            <button
+              onClick={() => setViewMode('history')}
               style={{
+                padding: '8px 16px',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                backgroundColor: viewMode === 'history' ? '#007acc' : 'transparent',
+                color: viewMode === 'history' ? 'white' : '#666',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              📋 History
+            </button>
+          </div>
+        </div>
+
+        {/* Conditional Content */}
+        {viewMode === 'history' ? (
+          <HistoryViewer />
+        ) : (
+          <>
+            {/* Only show session header if there are transcriptions */}
+            {sessionTranscriptions.length > 0 && (
+              <div className="session-header">
+                <h2
+                  style={{
+                    fontSize: "1.5em",
+                    fontWeight: "600",
+                    color: "#2c3e50",
+                    margin: "0 0 8px 0",
+                  }}
+                >
+                  Current Session
+                </h2>
+                <p
+                  style={{
                 color: "#6b7280",
                 margin: "0 0 24px 0",
                 fontSize: "14px",
@@ -440,10 +492,11 @@ This demonstrates how transcriptions will appear in your session feed once proce
                 onCopy={() => copyTranscriptionText(transcription.id)}
                 onDownload={() => downloadTranscription(transcription.id)}
                 onClear={() => clearTranscription(transcription.id)}
-                onViewDetails={() => viewTranscriptionDetails(transcription.id)}
               />
             ))}
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

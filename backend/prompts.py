@@ -94,51 +94,66 @@ IMPORTANT RULES:
 9. SECTION ORDER must be: Main Topics → Speaker Points → Decisions → Action Items
 """
 
-def get_structured_data_extraction_prompt(transcript_text):
-    """Prompt for extracting structured data - ONLY 3 categories needed"""
+def get_unified_analysis_prompt(transcript_text):
+    """
+    Unified prompt that generates all data separately without redundancy
+    Returns: summary (narrative only), speaker_points, action_items, key_decisions
+    """
     return f"""
-Based on the following transcript, extract and create 3 categories of structured data:
+Based on the following transcript, create a comprehensive analysis with SEPARATED sections (NO REDUNDANCY):
 
 TRANSCRIPT:
-{transcript_text[:4000]}  
+{transcript_text[:5000]}
 
-TASK: Create 3 data categories in JSON format with consistent structure:
+Generate a JSON response with 4 distinct sections:
 
-1. ACTION ITEMS - MUST have 5 items with priority levels
-2. KEY DECISIONS - 3-5 important decisions 
-3. POINT OF VIEW - Important points from each speaker (SPECIFIC for point of view)
+1. NARRATIVE SUMMARY - Only main topics and overview (NO speaker details, NO decisions, NO action items)
+2. SPEAKER POINTS - Detailed points per speaker  
+3. KEY DECISIONS - Important decisions made
+4. ACTION ITEMS - Specific actionable tasks
 
-JSON output format (FOLLOW THIS FORMAT EXACTLY):
+JSON FORMAT (EXACTLY THIS STRUCTURE):
 {{
-  "action_items": [
-    "High Priority Action 1: [High priority action based on discussion]",
-    "Medium Priority Action 2: [Medium priority action based on discussion]",
-    "Strategic Action 3: [Long-term strategic action based on discussion]",
-    "Quick Win Action 4: [Easy and quick action based on discussion]",
-    "Follow-up Action 5: [Follow-up action based on discussion]"
+  "narrative_summary": "### Meeting Summary\\n\\n#### Main Topics Discussed\\n\\n1. **Topic 1**: Description...\\n2. **Topic 2**: Description...\\n\\n[NARRATIVE OVERVIEW ONLY - NO speaker points, decisions, or action items]",
+  "speaker_points": [
+    {{
+      "speaker": "Speaker 1 (Name)",
+      "points": [
+        "Key point 1 from this speaker",
+        "Key point 2 from this speaker", 
+        "Key point 3 from this speaker"
+      ]
+    }},
+    {{
+      "speaker": "Speaker 2 (Name)", 
+      "points": [
+        "Key point 1 from this speaker",
+        "Key point 2 from this speaker"
+      ]
+    }}
   ],
   "key_decisions": [
-    "[Important decision 1 based on discussion]",
-    "[Important decision 2 based on discussion]",
-    "[Important decision 3 based on discussion]",
-    "[Important decision 4 based on discussion (if any)]"
+    "Important decision 1 made during discussion",
+    "Important decision 2 made during discussion",
+    "Important decision 3 made during discussion"
   ],
-  "point_of_view": [
-    "Speaker 1: [Important point from Speaker 1's perspective/contribution]",
-    "Speaker 1: [Another important point from Speaker 1's perspective/contribution]",
-    "Speaker 2: [Important point from Speaker 2's perspective/contribution]",
-    "Speaker 2: [Another important point from Speaker 2's perspective/contribution]"
+  "action_items": [
+    "High Priority: Specific actionable task 1",
+    "Medium Priority: Specific actionable task 2", 
+    "Strategic: Long-term action 3",
+    "Quick Win: Easy implementation task 4",
+    "Follow-up: Monitoring/review task 5"
   ]
 }}
 
-MANDATORY RULES:
-- Output ONLY in valid JSON format
-- NO text outside JSON
-- All content 100% based on actual transcript
-- Point of view must focus on unique contribution of each speaker
-- Action items must be specific and actionable
-- Key decisions must be actual decisions from discussion
-- NO speaker_points because already exists in point_of_view
+CRITICAL RULES:
+- narrative_summary MUST NOT contain speaker points, decisions, or action items
+- Each section serves different purpose - NO OVERLAP
+- speaker_points contains detailed speaker contributions
+- key_decisions contains actual decisions made
+- action_items contains specific actionable tasks
+- Output ONLY valid JSON, no extra text
+- Use actual content from transcript
 """
 
 # ===== ENHANCED CHAT PROMPTS =====
