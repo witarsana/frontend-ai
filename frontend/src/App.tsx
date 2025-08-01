@@ -139,7 +139,14 @@ const App: React.FC = () => {
                 text: result.transcript
                   ? result.transcript.map((seg) => seg.text).join(" ")
                   : "No transcript available",
+                segments: result.transcript || [],
+                summary: result.summary || null,
+                actionItems: result.action_items || [],
+                keyDecisions: result.key_decisions || [],
+                sentiment: result.sentiment || null,
+                participants: result.speakers || [],
                 duration: result.duration || null,
+                fullResult: result, // Store complete result for detailed view
               }
             : t
         )

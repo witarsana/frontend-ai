@@ -4,6 +4,36 @@ export const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
+export const formatDuration = (timeString: string): string => {
+  // Parse various time formats and return a human-readable duration
+  const seconds = parseTimeToSeconds(timeString);
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
+
+export const getSpeakerClass = (speakerName: string): string => {
+  // Generate consistent speaker classes based on speaker name
+  const hash = speakerName.split("").reduce((a, b) => {
+    a = (a << 5) - a + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  const speakerIndex = (Math.abs(hash) % 4) + 1;
+  return `speaker-${speakerIndex}`;
+};
+
+export const formatConfidence = (confidence?: number): string => {
+  if (!confidence) return "N/A";
+  return `${Math.round(confidence * 100)}%`;
+};
+
 export const parseTimeToSeconds = (timeString: string): number => {
   try {
     // Handle different time formats: "MM:SS", "H:MM:SS", "M:SS.MS", or just number string

@@ -1,10 +1,12 @@
 export interface TranscriptItem {
+  id?: number;
   start: string;
   end: string;
   speaker: string;
   speakerName: string;
   text: string;
   tags: string[];
+  confidence?: number;
 }
 
 export interface AudioPlayerState {

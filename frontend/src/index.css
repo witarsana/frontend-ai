@@ -774,6 +774,15 @@ body {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.speaker-info > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .speaker-avatar {
@@ -786,16 +795,148 @@ body {
   justify-content: center;
   color: white;
   font-weight: bold;
+  font-size: 16px;
 }
 
+/* Improved speaker color scheme */
 .speaker-1 {
-  background: #6b7280;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 .speaker-2 {
-  background: #9ca3af;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
 }
 .speaker-3 {
-  background: #4b5563;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+.speaker-4 {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+/* Default speaker colors for dynamic speakers */
+.speaker-avatar:not(.speaker-1):not(.speaker-2):not(.speaker-3):not(
+    .speaker-4
+  ) {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+}
+
+/* Transcript statistics section */
+.transcript-stats {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.transcript-stats .stat-item {
+  text-align: center;
+  padding: 8px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.transcript-stats .stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Enhanced timestamp styling */
+.timestamp {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.timestamp:hover {
+  background: #e2e8f0;
+  color: #334155;
+  transform: scale(1.02);
+}
+
+.timestamp.clicked {
+  background: #3b82f6;
+  color: white;
+  animation: pulse 0.3s ease;
+}
+
+.timestamp.playing {
+  background: #10b981;
+  color: white;
+  animation: playing 1.5s infinite;
+}
+
+@keyframes playing {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Improved tag styling */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .transcript-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .speaker-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .speaker-avatar {
+    margin-right: 0;
+    margin-bottom: 8px;
+  }
 }
 
 .timestamp {

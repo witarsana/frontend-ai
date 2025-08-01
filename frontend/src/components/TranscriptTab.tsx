@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { TranscriptItem } from '../types';
-import TranscriptItemComponent from './TranscriptItem';
+import React, { useState } from "react";
+import { TranscriptItem } from "../types";
+import TranscriptItemComponent from "./TranscriptItem";
 
 interface TranscriptTabProps {
   transcript: TranscriptItem[];
@@ -21,19 +21,36 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
   onSearchChange,
   onFilterChange,
   onSeekToTime,
-  currentTime = 0
+  currentTime = 0,
 }) => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  const filters: { label: string; value: string }[] = [
-    
-  ];
-  filters.push({ label: 'All', value: 'All' });
+  // Calculate statistics
+  const totalDuration =
+    transcript.length > 0 ? transcript[transcript.length - 1].end : "0:00:00";
+  const totalWords = transcript.reduce(
+    (sum, item) => sum + item.text.split(" ").length,
+    0
+  );
+  const averageConfidence =
+    transcript.length > 0
+      ? transcript.reduce((sum, item) => sum + (item.confidence || 0), 0) /
+        transcript.length
+      : 0;
+
+  const filters: { label: string; value: string }[] = [];
+  filters.push({ label: "All", value: "All" });
 
   for (const participant of participants) {
-    filters.push({ label: participant, value: participant });
+    const segmentCount = transcript.filter(
+      (t) => t.speakerName === participant
+    ).length;
+    filters.push({
+      label: `${participant} (${segmentCount})`,
+      value: participant,
+    });
   }
 
   // Calculate pagination
@@ -56,7 +73,9 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     // Scroll to top of transcript section
-    document.querySelector('.tab-content')?.scrollIntoView({ behavior: 'smooth' });
+    document
+      .querySelector(".tab-content")
+      ?.scrollIntoView({ behavior: "smooth" });
   };
 
   const handleItemsPerPageChange = (items: number) => {
@@ -68,7 +87,7 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
   const getPageNumbers = () => {
     const pages = [];
     const maxPagesToShow = 5;
-    
+
     if (totalPages <= maxPagesToShow) {
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
@@ -77,21 +96,83 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
       const half = Math.floor(maxPagesToShow / 2);
       let start = Math.max(currentPage - half, 1);
       let end = Math.min(start + maxPagesToShow - 1, totalPages);
-      
+
       if (end - start < maxPagesToShow - 1) {
         start = Math.max(end - maxPagesToShow + 1, 1);
       }
-      
+
       for (let i = start; i <= end; i++) {
         pages.push(i);
       }
     }
-    
+
     return pages;
   };
 
   return (
     <div className="tab-content">
+      {/* Statistics Section */}
+      <div
+        className="transcript-stats"
+        style={{
+          backgroundColor: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          borderRadius: "8px",
+          padding: "16px",
+          marginBottom: "20px",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "16px",
+        }}
+      >
+        <div className="stat-item">
+          <div
+            style={{ fontSize: "24px", fontWeight: "bold", color: "#1e40af" }}
+          >
+            {transcript.length}
+          </div>
+          <div style={{ fontSize: "14px", color: "#64748b" }}>
+            Total Segments
+          </div>
+        </div>
+        <div className="stat-item">
+          <div
+            style={{ fontSize: "24px", fontWeight: "bold", color: "#059669" }}
+          >
+            {totalWords.toLocaleString()}
+          </div>
+          <div style={{ fontSize: "14px", color: "#64748b" }}>Total Words</div>
+        </div>
+        <div className="stat-item">
+          <div
+            style={{ fontSize: "24px", fontWeight: "bold", color: "#7c3aed" }}
+          >
+            {participants.length}
+          </div>
+          <div style={{ fontSize: "14px", color: "#64748b" }}>Speakers</div>
+        </div>
+        <div className="stat-item">
+          <div
+            style={{ fontSize: "24px", fontWeight: "bold", color: "#dc2626" }}
+          >
+            {totalDuration}
+          </div>
+          <div style={{ fontSize: "14px", color: "#64748b" }}>Duration</div>
+        </div>
+        {averageConfidence > 0 && (
+          <div className="stat-item">
+            <div
+              style={{ fontSize: "24px", fontWeight: "bold", color: "#d97706" }}
+            >
+              {Math.round(averageConfidence * 100)}%
+            </div>
+            <div style={{ fontSize: "14px", color: "#64748b" }}>
+              Avg. Confidence
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="controls">
         <input
           type="text"
@@ -104,7 +185,9 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
           {filters.map((filter) => (
             <button
               key={filter.value}
-              className={`filter-btn ${activeFilter === filter.value ? 'active' : ''}`}
+              className={`filter-btn ${
+                activeFilter === filter.value ? "active" : ""
+              }`}
               onClick={() => onFilterChange(filter.value)}
             >
               {filter.label}
@@ -116,13 +199,14 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
       {/* Pagination Info and Controls */}
       <div className="pagination-info">
         <div className="results-info">
-          Showing {Math.min(startIndex + 1, totalItems)} - {Math.min(endIndex, totalItems)} of {totalItems} items
+          Showing {Math.min(startIndex + 1, totalItems)} -{" "}
+          {Math.min(endIndex, totalItems)} of {totalItems} items
           {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
         </div>
         <div className="items-per-page">
           <label>Items per page:</label>
-          <select 
-            value={itemsPerPage} 
+          <select
+            value={itemsPerPage}
             onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
             className="items-select"
           >
@@ -155,7 +239,7 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
       {/* Pagination Controls */}
       {totalPages > 1 && (
         <div className="pagination">
-          <button 
+          <button
             className="pagination-btn"
             onClick={() => handlePageChange(1)}
             disabled={currentPage === 1}
@@ -163,7 +247,7 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
           >
             First
           </button>
-          <button 
+          <button
             className="pagination-btn"
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
@@ -171,19 +255,21 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
           >
             Previous
           </button>
-          
+
           {getPageNumbers().map((pageNum) => (
             <button
               key={pageNum}
-              className={`pagination-btn ${currentPage === pageNum ? 'active' : ''}`}
+              className={`pagination-btn ${
+                currentPage === pageNum ? "active" : ""
+              }`}
               onClick={() => handlePageChange(pageNum)}
               title={`Go to page ${pageNum}`}
             >
               {pageNum}
             </button>
           ))}
-          
-          <button 
+
+          <button
             className="pagination-btn"
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
@@ -191,7 +277,7 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
           >
             Next
           </button>
-          <button 
+          <button
             className="pagination-btn"
             onClick={() => handlePageChange(totalPages)}
             disabled={currentPage === totalPages}
@@ -199,7 +285,7 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
           >
             Last
           </button>
-          
+
           {totalPages > 5 && (
             <div className="jump-to-page">
               <span>Go to:</span>

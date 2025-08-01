@@ -67,6 +67,7 @@ export interface APIResultResponse {
   job_id: string;
   filename: string;
   transcript: Array<{
+    id?: number;
     start: number;
     end: number;
     text: string;
@@ -343,12 +344,15 @@ function formatSecondsToTimestamp(seconds: number): string {
 export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
   return {
     transcript: apiResult.transcript.map((segment) => ({
+      id: segment.id,
       start: formatSecondsToTimestamp(segment.start),
       end: formatSecondsToTimestamp(segment.end),
       speakerName: segment.speaker_name,
-      speaker: segment.speaker,
+      speaker:
+        segment.speaker || segment.speaker_name.toLowerCase().replace(" ", "-"),
       text: segment.text,
-      tags: segment.tags,
+      tags: segment.tags || [],
+      confidence: segment.confidence,
     })),
     summary: {
       overview: apiResult.summary,
