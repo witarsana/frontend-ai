@@ -4,41 +4,44 @@
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
+YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🚀 Starting AI Project Services...${NC}"
+echo -e "${BLUE}🚀 Starting AI Project Services (Python Backend)...${NC}"
 
-# Load environment variables
-if [ -f .env ]; then
-    source .env
-    echo -e "${GREEN}✅ Environment variables loaded${NC}"
-else
-    echo -e "⚠️  Warning: .env file not found"
-fi
+# Configure for Python backend
+echo -e "${YELLOW}🔧 Configuring for Python backend...${NC}"
+./scripts/port-manager.sh configure python
 
-echo -e "${BLUE}📊 Project Configuration:${NC}"
-echo "   Backend: ${BACKEND_HOST}:${BACKEND_PORT}"
-echo "   Frontend: ${FRONTEND_HOST}:${FRONTEND_PORT}"
+# Get configuration from port manager
+BACKEND_TYPE="python"
+BACKEND_PORT=$(./scripts/port-manager.sh port python backend)
+FRONTEND_PORT=$(./scripts/port-manager.sh port python frontend)
+BACKEND_FOLDER=$(./scripts/port-manager.sh folder python)
+
+echo -e "${BLUE}📊 Python Backend Configuration:${NC}"
+echo "   Backend: localhost:${BACKEND_PORT} (${BACKEND_FOLDER}/)"
+echo "   Frontend: localhost:${FRONTEND_PORT}"
 
 # Function to start backend
 start_backend() {
-    echo -e "\n${BLUE}🔧 Starting Backend Server...${NC}"
-    cd backend
-    python ffmpeg_free_main.py &
+    echo -e "\n${BLUE}🔧 Starting Python Backend Server...${NC}"
+    cd ${BACKEND_FOLDER}
+    uvicorn ffmpeg_free_main:app --host 0.0.0.0 --port ${BACKEND_PORT} --reload &
     BACKEND_PID=$!
     echo "Backend started with PID: $BACKEND_PID"
     cd ..
     
     # Wait for backend to be ready
     echo -e "${BLUE}⏳ Waiting for backend to initialize...${NC}"
-    sleep 3
+    sleep 5
     
     # Check if backend is responding
     local max_attempts=10
     local attempt=1
     while [ $attempt -le $max_attempts ]; do
-        if curl -s http://localhost:${BACKEND_PORT}/api/engines > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ Backend is ready!${NC}"
+        if curl -s http://localhost:${BACKEND_PORT}/ > /dev/null 2>&1; then
+            echo -e "${GREEN}✅ Python Backend is ready!${NC}"
             break
         else
             echo -e "   Attempt $attempt/$max_attempts - Backend not ready yet..."

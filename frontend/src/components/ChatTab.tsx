@@ -93,7 +93,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
         query: userQuery,
         session_id: sessionId,
         model_preference: selectedModel || 'faiss', // Default ke FAISS jika tidak ada preferensi
-        use_smart_routing: !selectedModel  // Hanya gunakan smart routing jika tidak ada model spesifik
+        use_smart_routing: !selectedModel,  // Hanya gunakan smart routing jika tidak ada model spesifik
+        job_id: currentFileId  // Tambahkan job_id untuk load transcript yang benar
       };
 
       const response = await fetch(endpoint, {
@@ -188,7 +189,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
             <div>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>AI Meeting Assistant</h3>
               <p style={{ margin: '4px 0 0 0', fontSize: '14px', opacity: 0.9 }}>
-                {_useEnhancedChat ? 'Enhanced chat dengan multi-model AI' : 'Tanya apa saja tentang isi meeting ini'}
+                {currentFileId ? 
+                  `🟢 Connected to transcript: ${currentFileId.substring(0, 20)}...` : 
+                  'Tanya apa saja tentang isi meeting ini'
+                }
               </p>
             </div>
           </div>

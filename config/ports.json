@@ -1,0 +1,14 @@
+{
+  "python": {
+    "backend_port": 8000,
+    "frontend_port": 3000,
+    "backend_folder": "backend",
+    "description": "Python FastAPI backend with React frontend"
+  },
+  "node": {
+    "backend_port": 8001,
+    "frontend_port": 3001,
+    "backend_folder": "backend-node",
+    "description": "Node.js Express backend with React frontend"
+  }
+}

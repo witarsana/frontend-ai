@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { TranscriptItem } from "../types";
+import ChatTab from "./ChatTab";
 
 interface SessionTranscriptionCardProps {
   transcription: {
@@ -31,7 +32,7 @@ export const SessionTranscriptionCard: React.FC<
   SessionTranscriptionCardProps
 > = ({ transcription, onCopy, onDownload, onClear, onViewDetails }) => {
   const [activeTab, setActiveTab] = useState<
-    "overview" | "segments" | "summary"
+    "overview" | "segments" | "summary" | "chat"
   >("overview");
   const [copiedTask, setCopiedTask] = useState<number | null>(null);
 
@@ -159,7 +160,7 @@ export const SessionTranscriptionCard: React.FC<
               marginBottom: "16px",
             }}
           >
-            {(["overview", "segments", "summary"] as const).map((tab) => (
+            {(["overview", "segments", "summary", "chat"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -183,7 +184,9 @@ export const SessionTranscriptionCard: React.FC<
                   ? "📊 Overview"
                   : tab === "segments"
                   ? "💬 Segments"
-                  : "📄 Summary"}
+                  : tab === "summary"
+                  ? "📄 Summary"
+                  : "🤖 AI Chat"}
               </button>
             ))}
           </div>
@@ -849,6 +852,16 @@ export const SessionTranscriptionCard: React.FC<
               📊 Open Full Analysis
             </button>
           </div>
+        </div>
+      )}
+
+      {/* AI Chat Tab */}
+      {activeTab === "chat" && transcription.status === "completed" && (
+        <div>
+          <ChatTab 
+            currentFileId={transcription.id}
+            isTranscriptionReady={true}
+          />
         </div>
       )}
 

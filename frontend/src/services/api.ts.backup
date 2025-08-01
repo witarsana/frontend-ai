@@ -1,6 +1,6 @@
 // API configuration for connecting to Node.js Express backend
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.DEV ? "" : "http://localhost:8000", // Auto-configured for python backend
+  BASE_URL: import.meta.env.DEV ? "" : "http://localhost:8001", // Use proxy in dev, direct URL in production
   ENDPOINTS: {
     UPLOAD: "/api/upload-and-process",
     STATUS: "/api/status",

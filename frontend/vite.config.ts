@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// https://vitejs.dev/config/
+// Auto-generated configuration for python backend
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,7 +9,7 @@ export default defineConfig({
     open: true,
     proxy: {
       "/api": {
-        target: "http://localhost:8001",
+        target: "http://localhost:8000",
         changeOrigin: true,
         secure: false,
       },
