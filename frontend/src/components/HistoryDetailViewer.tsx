@@ -59,7 +59,8 @@ const HistoryDetailViewer: React.FC<HistoryDetailViewerProps> = ({ selectedJob, 
           sentiment: result.sentiment || null,
           participants: result.participants || null,
           duration: selectedJob.duration,
-          fullResult: result
+          fullResult: result,
+          audioUrl: `${API_CONFIG.BASE_URL}/api/audio/${selectedJob.job_id}` // Corrected audio endpoint
         };
         
         setTranscriptionData(fullData);
@@ -78,7 +79,8 @@ const HistoryDetailViewer: React.FC<HistoryDetailViewerProps> = ({ selectedJob, 
         uploadTime: new Date(selectedJob.processed_at),
         text: '',
         duration: selectedJob.duration,
-        word_count: selectedJob.word_count
+        word_count: selectedJob.word_count,
+        audioUrl: `${API_CONFIG.BASE_URL}/api/audio/${selectedJob.job_id}` // Corrected audio endpoint for fallback too
       };
       setTranscriptionData(basicData);
     } finally {
