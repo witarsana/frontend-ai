@@ -2,7 +2,7 @@
 Chat System for AI Meeting Transcription
 =====================================
 
-Simple chat system that can query transcription data using Mistral AI.
+Simple chat system that can query transcription data using multi-provider AI.
 This module provides basic chat functionality for exploring meeting content.
 """
 
@@ -10,8 +10,10 @@ import json
 import os
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from mistralai import Mistral
 from dotenv import load_dotenv
+
+# Import our new multi-provider system
+from api_providers import initialize_providers, call_api
 
 # Load environment variables
 load_dotenv()
@@ -25,17 +27,9 @@ class ChatSystem:
         self.current_file_data = None
         self.session_history = {}
         
-        # Initialize Mistral client
-        self.mistral_client = None
-        mistral_api_key = os.getenv("MISTRAL_API_KEY")
-        if mistral_api_key:
-            try:
-                self.mistral_client = Mistral(api_key=mistral_api_key)
-                print("✅ Chat system Mistral client initialized")
-            except Exception as e:
-                print(f"⚠️  Chat system Mistral initialization failed: {e}")
-        else:
-            print("⚠️  MISTRAL_API_KEY not found for chat system")
+        # Initialize our multi-provider API system
+        self.api_providers = initialize_providers()
+        print("✅ Chat system multi-provider API initialized")
     
     def load_transcription_data(self, result_file_path: str) -> bool:
         """Load transcription data from a result file"""
@@ -98,9 +92,9 @@ class ChatSystem:
                 "confidence": 0.0
             }
         
-        if not self.mistral_client:
+        if not self.api_providers:
             return {
-                "response": "Chat system is not properly configured. Mistral API key may be missing.",
+                "response": "Chat system is not properly configured. API providers not available.",
                 "sources": [],
                 "confidence": 0.0
             }
@@ -109,31 +103,25 @@ class ChatSystem:
             # Build context from loaded data
             context = self._build_context_from_data()
             
-            # Create a prompt for Mistral
-            system_prompt = """Anda adalah asisten AI yang membantu menganalisis transkrip meeting/percakapan. 
-Berikan jawaban yang informatif dan relevan berdasarkan data transkrip yang tersedia. 
-Jawab dalam bahasa Indonesia yang jelas dan mudah dipahami."""
+            # Create a prompt for AI
+            system_prompt = """You are an AI assistant that helps analyze meeting/conversation transcripts. 
+Provide informative and relevant answers based on the available transcript data. 
+Answer in clear and easy-to-understand English."""
             
-            user_prompt = f"""Berdasarkan data meeting/percakapan berikut:
+            user_prompt = f"""Based on the following meeting/conversation data:
 
 {context}
 
-Pertanyaan: {query}
+Question: {query}
 
-Berikan jawaban yang informatif dan relevan."""
+Provide an informative and relevant answer."""
             
-            # Query Mistral AI
-            response = self.mistral_client.chat.complete(
-                model="mistral-large-latest",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.3,
+            # Use our multi-provider API system
+            answer = call_api(
+                f"{system_prompt}\n\n{user_prompt}",
+                providers=self.api_providers,
                 max_tokens=1000
             )
-            
-            answer = response.choices[0].message.content
             
             # Store in session history
             if session_id not in self.session_history:

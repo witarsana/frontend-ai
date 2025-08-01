@@ -11,8 +11,10 @@ import json
 import os
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
-from mistralai import Mistral
 from dotenv import load_dotenv
+
+# Import our new multi-provider system
+from api_providers import initialize_providers, call_api
 
 # Import ChatSystem from the local module
 from chat_system import ChatSystem
@@ -63,22 +65,19 @@ class MultiModelChatSystem:
             }
             print("✅ FAISS offline model available")
         
-        # Initialize Mistral client
-        self.mistral_client = None
-        mistral_api_key = os.getenv("MISTRAL_API_KEY")
-        if mistral_api_key:
-            try:
-                self.mistral_client = Mistral(api_key=mistral_api_key)
-                self.available_models["mistral"] = {
-                    "client": self.mistral_client,
-                    "model_name": "mistral-large-latest",
-                    "capabilities": ["chat", "analysis", "summarization"],
-                    "priority": 1,
-                    "offline": False
-                }
-                print("✅ Multi-model chat system Mistral client initialized")
-            except Exception as e:
-                print(f"⚠️  Multi-model Mistral initialization failed: {e}")
+        # Initialize our multi-provider API system
+        self.api_providers = initialize_providers()
+        if self.api_providers and self.api_providers['ready']['mistral']:
+            self.available_models["mistral"] = {
+                "client": self.api_providers,
+                "model_name": "Multi-Provider AI (Mistral/DeepSeek/OpenRouter)",
+                "capabilities": ["chat", "analysis", "summarization"],
+                "priority": 1,
+                "offline": False
+            }
+            print("✅ Multi-model chat system multi-provider API initialized")
+        else:
+            print("⚠️  Multi-provider API initialization failed")
         
         # NOTE: Deepseek is disabled as requested - no agent available yet
         # Future: Add Deepseek when agent is ready
@@ -228,42 +227,40 @@ class MultiModelChatSystem:
             context = self.base_chat_system._build_context_from_data()
             
             # Enhanced system prompt for better responses
-            system_prompt = """Anda adalah asisten AI expert untuk analisis meeting dan percakapan bisnis. 
-Anda memiliki kemampuan untuk:
-1. Menganalisis transkrip meeting secara mendalam
-2. Mengidentifikasi pola komunikasi dan dinamika diskusi
-3. Memberikan insight strategis dan actionable recommendations
-4. Menjawab pertanyaan dengan detail dan konteks yang relevan
+            system_prompt = """You are an expert AI assistant for meeting and business conversation analysis. 
+You have the ability to:
+1. Analyze meeting transcripts in-depth
+2. Identify communication patterns and discussion dynamics
+3. Provide strategic insights and actionable recommendations
+4. Answer questions with detailed and relevant context
 
-Berikan jawaban yang informatif, terstruktur, dan actionable. 
-Gunakan bahasa Indonesia yang profesional namun mudah dipahami."""
+Provide informative, structured, and actionable answers. 
+Use professional yet easy-to-understand English."""
             
             # Enhanced user prompt with better structure
-            user_prompt = f"""Berdasarkan data meeting/percakapan berikut:
+            user_prompt = f"""Based on the following meeting/conversation data:
 
 {context}
 
-PERTANYAAN: {query}
+QUESTION: {query}
 
-Berikan jawaban yang komprehensif dengan struktur:
-1. **Jawaban Langsung**: Respon utama terhadap pertanyaan
-2. **Detail & Konteks**: Informasi pendukung dari transkrip
-3. **Insight Tambahan**: Observasi atau pola menarik (jika relevan)
+Provide a comprehensive answer with the following structure:
+1. **Direct Answer**: Main response to the question
+2. **Details & Context**: Supporting information from the transcript
+3. **Additional Insights**: Interesting observations or patterns (if relevant)
 
-Pastikan jawaban akurat dan berdasarkan data yang tersedia."""
+Ensure the answer is accurate and based on available data."""
             
-            # Query Mistral with enhanced settings
-            response = self.mistral_client.chat.complete(
-                model="mistral-large-latest",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.2,  # Lower temperature for more focused responses
-                max_tokens=1200   # Increased token limit for detailed responses
+            # Use our multi-provider API system
+            full_prompt = f"""{system_prompt}
+
+{user_prompt}"""
+            
+            answer = call_api(
+                full_prompt,
+                providers=self.api_providers,
+                max_tokens=1200
             )
-            
-            answer = response.choices[0].message.content
             
             # Store in session history
             if session_id not in self.session_history:
