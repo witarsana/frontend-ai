@@ -262,9 +262,11 @@ def is_summary_query(query: str) -> bool:
     Deteksi apakah query meminta summary/ringkasan
     """
     summary_keywords = [
-        "ringkas", "summary", "rangkum", "simpulkan", "kesimpulan",
-        "ringkasan", "poin utama", "inti", "garis besar", "overview",
-        "buatlah ringkasan", "berikan ringkasan", "format terstruktur"
+        "summary", "summarize", "conclusions", "main points", "overview",
+        "ringkas", "rangkum", "simpulkan", "kesimpulan",
+        "ringkasan", "poin utama", "inti", "garis besar",
+        "buatlah ringkasan", "berikan ringkasan", "format terstruktur",
+        "key points", "brief", "outline", "highlights", "recap"
     ]
     
     query_lower = query.lower()

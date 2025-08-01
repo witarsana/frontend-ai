@@ -1,6 +1,8 @@
 // API configuration for connecting to Python FastAPI backend
+import { PORT_CONFIG } from '../config/port-config';
+
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8000', // FFmpeg-free backend
+  BASE_URL: PORT_CONFIG.urls.backend, // Uses centralized port configuration
   ENDPOINTS: {
     UPLOAD: '/api/upload-and-process',
     STATUS: '/api/status',

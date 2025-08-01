@@ -1,0 +1,15 @@
+{
+  "backend": {
+    "port": 8001,
+    "host": "localhost"
+  },
+  "frontend": {
+    "port": 3001,
+    "host": "localhost"
+  },
+  "urls": {
+    "backend": "http://localhost:8001",
+    "frontend": "http://localhost:3001",
+    "api_docs": "http://localhost:8001/docs"
+  }
+}

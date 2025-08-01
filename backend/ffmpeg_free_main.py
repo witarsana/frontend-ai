@@ -9,7 +9,22 @@ from datetime import datetime
 import json
 from faster_whisper import WhisperModel
 import whisper  # Simple whisper for fast transcription
-from mistralai import Mistral
+
+# Mistral AI import - compatible with version 0.4.2
+try:
+    from mistralai.client import MistralClient
+    MISTRAL_AVAILABLE = True
+    print("✅ Mistral AI client imported successfully")
+except ImportError:
+    try:
+        from mistralai import Mistral as MistralClient
+        MISTRAL_AVAILABLE = True
+        print("✅ Mistral AI legacy import successful")
+    except ImportError:
+        print("⚠️  Mistral AI not available - AI features will be limited")
+        MistralClient = None
+        MISTRAL_AVAILABLE = False
+
 from typing import Dict, List, Any, Optional
 import traceback
 import librosa
@@ -23,6 +38,9 @@ import statistics
 
 # Import prompts dari file terpisah
 from prompts import get_summary_prompt, get_fallback_responses, truncate_transcript
+
+# Import our new multi-provider API system
+from api_providers import initialize_providers, call_api
 
 # Chat system imports
 try:
@@ -97,16 +115,23 @@ deepgram_client = None
 processing_jobs = {}
 chat_system = None
 multi_chat_system = None
+api_providers = None  # Our new multi-provider system
 
 # Configuration
 TRANSCRIPTION_ENGINE = os.getenv("TRANSCRIPTION_ENGINE", "faster-whisper")  # "faster-whisper" or "deepgram"
 
 def load_models():
     """Load AI models with error handling"""
-    global whisper_model, simple_whisper_model, mistral_client, diarization_pipeline, deepgram_client
+    global whisper_model, simple_whisper_model, mistral_client, diarization_pipeline, deepgram_client, api_providers
     
     try:
         print(f"🔧 Transcription engine: {TRANSCRIPTION_ENGINE}")
+        
+        # Initialize our multi-provider API system
+        if api_providers is None:
+            print("🔄 Initializing multi-provider API system...")
+            api_providers = initialize_providers()
+            print("✅ Multi-provider API system initialized!")
         
         # Load simple whisper model for fast transcription
         if simple_whisper_model is None:
@@ -139,7 +164,7 @@ def load_models():
         if mistral_client is None:
             api_key = os.getenv("MISTRAL_API_KEY")
             if api_key:
-                mistral_client = Mistral(api_key=api_key)
+                mistral_client = MistralClient(api_key=api_key)
                 print("✅ Mistral client initialized!")
             else:
                 print("⚠️  MISTRAL_API_KEY not found")
@@ -1563,8 +1588,8 @@ def _transcribe_librosa_sync(audio_path: str, job_id: str = None) -> Dict[Any, A
 async def generate_summary_simple(transcription: Dict) -> Dict[str, Any]:
     """Simple summary generation with enhanced debugging"""
     try:
-        if not mistral_client:
-            print("❌ Mistral client not available, using fallback")
+        if not api_providers:
+            print("❌ API providers not available, using fallback")
             return get_simple_fallback()
         
         transcript_text = format_transcript_for_summary(transcription["segments"])
@@ -1623,7 +1648,7 @@ def _generate_summary_simple_sync(transcript_text: str) -> Dict[str, Any]:
     """Enhanced summary generation using centralized prompts"""
     try:
         print(f"🔍 DEBUG: Starting summary generation with transcript length: {len(transcript_text)}")
-        print(f"🔍 DEBUG: Mistral client available: {mistral_client is not None}")
+        print(f"🔍 DEBUG: API providers available: {api_providers is not None}")
         
         # Truncate transcript if too long using utility function
         transcript_text = truncate_transcript(transcript_text, max_length=6000)
@@ -1631,17 +1656,12 @@ def _generate_summary_simple_sync(transcript_text: str) -> Dict[str, Any]:
         
         # Get prompt from centralized prompts file
         prompt = get_summary_prompt(transcript_text)
-        print(f"🔍 DEBUG: Calling Mistral API with prompt length: {len(prompt)}")
+        print(f"🔍 DEBUG: Calling API with prompt length: {len(prompt)}")
         
-        response = mistral_client.chat.complete(
-            model="mistral-large-latest",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=1200  # Increased for more comprehensive responses
-        )
+        # Use our multi-provider API system
+        response_text = call_api(prompt, providers=api_providers, max_tokens=1200)
         
-        response_text = response.choices[0].message.content.strip()
-        print(f"🤖 Mistral response length: {len(response_text)} chars")
+        print(f"🤖 API response length: {len(response_text)} chars")
         print(f"📝 Response preview: {response_text[:200]}...")
         
         # Parse JSON - handle markdown code blocks
@@ -1814,15 +1834,15 @@ def clean_summary_text(summary: str, action_items: list, key_decisions: list) ->
         
         # Skip detailed action items and decisions sections to avoid duplication
         if (stripped.startswith('#### 📋 Action Items') or 
-            stripped.startswith('#### 🎯 Keputusan atau Kesimpulan') or
+            stripped.startswith('#### 🎯 Decisions or Conclusions') or
             stripped.startswith('#### 📋 Next Steps') or
             '📋 Action Items' in stripped or
-            '🎯 Keputusan atau Kesimpulan' in stripped):
+            '🎯 Decisions or Conclusions' in stripped):
             skip_section = True
             continue
         
         # Reset skip when we hit a new major section
-        if stripped.startswith('####') and not any(x in stripped for x in ['📋', '🎯', 'Action', 'Keputusan']):
+        if stripped.startswith('####') and not any(x in stripped for x in ['📋', '🎯', 'Action', 'Decisions']):
             skip_section = False
         
         # Only add lines if we're not in a skipped section
@@ -1839,7 +1859,7 @@ def clean_summary_text(summary: str, action_items: list, key_decisions: list) ->
 
 async def extract_structured_data_from_summary(transcript_segments: list) -> tuple:
     """Extract and separate detailed content into 3 distinct fields using AI - NO STATIC CONTENT"""
-    global mistral_client
+    global api_providers
     
     if not transcript_segments:
         return ["Review transcript for detailed insights"], ["Audio successfully processed with AI technology"], ["Speaker 1: Main points from speaker's perspective"]
@@ -1856,22 +1876,16 @@ async def extract_structured_data_from_summary(transcript_segments: list) -> tup
     
     # Generate structured data using AI
     try:
-        if not mistral_client:
-            print("⚠️ Mistral client not available, using basic fallback")
+        if not api_providers:
+            print("⚠️ API providers not available, using basic fallback")
             return generate_basic_structured_data()
         
         # Import dan gunakan prompt dari prompts.py
         from prompts import get_structured_data_extraction_prompt
         prompt = get_structured_data_extraction_prompt(transcript_text)
 
-        response = mistral_client.chat.complete(
-            model="mistral-large-latest",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=1500
-        )
-        
-        response_text = response.choices[0].message.content.strip()
+        # Use our multi-provider API system
+        response_text = call_api(prompt, providers=api_providers, max_tokens=1500)
         
         # Clean and parse JSON response with better error handling
         json_str = ""
@@ -1940,20 +1954,9 @@ def generate_basic_structured_data() -> tuple:
 
 async def generate_comprehensive_summary(transcript_segments: list) -> str:
     """Generate comprehensive summary like the reference file with better formatting"""
-    global mistral_client
+    global api_providers
     
     print("\n🧠 Generating comprehensive summary with enhanced formatting...")
-    
-    # Initialize Mistral client if not available
-    if mistral_client is None:
-        api_key = os.getenv("MISTRAL_API_KEY")
-        if api_key:
-            from mistralai import Mistral
-            mistral_client = Mistral(api_key=api_key)
-            print("✅ Mistral client initialized for summary generation!")
-        else:
-            print("⚠️ MISTRAL_API_KEY not found - cannot generate summary")
-            return "❌ Mistral API key not configured for summary generation."
     
     if not transcript_segments:
         return "❌ No transcript available for summarization."
@@ -1973,90 +1976,35 @@ async def generate_comprehensive_summary(transcript_segments: list) -> str:
         from prompts import get_comprehensive_summary_prompt
         prompt = get_comprehensive_summary_prompt(formatted_transcript)
         
-        response = mistral_client.chat.complete(
-            model="mistral-large-latest",
-            messages=[
-                {"role": "system", "content": "You are an expert analyst who is very skilled at analyzing conversations and creating comprehensive, detailed, and actionable summaries. You always provide deep insights and professional format like meeting briefings. IMPORTANT: You MUST follow the complete 4-section format and CANNOT skip the 'Important Points from Each Speaker' section."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.1,  # Even lower temperature for more consistent formatting
-            max_tokens=3500   # More tokens for comprehensive output including speaker points
-        )
-        
-        summary_content = response.choices[0].message.content
-        
-        # Clean the summary content to prevent JSON corruption
-        summary_content = summary_content.replace('\x00', '').strip()  # Remove null bytes
-        
-        # Validate that the summary doesn't contain problematic characters
+        # Use our new multi-provider API system
         try:
-            # Test JSON encoding to catch issues early - this is critical!
-            json.dumps({"test": summary_content}, ensure_ascii=False)
+            summary = call_api(prompt, providers=api_providers)
+            print("✅ Summary generated successfully!")
+            return summary
+        except Exception as e:
+            print(f"❌ Summary generation failed: {str(e)}")
+            return f"❌ Summary generation failed: {str(e)}"
             
-            # Validate that all 4 required sections are present
-            required_sections = [
-                "Main Topics Discussed",
-                "Important Points from Each Speaker", 
-                "Decisions or Conclusions Made",
-                "Action Items"
-            ]
-            
-            missing_sections = []
-            for section in required_sections:
-                if section not in summary_content:
-                    missing_sections.append(section)
-            
-            if missing_sections:
-                print(f"⚠️ Missing sections in summary: {missing_sections}")
-                # Don't fail, but log the issue
-                
-            return summary_content
-            
-        except Exception as encoding_error:
-            print(f"⚠️ Summary encoding issue: {encoding_error}")
-            print(f"⚠️ Problematic content preview: {summary_content[:200]}...")
-            # Return a safe fallback that's guaranteed to be JSON-safe
-            return "Summary generation completed but contained encoding issues. Please regenerate for full content."
+    except ImportError:
+        # Fallback if prompts module not available
+        basic_prompt = f"""Please provide a comprehensive meeting summary for the following transcript:
+
+{formatted_transcript}
+
+Please organize your response with these sections:
+1. Main Topics Discussed
+2. Important Points from Each Speaker
+3. Key Decisions & Outcomes
+4. Next Steps/Action Items
+
+Keep the summary professional and detailed."""
         
-    except Exception as e:
-        error_msg = str(e)
-        print(f"❌ Comprehensive summary error: {error_msg}")
-        
-        # Return a JSON-safe fallback with proper 4-section structure
-        fallback_summary = """### Meeting Summary
-
-#### Main Topics Discussed
-1. **Audio Content Analysis**: System successfully analyzed and processed audio content with cutting-edge AI technology
-2. **Speaker Segmentation**: Identified multiple speakers with high accuracy using machine learning technology
-3. **Transcription Quality**: High-quality transcription results with word-level timestamps
-
-#### Important Points from Each Speaker
-
-**Speaker 1**
-- **Content Leadership**: Led discussion with substantial contributions throughout the conversation
-- **Knowledge Sharing**: Presented valuable information and insights for the audience
-
-**Speaker 2**
-- **Active Participation**: Provided constructive responses and feedback
-- **Collaborative Discussion**: Contributed to creating meaningful dialogue
-
-#### Decisions or Conclusions Made
-1. Audio content successfully processed with cutting-edge transcription technology
-2. Transcription results meet high quality standards for further analysis
-3. System demonstrates stable and reliable performance
-
-#### Action Items
-1. **Review**: Conduct comprehensive review of transcription results to gain detailed insights
-2. **Analysis**: Analyze content for business applications, learning, or strategic planning
-3. **Documentation**: Use transcription results for documentation and future project references"""
-
-        # Validate fallback is JSON-safe
         try:
-            json.dumps({"test": fallback_summary}, ensure_ascii=False)
-            return fallback_summary
-        except Exception as json_error:
-            print(f"❌ Even fallback summary has JSON issues: {json_error}")
-            return "Summary generation failed. Please regenerate or check transcript manually."
+            summary = call_api(basic_prompt, providers=api_providers)
+            return summary
+        except Exception as e:
+            print(f"❌ Summary generation failed: {str(e)}")
+            return f"❌ Summary generation failed: {str(e)}"
 
 async def generate_summary_with_mistral(transcript_segments: list) -> str:
     """Generate summary using Mistral API - format from sample script"""
@@ -2126,24 +2074,13 @@ IMPORTANT:
 """
 
     try:
-        if not mistral_client:
-            return "❌ Mistral client not available."
-        
-        response = mistral_client.chat.complete(
-            model="mistral-large-latest",
-            messages=[
-                {"role": "system", "content": "You are an intelligent assistant who is expert in summarizing meeting and conversation transcripts."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.5,
-            max_tokens=1500
-        )
-        
-        return response.choices[0].message.content
+        # Use our multi-provider API system
+        summary = call_api(prompt, providers=api_providers)
+        return summary
         
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ Mistral API error: {error_msg}")
+        print(f"❌ Summary generation error: {error_msg}")
         
         # Provide intelligent fallback based on transcript content
         if "service tier capacity exceeded" in error_msg.lower() or "429" in error_msg:
@@ -2436,6 +2373,12 @@ async def enhanced_chat_query(request: dict):
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Centralized port configuration
+    BACKEND_PORT = 8001
+    BACKEND_HOST = "0.0.0.0"
+    
     print("🚀 Starting FFmpeg-Free AI Transcription API...")
+    print(f"🔧 Server will run on: {BACKEND_HOST}:{BACKEND_PORT}")
     print("🔧 Features: Librosa audio processing, No external dependencies")
-    uvicorn.run(app, host="0.0.0.0", port=8000)  # Port 8000 for FFmpeg-free version
+    uvicorn.run(app, host=BACKEND_HOST, port=BACKEND_PORT)

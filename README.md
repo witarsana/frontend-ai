@@ -171,6 +171,30 @@ npm run dev
 
 ## 🔧 Configuration
 
+### 🚦 Port Configuration (NEW!)
+
+This project now uses a centralized port configuration system. All ports are managed in one place!
+
+```bash
+# Show current ports
+./manage-ports.sh show
+
+# Change ports easily
+./manage-ports.sh set-both 8002 3002
+
+# Reset to defaults (8001, 3001)
+./manage-ports.sh reset
+
+# Test if ports are available
+./manage-ports.sh test
+```
+
+**Default Ports:**
+- Backend: http://localhost:8001
+- Frontend: http://localhost:3001
+
+📖 **Full documentation:** [Port Configuration Guide](docs/PORT_CONFIGURATION.md)
+
 ### Environment Variables
 
 Copy `.env.example` to `.env` and configure:
@@ -223,17 +247,17 @@ You can change transcription engines at runtime via API:
 
 ```bash
 # Switch to Deepgram
-curl -X POST "http://localhost:8000/api/config/engine" \
+curl -X POST "http://localhost:8001/api/config/engine" \
   -H "Content-Type: application/json" \
   -d '"deepgram"'
 
 # Switch back to Faster-Whisper
-curl -X POST "http://localhost:8000/api/config/engine" \
+curl -X POST "http://localhost:8001/api/config/engine" \
   -H "Content-Type: application/json" \
   -d '"faster-whisper"'
 
 # Check current configuration
-curl "http://localhost:8000/api/config"
+curl "http://localhost:8001/api/config"
 ```
 
 ## 🎬 Demo Materials
@@ -262,7 +286,7 @@ npm run dev
 
 **Port conflicts?**
 
-- Backend: http://localhost:8000
+- Backend: http://localhost:8001
 - Frontend: http://localhost:3001
 
 **Transcription not working?**
