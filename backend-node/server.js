@@ -224,19 +224,15 @@ app.get("/api/engines", (req, res) => {
   res.json({
     engines: {
       "faster-whisper": {
-        name: "Faster-Whisper (OpenAI)",
-        type: "cloud",
-        cost: "paid",
+        name: "Faster-Whisper",
+        type: "local",
+        cost: "free",
         speed: "fast",
-        accuracy: "very_high",
+        accuracy: "high",
         languages: "multilingual",
-        features: [
-          "high_accuracy",
-          "multilingual",
-          "robust",
-          "privacy_focused",
-        ],
-        available: !!process.env.OPENAI_API_KEY,
+        features: ["offline", "privacy", "no_api_limits", "local_processing"],
+        available: transcriptionService.isLocalWhisperAvailable(),
+        service_info: transcriptionService.getLocalWhisperStatus(),
       },
       deepgram: {
         name: "Deepgram Nova-2",

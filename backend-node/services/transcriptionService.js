@@ -17,15 +17,16 @@ let hfClient = null;
 let localWhisperClient = null;
 
 // Check if local Whisper service is available
-const LOCAL_WHISPER_URL = process.env.LOCAL_WHISPER_URL || "http://localhost:8000";
+const LOCAL_WHISPER_URL =
+  process.env.LOCAL_WHISPER_URL || "http://localhost:8000";
 
 // Initialize local Whisper client
 if (process.env.USE_LOCAL_WHISPER === "true" || !process.env.OPENAI_API_KEY) {
   localWhisperClient = {
     baseURL: LOCAL_WHISPER_URL,
-    available: false
+    available: false,
   };
-  
+
   // Check if local service is running
   checkLocalWhisperAvailability();
 }
@@ -52,24 +53,32 @@ if (process.env.HUGGING_FACE_TOKEN) {
  */
 async function checkLocalWhisperAvailability() {
   if (!localWhisperClient) return;
-  
+
   try {
     const response = await fetch(`${LOCAL_WHISPER_URL}/health`, {
-      method: 'GET',
-      timeout: 5000
+      method: "GET",
+      timeout: 5000,
     });
-    
+
     if (response.ok) {
       const health = await response.json();
       localWhisperClient.available = health.model_loaded;
-      console.log(`🏠 Local Whisper service: ${localWhisperClient.available ? 'AVAILABLE' : 'NOT READY'}`);
-      
+      console.log(
+        `🏠 Local Whisper service: ${
+          localWhisperClient.available ? "AVAILABLE" : "NOT READY"
+        }`
+      );
+
       if (health.model_name) {
-        console.log(`🤖 Local Whisper model: ${health.model_name} on ${health.device}`);
+        console.log(
+          `🤖 Local Whisper model: ${health.model_name} on ${health.device}`
+        );
       }
     } else {
       localWhisperClient.available = false;
-      console.log(`🏠 Local Whisper service: NOT AVAILABLE (status: ${response.status})`);
+      console.log(
+        `🏠 Local Whisper service: NOT AVAILABLE (status: ${response.status})`
+      );
     }
   } catch (error) {
     localWhisperClient.available = false;
@@ -116,27 +125,42 @@ class TranscriptionService {
       const userSelectedEngine = preferredEngine && preferredEngine !== null;
 
       // Try the preferred engine first, but prioritize local Whisper if available
-      if (targetEngine === "openai" && (localWhisperClient?.available || openaiClient)) {
+      if (
+        targetEngine === "openai" &&
+        (localWhisperClient?.available || openaiClient)
+      ) {
         // Prefer local Whisper over cloud OpenAI if available
         const useLocalWhisper = localWhisperClient?.available;
-        
+
         console.log(
-          `🤖 Attempting ${useLocalWhisper ? 'Local' : 'Cloud'} OpenAI Whisper transcription ${
+          `🤖 Attempting ${
+            useLocalWhisper ? "Local" : "Cloud"
+          } OpenAI Whisper transcription ${
             userSelectedEngine ? "(user selected)" : "(default)"
           }...`
         );
-        
+
         try {
-          const result = useLocalWhisper 
-            ? await this.transcribeWithLocalWhisper(filePath, filename, audioInfo)
+          const result = useLocalWhisper
+            ? await this.transcribeWithLocalWhisper(
+                filePath,
+                filename,
+                audioInfo
+              )
             : await this.transcribeWithOpenAI(filePath, filename, audioInfo);
-          
+
           console.log(
-            `✅ ${useLocalWhisper ? 'Local' : 'Cloud'} OpenAI Whisper success: ${result.segments.length} segments`
+            `✅ ${
+              useLocalWhisper ? "Local" : "Cloud"
+            } OpenAI Whisper success: ${result.segments.length} segments`
           );
           return result;
         } catch (error) {
-          console.log(`⚠️ ${useLocalWhisper ? 'Local' : 'Cloud'} OpenAI Whisper failed: ${error.message}`);
+          console.log(
+            `⚠️ ${useLocalWhisper ? "Local" : "Cloud"} OpenAI Whisper failed: ${
+              error.message
+            }`
+          );
 
           // If user explicitly selected this engine, throw error instead of fallback
           if (userSelectedEngine) {
@@ -276,23 +300,40 @@ class TranscriptionService {
       );
 
       for (const engine of fallbackEngines) {
-        if (engine === "openai" && (localWhisperClient?.available || openaiClient)) {
+        if (
+          engine === "openai" &&
+          (localWhisperClient?.available || openaiClient)
+        ) {
           const useLocalWhisper = localWhisperClient?.available;
-          
+
           console.log(
-            `🤖 Fallback: Attempting ${useLocalWhisper ? 'Local' : 'Cloud'} OpenAI Whisper transcription...`
+            `🤖 Fallback: Attempting ${
+              useLocalWhisper ? "Local" : "Cloud"
+            } OpenAI Whisper transcription...`
           );
           try {
-            const result = useLocalWhisper 
-              ? await this.transcribeWithLocalWhisper(filePath, filename, audioInfo)
+            const result = useLocalWhisper
+              ? await this.transcribeWithLocalWhisper(
+                  filePath,
+                  filename,
+                  audioInfo
+                )
               : await this.transcribeWithOpenAI(filePath, filename, audioInfo);
-            
+
             console.log(
-              `✅ ${useLocalWhisper ? 'Local' : 'Cloud'} OpenAI Whisper fallback success: ${result.segments.length} segments`
+              `✅ ${
+                useLocalWhisper ? "Local" : "Cloud"
+              } OpenAI Whisper fallback success: ${
+                result.segments.length
+              } segments`
             );
             return result;
           } catch (error) {
-            console.log(`⚠️ ${useLocalWhisper ? 'Local' : 'Cloud'} OpenAI Whisper fallback failed: ${error.message}`);
+            console.log(
+              `⚠️ ${
+                useLocalWhisper ? "Local" : "Cloud"
+              } OpenAI Whisper fallback failed: ${error.message}`
+            );
 
             // Only throw fatal errors immediately
             if (error.message && error.message.includes("quota")) {
@@ -425,34 +466,53 @@ class TranscriptionService {
         throw new Error("Local Whisper service is not available");
       }
 
+      // Check file size before sending
+      const stats = await fs.stat(filePath);
+      const fileSizeMB = stats.size / (1024 * 1024);
+      console.log(`📊 File size: ${fileSizeMB.toFixed(1)}MB`);
+
+      if (fileSizeMB > 25) {
+        throw new Error(
+          `File too large (${fileSizeMB.toFixed(
+            1
+          )}MB). Maximum size is 25MB for local processing.`
+        );
+      }
+
       // Create form data
-      const FormData = require('form-data');
+      const FormData = require("form-data");
       const form = new FormData();
-      
+
       // Add file
-      form.append('file', fs.createReadStream(filePath), {
+      form.append("file", fs.createReadStream(filePath), {
         filename: filename,
-        contentType: 'audio/mpeg'
+        contentType: "audio/mpeg",
       });
-      
+
       // Add parameters
-      form.append('model', 'whisper-1');
-      form.append('response_format', 'verbose_json');
-      form.append('timestamp_granularities', 'segment');
+      form.append("model", "whisper-1");
+      form.append("response_format", "verbose_json");
+      form.append("timestamp_granularities", "segment");
 
       console.log(`📡 Local Whisper: Making API request...`);
 
       // Make request to local Whisper service
-      const response = await fetch(`${LOCAL_WHISPER_URL}/v1/audio/transcriptions`, {
-        method: 'POST',
-        body: form,
-        headers: form.getHeaders(),
-        timeout: 120000 // 2 minutes timeout for local processing
-      });
+      const response = await fetch(
+        `${LOCAL_WHISPER_URL}/v1/audio/transcriptions`,
+        {
+          method: "POST",
+          body: form,
+          headers: form.getHeaders(),
+          timeout: 60000, // 1 minute timeout for local processing
+          signal: AbortSignal.timeout(60000), // Additional abort signal
+        }
+      );
 
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`Local Whisper API error: ${response.status} - ${error}`);
+        throw new Error(
+          `Local Whisper API error: ${response.status} - ${error}`
+        );
       }
 
       const result = await response.json();
@@ -479,7 +539,9 @@ class TranscriptionService {
 
       // Provide more specific error messages
       if (error.message?.includes("timeout")) {
-        throw new Error("Local Whisper request timed out. The audio file might be too large.");
+        throw new Error(
+          "Local Whisper request timed out. The audio file might be too large."
+        );
       }
 
       if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
@@ -869,31 +931,31 @@ class TranscriptionService {
       {
         id: 0,
         start: 0.0,
-        end: 15.5,
+        end: 32.2,
         text: "Welcome everyone to today's meeting. I'd like to start by reviewing our agenda and discussing the key points we need to cover.",
         speaker_name: "Speaker 1",
         confidence: 0.95,
       },
       {
         id: 1,
-        start: 15.5,
-        end: 28.2,
+        start: 32.2,
+        end: 58.6,
         text: "Thank you for that introduction. I have some updates on the project timeline that I think everyone should be aware of.",
         speaker_name: "Speaker 2",
         confidence: 0.92,
       },
       {
         id: 2,
-        start: 28.2,
-        end: 45.8,
+        start: 58.6,
+        end: 95.2,
         text: "That sounds great. Before we dive into those updates, could we also discuss the budget allocation for the next quarter? I have some concerns about our current spending.",
         speaker_name: "Speaker 3",
         confidence: 0.88,
       },
       {
         id: 3,
-        start: 45.8,
-        end: 60.0,
+        start: 95.2,
+        end: 124.7,
         text: "Absolutely, let's address the budget concerns first and then move on to the project timeline updates. This will help us get a complete picture.",
         speaker_name: "Speaker 1",
         confidence: 0.94,
@@ -902,7 +964,7 @@ class TranscriptionService {
 
     // Adjust timing based on actual audio duration
     const actualDuration = audioInfo.duration;
-    const mockDuration = 60;
+    const mockDuration = 124.7;
     const timeScale = actualDuration / mockDuration;
 
     const scaledSegments = mockSegments.map((segment) => ({
@@ -1093,6 +1155,29 @@ class TranscriptionService {
         })
         .save(outputPath);
     });
+  }
+
+  /**
+   * Check if local Whisper service is available
+   */
+  isLocalWhisperAvailable() {
+    return localWhisperClient && localWhisperClient.available;
+  }
+
+  /**
+   * Get local Whisper service status
+   */
+  getLocalWhisperStatus() {
+    if (!localWhisperClient) {
+      return { available: false, reason: "Local Whisper not configured" };
+    }
+    return {
+      available: localWhisperClient.available,
+      url: LOCAL_WHISPER_URL,
+      reason: localWhisperClient.available
+        ? "Service healthy"
+        : "Service unavailable",
+    };
   }
 }
 

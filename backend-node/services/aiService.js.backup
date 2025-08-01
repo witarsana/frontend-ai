@@ -2,17 +2,136 @@ const OpenAI = require("openai");
 
 // Initialize OpenAI client
 let openaiClient = null;
+let localLLMClient = null;
+
+// Local LLM Configuration
+const LOCAL_LLM_URL = process.env.LOCAL_LLM_URL || "http://localhost:11434"; // Ollama default
+const USE_LOCAL_LLM = process.env.USE_LOCAL_LLM === "true";
 
 if (process.env.OPENAI_API_KEY) {
   openaiClient = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
-  console.log("✅ OpenAI client initialized for AI analysis");
-} else {
-  console.log("⚠️ No OpenAI API key found - will use mock AI responses");
+}
+
+// Initialize local LLM client (Ollama)
+if (USE_LOCAL_LLM) {
+  localLLMClient = {
+    baseURL: LOCAL_LLM_URL,
+    available: false,
+    model: process.env.LOCAL_LLM_MODEL || "llama2", // Default model
+  };
+
+  // Check if local LLM service is running
+  checkLocalLLMAvailability();
+}
+
+/**
+ * Check if local LLM service is available
+ */
+async function checkLocalLLMAvailability() {
+  if (!localLLMClient) return;
+
+  try {
+    const fetch = require("node-fetch");
+    const response = await fetch(`${LOCAL_LLM_URL}/api/tags`, {
+      method: "GET",
+      timeout: 5000,
+    });
+
+    if (response.ok) {
+      const models = await response.json();
+      localLLMClient.available = models.models && models.models.length > 0;
+      console.log(
+        `🧠 Local LLM service: ${
+          localLLMClient.available ? "AVAILABLE" : "NO MODELS"
+        }`
+      );
+
+      if (localLLMClient.available) {
+        console.log(
+          `🤖 Local LLM models: ${models.models.map((m) => m.name).join(", ")}`
+        );
+      }
+    } else {
+      localLLMClient.available = false;
+      console.log(
+        `🧠 Local LLM service: NOT AVAILABLE (status: ${response.status})`
+      );
+    }
+  } catch (error) {
+    localLLMClient.available = false;
+    console.log(`🧠 Local LLM service: NOT AVAILABLE (${error.message})`);
+  }
+}
+
+// Check local LLM availability every 30 seconds
+if (localLLMClient) {
+  setInterval(checkLocalLLMAvailability, 30000);
 }
 
 class AIService {
+  /**
+   * Generate summary using local LLM (Ollama)
+   */
+  async generateSummaryWithLocalLLM(segments) {
+    try {
+      if (!localLLMClient?.available) {
+        throw new Error("Local LLM service is not available");
+      }
+
+      const fullText = segments
+        .map((seg) => `${seg.speaker_name}: ${seg.text}`)
+        .join("\n");
+
+      const prompt = `Please analyze this meeting transcript and provide a comprehensive summary that includes:
+
+1. Main Topics Discussed
+2. Key Points and Decisions
+3. Participants and Their Contributions
+4. Important Outcomes
+
+Transcript:
+${fullText}
+
+Please provide a well-structured summary that captures the essence of the conversation:`;
+
+      console.log(
+        `🧠 Local LLM: Generating summary with ${localLLMClient.model}...`
+      );
+
+      const fetch = require("node-fetch");
+      const response = await fetch(`${LOCAL_LLM_URL}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: localLLMClient.model,
+          prompt: prompt,
+          stream: false,
+          options: {
+            temperature: 0.3,
+            num_predict: 1000,
+          },
+        }),
+        timeout: 60000, // 1 minute timeout
+      });
+
+      if (!response.ok) {
+        throw new Error(`Local LLM API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log(`✅ Local LLM: Summary generated successfully`);
+
+      return result.response || "Unable to generate summary with local model.";
+    } catch (error) {
+      console.error("❌ Local LLM summary error:", error);
+      throw new Error(`Local LLM failed: ${error.message}`);
+    }
+  }
+
   /**
    * Generate a comprehensive summary of the transcript
    */
@@ -22,12 +141,31 @@ class AIService {
         .map((seg) => `${seg.speaker_name}: ${seg.text}`)
         .join("\n");
 
+      // Try local LLM first if available and enabled
+      if (localLLMClient?.available && USE_LOCAL_LLM) {
+        console.log(`🧠 Attempting Local LLM summary generation...`);
+        try {
+          const result = await this.generateSummaryWithLocalLLM(segments);
+          console.log(`✅ Local LLM summary success`);
+          return result;
+        } catch (error) {
+          console.log(`⚠️ Local LLM failed: ${error.message}`);
+
+          // If user explicitly wants local only, don't fallback
+          if (process.env.LOCAL_LLM_ONLY === "true") {
+            throw error;
+          }
+          // Otherwise, continue to OpenAI fallback
+        }
+      }
+
+      // Fallback to OpenAI
       if (!openaiClient) {
-        console.log(`🧪 No OpenAI API key, using mock summary`);
+        console.log(`🧪 No AI services available, using mock summary`);
         return this.generateMockSummary(segments);
       }
 
-      console.log(`🤖 Generating summary with OpenAI...`);
+      console.log(`🤖 Attempting OpenAI summary generation...`);
 
       const prompt = `Please analyze this meeting transcript and provide a comprehensive summary that includes:
 
@@ -58,7 +196,7 @@ Please provide a well-structured summary that captures the essence of the conver
         temperature: 0.3,
       });
 
-      console.log(`✅ OpenAI summary generated successfully`);
+      console.log(`✅ OpenAI summary success`);
       return response.choices[0].message.content.trim();
     } catch (error) {
       console.error("AI Summary error:", error);
@@ -343,7 +481,6 @@ Return only the JSON array:`;
   // Mock functions for when OpenAI is not available
 
   generateMockSummary(segments) {
-    console.log("here bro ");
     const speakers = [...new Set(segments.map((seg) => seg.speaker_name))];
     const wordCount = segments.reduce(
       (count, seg) => count + seg.text.split(" ").length,
