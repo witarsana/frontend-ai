@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Note AI - Demo Slideshow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow: hidden;
+        }
+        
+        .slideshow-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .slide {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            max-width: 1000px;
+            animation: fadeIn 0.5s;
+        }
+        
+        .slide.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            color: #ffd700;
+        }
+        
+        h3 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #87ceeb;
+        }
+        
+        p, li {
+            font-size: 1.3rem;
+            line-height: 1.6;
+            margin-bottom: 0.8rem;
+        }
+        
+        .bullet-points {
+            text-align: left;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .bullet-points li {
+            margin-bottom: 1rem;
+            list-style: none;
+            position: relative;
+            padding-left: 2rem;
+        }
+        
+        .bullet-points li::before {
+            content: "✅";
+            position: absolute;
+            left: 0;
+            font-size: 1.2rem;
+        }
+        
+        .demo-steps {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 1rem 0;
+            backdrop-filter: blur(10px);
+        }
+        
+        .code-block {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            margin: 1rem 0;
+            text-align: left;
+        }
+        
+        .navigation {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .nav-btn {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        
+        .nav-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+        
+        .slide-counter {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            background: rgba(0,0,0,0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        
+        .emoji {
+            font-size: 2rem;
+            margin: 0 0.5rem;
+        }
+        
+        .highlight {
+            background: linear-gradient(120deg, #ffd700 0%, #ffed4e 100%);
+            color: #333;
+            padding: 0.3rem 0.6rem;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .feature-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .timer {
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            background: rgba(0,0,0,0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="slideshow-container">
+        <!-- Slide 1: Title -->
+        <div class="slide active">
+            <h1>🎤 Voice Note AI</h1>
+            <h2>Demo Presentation</h2>
+            <p style="font-size: 1.8rem; margin-top: 2rem;">Transform Audio into Actionable Intelligence</p>
+            <div class="demo-steps">
+                <p><strong>Duration:</strong> 15 minutes</p>
+                <p><strong>Audience:</strong> Stakeholders & Decision Makers</p>
+                <p><strong>Goal:</strong> Showcase AI-powered transcription capabilities</p>
+            </div>
+        </div>
+
+        <!-- Slide 2: Value Proposition -->
+        <div class="slide">
+            <h2>🎯 Key Value Propositions</h2>
+            <div class="bullet-points">
+                <li><span class="emoji">⚡</span> <strong>Automated Transcription</strong> - Convert audio/video to text instantly</li>
+                <li><span class="emoji">🤖</span> <strong>AI-Powered Analysis</strong> - Smart summaries, action items, key decisions</li>
+                <li><span class="emoji">💬</span> <strong>Interactive Chat</strong> - Ask questions about meeting content</li>
+                <li><span class="emoji">🎵</span> <strong>Audio Playback</strong> - Clickable timestamps for easy navigation</li>
+                <li><span class="emoji">📊</span> <strong>Speaker Identification</strong> - Automatic speaker diarization</li>
+            </div>
+        </div>
+
+        <!-- Slide 3: Demo Setup -->
+        <div class="slide">
+            <h2>🚀 Demo Setup</h2>
+            <div class="demo-steps">
+                <h3>Quick Start Commands:</h3>
+                <div class="code-block">
+cd /Users/ahmadfaris/work/chronicle/voiceNoteV1/frontend-ai<br>
+npm run dev:full
+                </div>
+                <h3>Open Demo:</h3>
+                <div class="code-block">
+Browser: Chrome<br>
+URL: http://localhost:3001
+                </div>
+                <p style="margin-top: 1rem;"><span class="highlight">Demo Ready in 2 minutes!</span></p>
+            </div>
+        </div>
+
+        <!-- Slide 4: Demo Flow -->
+        <div class="slide">
+            <h2>🎬 Demo Flow (15 minutes)</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>1. Opening</h3>
+                    <p><strong>2 minutes</strong></p>
+                    <p>Value proposition & business impact</p>
+                </div>
+                <div class="feature-card">
+                    <h3>2. File Upload</h3>
+                    <p><strong>3 minutes</strong></p>
+                    <p>Processing demo with real-time status</p>
+                </div>
+                <div class="feature-card">
+                    <h3>3. Transcription</h3>
+                    <p><strong>5 minutes</strong></p>
+                    <p>Segments, speaker ID, audio sync</p>
+                </div>
+                <div class="feature-card">
+                    <h3>4. AI Analysis</h3>
+                    <p><strong>3 minutes</strong></p>
+                    <p>Summary, action items, decisions</p>
+                </div>
+                <div class="feature-card">
+                    <h3>5. AI Chat</h3>
+                    <p><strong>4 minutes</strong></p>
+                    <p>Interactive Q&A with content</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Part 1 - File Upload -->
+        <div class="slide">
+            <h2>📁 Part 1: File Upload & Processing</h2>
+            <div class="demo-steps">
+                <h3>Demo Script:</h3>
+                <p style="font-style: italic; margin: 1rem 0;">"Let me upload a sample meeting recording. Notice how our system accepts multiple formats and provides real-time processing updates."</p>
+                
+                <h3>Show Features:</h3>
+                <div class="bullet-points">
+                    <li>Drag & drop interface</li>
+                    <li>Multiple format support (MP3, WAV, MP4, MOV)</li>
+                    <li>Real-time processing status with emojis</li>
+                    <li>Completion notification</li>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Part 2 - Segments -->
+        <div class="slide">
+            <h2>💬 Part 2: Transcription Results</h2>
+            <div class="demo-steps">
+                <h3>Demo Script:</h3>
+                <p style="font-style: italic; margin: 1rem 0;">"Here's the complete transcript with automatic speaker identification. Watch what happens when I click on any timestamp - it jumps directly to that moment in the audio."</p>
+                
+                <h3>Key Features to Highlight:</h3>
+                <div class="bullet-points">
+                    <li><span class="highlight">Clickable timestamps</span> - Jump to exact audio moment</li>
+                    <li>🔍 Search within transcript</li>
+                    <li>👥 Speaker diarization (John, Sarah, Mike)</li>
+                    <li>📄 Pagination for long meetings</li>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Part 3 - AI Analysis -->
+        <div class="slide">
+            <h2>📊 Part 3: AI Analysis</h2>
+            <div class="demo-steps">
+                <h3>Demo Script:</h3>
+                <p style="font-style: italic; margin: 1rem 0;">"Our AI automatically generates structured summaries, extracts action items, and identifies key decisions. Notice the Notion integration for seamless task management."</p>
+                
+                <h3>Show Results:</h3>
+                <div class="bullet-points">
+                    <li>📋 AI-generated meeting summary</li>
+                    <li>✅ Action items with assignees</li>
+                    <li>🎯 Key decisions highlighted</li>
+                    <li>📝 Notion integration button</li>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Part 4 - AI Chat -->
+        <div class="slide">
+            <h2>🤖 Part 4: AI Chat Interface</h2>
+            <div class="demo-steps">
+                <h3>Demo Script:</h3>
+                <p style="font-style: italic; margin: 1rem 0;">"This is where it gets exciting. You can now chat with your meeting content. Our AI understands context and can answer specific questions about what was discussed."</p>
+                
+                <h3>Sample Questions:</h3>
+                <div class="code-block">
+• "What were the main action items?"<br>
+• "Who was responsible for frontend tasks?"<br>
+• "What budget decisions were made?"<br>
+• "Summarize the key challenges"
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Business Impact -->
+        <div class="slide">
+            <h2>💰 Business Impact</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>⏱️ Time Savings</h3>
+                    <p><strong>10x faster</strong> than manual transcription</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎯 Accuracy</h3>
+                    <p><strong>95%+</strong> transcription accuracy</p>
+                </div>
+                <div class="feature-card">
+                    <h3>💡 Insights</h3>
+                    <p><strong>Automated</strong> action items & decisions</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔍 Searchability</h3>
+                    <p>Find any discussion <strong>instantly</strong></p>
+                </div>
+            </div>
+            <div style="margin-top: 2rem;">
+                <p class="highlight" style="font-size: 1.5rem;">ROI: 300%+ in first year</p>
+            </div>
+        </div>
+
+        <!-- Slide 10: Next Steps -->
+        <div class="slide">
+            <h2>🚀 Next Steps</h2>
+            <div class="bullet-points">
+                <li><strong>30-day Free Trial</strong> - Start pilot program with your team</li>
+                <li><strong>Custom Demo</strong> - Tailored demo with your actual meeting content</li>
+                <li><strong>Technical Integration</strong> - API documentation and developer access</li>
+                <li><strong>Enterprise Setup</strong> - Custom deployment and training</li>
+            </div>
+            
+            <div class="demo-steps" style="margin-top: 2rem;">
+                <h3>Ready to Get Started?</h3>
+                <p style="font-size: 1.5rem;">Let's discuss your specific requirements and implementation timeline.</p>
+            </div>
+        </div>
+
+        <!-- Slide 11: Q&A -->
+        <div class="slide">
+            <h1>❓ Questions & Discussion</h1>
+            <div class="demo-steps">
+                <h3>Common Questions:</h3>
+                <div class="bullet-points">
+                    <li><strong>How accurate is the transcription?</strong><br>95%+ accuracy with modern AI models</li>
+                    <li><strong>What about data security?</strong><br>Enterprise-grade security, on-premise options available</li>
+                    <li><strong>Integration capabilities?</strong><br>Full API, Notion integration, more coming</li>
+                    <li><strong>Pricing model?</strong><br>Flexible pricing based on usage and features</li>
+                </div>
+            </div>
+            
+            <p style="font-size: 1.3rem; margin-top: 2rem;">
+                <strong>Contact:</strong> [Your email] | [Your phone]
+            </p>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="navigation">
+        <button class="nav-btn" onclick="previousSlide()">← Previous</button>
+        <button class="nav-btn" onclick="nextSlide()">Next →</button>
+        <button class="nav-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+    </div>
+
+    <!-- Slide Counter -->
+    <div class="slide-counter">
+        <span id="currentSlide">1</span> / <span id="totalSlides">11</span>
+    </div>
+
+    <!-- Timer -->
+    <div class="timer" id="timer">
+        00:00
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+        let startTime = Date.now();
+        
+        // Update slide counter
+        document.getElementById('totalSlides').textContent = totalSlides;
+        
+        // Timer
+        function updateTimer() {
+            const elapsed = Date.now() - startTime;
+            const minutes = Math.floor(elapsed / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            document.getElementById('timer').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        setInterval(updateTimer, 1000);
+        
+        function showSlide(n) {
+            slides[currentSlide].classList.remove('active');
+            currentSlide = (n + totalSlides) % totalSlides;
+            slides[currentSlide].classList.add('active');
+            document.getElementById('currentSlide').textContent = currentSlide + 1;
+        }
+        
+        function nextSlide() {
+            showSlide(currentSlide + 1);
+        }
+        
+        function previousSlide() {
+            showSlide(currentSlide - 1);
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case 'ArrowRight':
+                case ' ':
+                    e.preventDefault();
+                    nextSlide();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    previousSlide();
+                    break;
+                case 'f':
+                case 'F':
+                    e.preventDefault();
+                    toggleFullscreen();
+                    break;
+                case 'Escape':
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen();
+                    }
+                    break;
+            }
+        });
+        
+        // Auto-advance for demo (optional)
+        let autoAdvance = false;
+        function toggleAutoAdvance() {
+            autoAdvance = !autoAdvance;
+            if (autoAdvance) {
+                autoAdvanceInterval = setInterval(() => {
+                    nextSlide();
+                }, 10000); // 10 seconds per slide
+            } else {
+                clearInterval(autoAdvanceInterval);
+            }
+        }
+    </script>
+</body>
+</html>
