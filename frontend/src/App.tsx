@@ -1,26 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { ProcessingState } from "./types";
 import { aiAPI, EngineAPI, TranscriptionEngine } from "./services/api";
 import newLogoTranskribo from "./assets/new-logo-transkribo.png";
 
 import UploadSection from "./components/UploadSection";
 import SessionTranscriptionCard from "./components/SessionTranscriptionCard";
 import HistoryViewer from "./components/HistoryViewer";
+import ProcessingPage from "./components/ProcessingPage";
 
 const App: React.FC = () => {
-  const [processingState, setProcessingState] = useState<ProcessingState>({
-    isProcessing: false,
-    progress: 0,
-    status: "",
-  });
-
   const [apiConnected, setApiConnected] = useState<boolean>(false);
   const [sessionTranscriptions, setSessionTranscriptions] = useState<any[]>([]);
-  const [viewMode, setViewMode] = useState<'upload' | 'history'>('upload');
+  const [viewMode, setViewMode] = useState<'upload' | 'history' | 'processing'>('upload');
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
 
-  // Check API connection on mount
+  // Check API connection and auto-resume job on mount
   useEffect(() => {
     checkAPIConnection();
+    checkAndResumeJob();
   }, []);
 
   const checkAPIConnection = async () => {
@@ -36,6 +32,47 @@ const App: React.FC = () => {
     }
   };
 
+  // Auto-resume functionality - check for ongoing jobs and continue monitoring
+  const checkAndResumeJob = async () => {
+    try {
+      const storedJob = localStorage.getItem('currentProcessingJob');
+      if (!storedJob) return;
+
+      const job = JSON.parse(storedJob);
+      
+      // Check if job is not too old (max 2 hours)
+      const maxAge = 2 * 60 * 60 * 1000; // 2 hours
+      if (Date.now() - job.timestamp > maxAge) {
+        localStorage.removeItem('currentProcessingJob');
+        return;
+      }
+
+      // Check if we're connected to API
+      if (apiConnected) {
+        try {
+          // Try to get job status to see if it's still valid
+          const status = await aiAPI.getStatus(job.jobId);
+          
+          // If job is still processing, auto-resume
+          if (status.status === 'transcribing' || status.status === 'preprocessing' || status.status === 'generating_summary') {
+            console.log('Auto-resuming job:', job.jobId);
+            setCurrentJobId(job.jobId);
+            setViewMode('processing');
+          } else if (status.status === 'completed' || status.status === 'error') {
+            // Job is done, clean up
+            localStorage.removeItem('currentProcessingJob');
+          }
+        } catch (error) {
+          // Job might not exist anymore
+          console.log('Stored job no longer exists, cleaning up');
+          localStorage.removeItem('currentProcessingJob');
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for resumable job:', error);
+    }
+  };
+
   const handleFileSelect = async (
     file: File,
     options?: { language?: string; engine?: string }
@@ -43,6 +80,41 @@ const App: React.FC = () => {
     console.log("File selected:", file.name, "Size:", file.size);
     console.log("Upload options:", options);
 
+    // Use real API if connected
+    if (apiConnected) {
+      try {
+        // Set engine if specified
+        if (options?.engine) {
+          const engineAPI = new EngineAPI();
+          await engineAPI.setEngine(
+            options.engine as "faster-whisper" | "deepgram"
+          );
+        }
+
+        // Upload and start processing with engine preference
+        const uploadResponse = await aiAPI.uploadAndProcess(file, {
+          engine: options?.engine as TranscriptionEngine,
+          language: options?.language,
+        });
+        
+        console.log("Upload response:", uploadResponse);
+        
+        // Set current job ID and switch to processing view
+        setCurrentJobId(uploadResponse.job_id);
+        setViewMode('processing');
+
+      } catch (error) {
+        console.error("API upload failed:", error);
+        // Fall back to simulation
+        simulateProcessing(file);
+      }
+    } else {
+      // Fall back to simulation
+      simulateProcessing(file);
+    }
+  };
+
+  const simulateProcessing = async (file: File) => {
     // Add file to session transcriptions immediately with processing status
     const newTranscription = {
       id: Date.now().toString(),
@@ -54,212 +126,51 @@ const App: React.FC = () => {
     };
 
     setSessionTranscriptions((prev) => [newTranscription, ...prev]);
-
-    // Use real API if connected, otherwise simulate
-    if (apiConnected) {
-      try {
-        await processFileWithAPI(newTranscription.id, file, options);
-      } catch (error) {
-        console.error("API processing failed:", error);
-
-        // Extract error information if available
-        const errorInfo = (error as any).errorInfo || {
-          message: error instanceof Error ? error.message : "Upload failed",
-          type: "general_error",
-        };
-
-        // Set processing state to show error
-        setProcessingState({
-          isProcessing: false,
-          progress: 0,
-          status: "Error",
-          error: {
-            message: errorInfo.message,
-            type: errorInfo.type,
-            details: errorInfo.details,
-          },
-        });
-
-        // Update transcription to error state
-        setSessionTranscriptions((prev) =>
-          prev.map((t) =>
-            t.id === newTranscription.id
-              ? { ...t, status: "error" as const }
-              : t
-          )
-        );
-      }
-    } else {
-      // Fall back to simulation
-      simulateProcessing(newTranscription.id, file);
-    }
+    
+    // Simulate processing with fake job ID
+    const fakeJobId = `sim_${Date.now()}`;
+    setCurrentJobId(fakeJobId);
+    setViewMode('processing');
   };
 
-  const processFileWithAPI = async (
-    transcriptionId: string,
-    file: File,
-    options?: { language?: string; engine?: string }
-  ) => {
-    try {
-      // Set engine if specified
-      if (options?.engine) {
-        const engineAPI = new EngineAPI();
-        await engineAPI.setEngine(
-          options.engine as "faster-whisper" | "deepgram"
-        );
-      }
+  const handleProcessingComplete = async (result: any) => {
+    console.log("Processing completed:", result);
+    
+    // Add completed transcription to session
+    const newTranscription = {
+      id: currentJobId || Date.now().toString(),
+      filename: result.filename || "Unknown",
+      status: "completed" as const,
+      uploadTime: new Date(),
+      text: result.transcript ? result.transcript.map((seg: any) => seg.text).join(" ") : "No transcript available",
+      segments: result.transcript || [],
+      summary: result.summary || null,
+      actionItems: result.action_items || [],
+      keyDecisions: result.key_decisions || [],
+      sentiment: result.sentiment || null,
+      participants: result.speakers || [],
+      duration: result.duration || null,
+      fullResult: result,
+    };
 
-      // Upload and start processing with engine preference
-      const uploadResponse = await aiAPI.uploadAndProcess(file, {
-        engine: options?.engine as TranscriptionEngine,
-        language: options?.language,
-      });
-      console.log("Upload response:", uploadResponse);
-
-      // Poll for status updates with progress callback
-      const result = await aiAPI.waitForCompletion(
-        uploadResponse.job_id,
-        (status) => {
-          // Update processing state for visual feedback
-          setProcessingState({
-            isProcessing: true,
-            progress: status.progress,
-            status: status.message || `Status: ${status.status}`,
-          });
-        }
-      );
-
-      console.log("Processing result:", result);
-
-      // Update transcription with real results
-      setSessionTranscriptions((prev) =>
-        prev.map((t) =>
-          t.id === transcriptionId
-            ? {
-                ...t,
-                status: "completed" as const,
-                text: result.transcript
-                  ? result.transcript.map((seg) => seg.text).join(" ")
-                  : "No transcript available",
-                segments: result.transcript || [],
-                summary: result.summary || null,
-                actionItems: result.action_items || [],
-                keyDecisions: result.key_decisions || [],
-                sentiment: result.sentiment || null,
-                participants: result.speakers || [],
-                duration: result.duration || null,
-                fullResult: result, // Store complete result for detailed view
-              }
-            : t
-        )
-      );
-
-      // Reset processing state
-      setProcessingState({
-        isProcessing: false,
-        progress: 100,
-        status: "Complete",
-      });
-    } catch (error) {
-      console.error("Real API processing failed:", error);
-
-      // Extract error information if available
-      const errorInfo = (error as any).errorInfo || {
-        message:
-          error instanceof Error ? error.message : "Unknown error occurred",
-        type: "general_error",
-      };
-
-      // Set processing state to show error
-      setProcessingState({
-        isProcessing: false,
-        progress: 0,
-        status: "Error",
-        error: {
-          message: errorInfo.message,
-          type: errorInfo.type,
-          details: errorInfo.details,
-        },
-      });
-
-      // Update transcription to error state
-      setSessionTranscriptions((prev) =>
-        prev.map((t) =>
-          t.id === transcriptionId ? { ...t, status: "error" as const } : t
-        )
-      );
-    }
+    setSessionTranscriptions((prev) => [newTranscription, ...prev]);
+    
+    // Reset and go back to upload view
+    setCurrentJobId(null);
+    setViewMode('upload');
   };
 
-  const simulateProcessing = async (transcriptionId: string, file: File) => {
-    const processingStatuses = [
-      "Uploading file...",
-      "Converting audio...",
-      "Transcribing speech...",
-      "Identifying speakers...",
-      "Generating summary...",
-      "Applying auto-tags...",
-      "Finalizing results...",
-    ];
-
-    setProcessingState({
-      isProcessing: true,
-      progress: 0,
-      status: processingStatuses[0],
-    });
-
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      const progress = ((currentStep + 1) / processingStatuses.length) * 100;
-
-      setProcessingState({
-        isProcessing: true,
-        progress: Math.round(progress),
-        status: processingStatuses[currentStep],
-      });
-
-      currentStep++;
-
-      if (currentStep >= processingStatuses.length) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setProcessingState({
-            isProcessing: false,
-            progress: 100,
-            status: "Complete",
-          });
-
-          // Update the transcription with completed data
-          const sampleText = `This is a sample transcription for ${file.name}. 
-
-In a real application, this would contain the actual transcribed text from your audio or video file. The AI would have processed the speech, identified different speakers, and provided accurate timestamps.
-
-Key points discussed:
-- Important topic 1
-- Decision made on topic 2  
-- Action items assigned
-- Next meeting scheduled
-
-This demonstrates how transcriptions will appear in your session feed once processing is complete.`;
-
-          setSessionTranscriptions((prev) =>
-            prev.map((t) =>
-              t.id === transcriptionId
-                ? {
-                    ...t,
-                    status: "completed" as const,
-                    text: sampleText,
-                    duration: 180,
-                  }
-                : t
-            )
-          );
-        }, 1000);
-      }
-    }, 1500);
+  const handleProcessingError = (error: any) => {
+    console.error("Processing error:", error);
+    // Go back to upload view on error
+    setViewMode('upload');
+    setCurrentJobId(null);
+  };  const handleBackToUpload = () => {
+    setCurrentJobId(null);
+    setViewMode('upload');
   };
 
-  // Session transcription handlers
+  // Session transcription handlers (now used only for legacy/simulation)
   const copyTranscriptionText = (id: string) => {
     const transcription = sessionTranscriptions.find((t) => t.id === id);
     if (transcription) {
@@ -286,7 +197,7 @@ This demonstrates how transcriptions will appear in your session feed once proce
   };
 
   return (
-    <div className="two-panel-workspace">
+    <div className="two-panel-workspace" style={{position: 'relative'}}>
       {/* Left Panel - Control Center */}
       <div className="control-panel">
         {/* Brand Header */}
@@ -409,93 +320,187 @@ This demonstrates how transcriptions will appear in your session feed once proce
         </div>
 
         {/* Conditional Content */}
-        {viewMode === 'history' ? (
+        {viewMode === 'processing' && currentJobId ? (
+          <ProcessingPage 
+            jobId={currentJobId}
+            onComplete={handleProcessingComplete}
+            onError={handleProcessingError}
+            onBack={handleBackToUpload}
+          />
+        ) : viewMode === 'history' ? (
           <HistoryViewer />
         ) : (
           <>
-            {/* Only show session header if there are transcriptions */}
-            {sessionTranscriptions.length > 0 && (
-              <div className="session-header">
-                <h2
-                  style={{
-                    fontSize: "1.5em",
-                    fontWeight: "600",
-                    color: "#2c3e50",
-                    margin: "0 0 8px 0",
-                  }}
-                >
-                  Current Session
-                </h2>
-                <p
-                  style={{
-                color: "#6b7280",
-                margin: "0 0 24px 0",
-                fontSize: "14px",
-              }}
-            >
-              Your transcriptions from this session will appear here
-            </p>
-          </div>
-        )}
+            {/* Active Processing Jobs Dashboard */}
+            {currentJobId && (
+              <div style={{
+                backgroundColor: '#fff3cd',
+                border: '1px solid #ffeaa7',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '24px'
+              }}>
+                <h3 style={{
+                  margin: '0 0 16px 0',
+                  color: '#856404',
+                  fontSize: '18px',
+                  fontWeight: '600'
+                }}>
+                  ⚙️ Processing Dashboard
+                </h3>
+                
+                <div style={{
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  border: '1px solid #ffeaa7'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '12px'
+                  }}>
+                    <div>
+                      <strong>Job ID:</strong> 
+                      <code style={{
+                        backgroundColor: '#f8f9fa',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        marginLeft: '8px',
+                        fontSize: '12px'
+                      }}>
+                        {currentJobId}
+                      </code>
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px'
+                    }}>
+                      <button
+                        onClick={() => setViewMode('processing')}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#007acc',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        📊 View Details
+                      </button>
+                      <button
+                        onClick={() => {
+                          localStorage.removeItem('currentProcessingJob');
+                          setCurrentJobId(null);
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#dc3545',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#666',
+                    fontStyle: 'italic'
+                  }}>
+                    Processing in background... Click "View Details" to monitor progress
+                  </div>
+                </div>
+              </div>
+            )}
 
-        {/* Session Content */}
-        {sessionTranscriptions.length === 0 && !processingState.isProcessing ? (
-          <div className="session-empty-state">
-            <h3
-              style={{
-                fontSize: "1.4em",
-                fontWeight: "600",
-                color: "#2c3e50",
-                margin: "0 0 12px 0",
-                textAlign: "center",
-              }}
-            >
-              Ready to transcribe!
-            </h3>
-            <p
-              style={{
-                color: "#6b7280",
-                fontSize: "16px",
-                lineHeight: "1.5",
-                textAlign: "center",
-                maxWidth: "400px",
-                margin: "0 auto 20px auto",
-              }}
-            >
-              Drop an audio or video file to the left to get started. Your
-              transcriptions will appear here as cards that you can copy,
-              download, or clear.
-            </p>
-            <div
-              style={{
-                marginTop: "20px",
-                padding: "12px 16px",
-                backgroundColor: "#f3e8ff",
-                borderRadius: "8px",
-                color: "#7c3aed",
-                fontSize: "14px",
-                fontWeight: "500",
-                textAlign: "center",
-                maxWidth: "400px",
-                margin: "0 auto",
-              }}
-            >
-              💡 Supports MP3, WAV, MP4, MOV and more - up to 1GB
+            {/* Upload Section */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              marginBottom: '24px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <h3 style={{
+                margin: '0 0 16px 0',
+                color: '#2c3e50',
+                fontSize: '18px',
+                fontWeight: '600'
+              }}>
+                📤 Upload New File
+              </h3>
+              
+              <div style={{
+                textAlign: 'center',
+                padding: '20px'
+              }}>
+                <p style={{
+                  color: '#6b7280',
+                  fontSize: '16px',
+                  margin: '0 0 20px 0'
+                }}>
+                  Drag & drop your audio/video file or use the upload button on the left panel
+                </p>
+                
+                <div style={{
+                  display: 'inline-block',
+                  padding: '12px 24px',
+                  backgroundColor: '#f3e8ff',
+                  borderRadius: '8px',
+                  color: '#7c3aed',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}>
+                  💡 Supports MP3, WAV, MP4, MOV and more - up to 1GB
+                </div>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="session-cards">
-            {sessionTranscriptions.map((transcription) => (
-              <SessionTranscriptionCard
-                key={transcription.id}
-                transcription={transcription}
-                onCopy={() => copyTranscriptionText(transcription.id)}
-                onDownload={() => downloadTranscription(transcription.id)}
-                onClear={() => clearTranscription(transcription.id)}
-              />
-            ))}
-          </div>
-        )}
+
+            {/* Session Results */}
+            {sessionTranscriptions.length > 0 && (
+              <>
+                <div style={{
+                  marginBottom: '16px'
+                }}>
+                  <h3 style={{
+                    margin: '0',
+                    color: '#2c3e50',
+                    fontSize: '18px',
+                    fontWeight: '600'
+                  }}>
+                    � Session Results ({sessionTranscriptions.length})
+                  </h3>
+                  <p style={{
+                    color: '#6b7280',
+                    fontSize: '14px',
+                    margin: '4px 0 0 0'
+                  }}>
+                    Completed transcriptions from this session
+                  </p>
+                </div>
+                
+                <div className="session-cards">
+                  {sessionTranscriptions.map((transcription) => (
+                    <SessionTranscriptionCard
+                      key={transcription.id}
+                      transcription={transcription}
+                      onCopy={() => copyTranscriptionText(transcription.id)}
+                      onDownload={() => downloadTranscription(transcription.id)}
+                      onClear={() => clearTranscription(transcription.id)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

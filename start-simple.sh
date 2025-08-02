@@ -11,12 +11,7 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
 echo -e "${BLUE}🚀 Starting Voice Note AI...${NC}"
-echo -e "${BLUE}📍 Working directory: $(pwd)${NC}"
 
 # Kill existing processes
 echo -e "${YELLOW}🔄 Killing existing processes...${NC}"
@@ -31,8 +26,6 @@ if [ ! -f ".env" ]; then
         cp .env.master .env
     else
         echo -e "${RED}❌ No .env file found${NC}"
-        echo -e "${RED}📍 Current directory: $(pwd)${NC}"
-        echo -e "${RED}📂 Files: $(ls -la | head -5)${NC}"
         exit 1
     fi
 fi
