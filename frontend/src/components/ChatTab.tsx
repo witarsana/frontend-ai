@@ -61,10 +61,82 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
   const [showHistory, setShowHistory] = useState(false);
   const [loadedJobInfo, setLoadedJobInfo] = useState<CompletedJob | null>(null);
 
+  // Session Storage Keys
+  const STORAGE_KEY = `chat_messages_${currentFileId || 'default'}`;
+  const MODEL_KEY = `chat_model_${currentFileId || 'default'}`;
+
+  // Save messages to sessionStorage
+  const saveMessagesToStorage = (messagesToSave: ChatMessage[]) => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messagesToSave));
+      sessionStorage.setItem(MODEL_KEY, selectedModel);
+      console.log(`💾 Saved ${messagesToSave.length} messages for session ${currentFileId}`);
+    } catch (error) {
+      console.error('❌ Error saving messages to storage:', error);
+    }
+  };
+
+  // Load messages from sessionStorage
+  const loadMessagesFromStorage = (): ChatMessage[] => {
+    try {
+      const savedMessages = sessionStorage.getItem(STORAGE_KEY);
+      const savedModel = sessionStorage.getItem(MODEL_KEY);
+      
+      if (savedModel) {
+        setSelectedModel(savedModel);
+      }
+      
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        console.log(`📂 Loaded ${parsedMessages.length} messages for session ${currentFileId}`);
+        return parsedMessages;
+      }
+    } catch (error) {
+      console.error('❌ Error loading messages from storage:', error);
+    }
+    return [];
+  };
+
+  // Clear session storage
+  const clearSessionStorage = () => {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(MODEL_KEY);
+      console.log('🗑️ Cleared chat session storage');
+    } catch (error) {
+      console.error('❌ Error clearing session storage:', error);
+    }
+  };
+
   // Auto-scroll to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Save messages whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveMessagesToStorage(messages);
+    }
+  }, [messages]);
+
+  // Save selected model whenever it changes
+  useEffect(() => {
+    if (currentFileId) {
+      sessionStorage.setItem(MODEL_KEY, selectedModel);
+    }
+  }, [selectedModel, currentFileId]);
+
+  // Load saved messages when file changes
+  useEffect(() => {
+    if (currentFileId) {
+      const savedMessages = loadMessagesFromStorage();
+      if (savedMessages.length > 0) {
+        setMessages(savedMessages);
+        return;
+      }
+    }
+  }, [currentFileId]);
 
     // Load transcript when file ID changes
   useEffect(() => {
@@ -253,7 +325,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
                 {loadedJobInfo ? 
                   `🟢 ${loadedJobInfo}` :
                   currentFileId ? 
-                  `🟢 Connected to transcript: ${currentFileId.substring(0, 20)}...` : 
+                  `🟢 Connected • ${messages.length > 0 ? messages.length + ' messages saved' : 'Ready to chat'}` : 
                   'Tanya apa saja tentang isi meeting ini'
                 }
               </p>
@@ -262,6 +334,31 @@ const ChatTab: React.FC<ChatTabProps> = ({ currentFileId, isTranscriptionReady }
           
           {/* History Controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '16px' }}>
+            {/* Clear conversation button */}
+            {messages.length > 0 && (
+              <button
+                onClick={() => {
+                  setMessages([]);
+                  clearSessionStorage();
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '8px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '12px'
+                }}
+                title="Clear conversation (will reset when browser closes)"
+              >
+                🗑️ Clear
+              </button>
+            )}
+            
             <button
               onClick={() => setShowHistory(!showHistory)}
               style={{

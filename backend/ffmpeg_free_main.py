@@ -42,6 +42,16 @@ from prompts import get_summary_prompt, get_fallback_responses, truncate_transcr
 # Import our new multi-provider API system
 from api_providers import initialize_providers, call_api
 
+# Notion integration import
+try:
+    from notion_integration import router as notion_router
+    NOTION_INTEGRATION_AVAILABLE = True
+    print("✅ Notion integration available")
+except ImportError as e:
+    print(f"⚠️  Notion integration not available: {e}")
+    NOTION_INTEGRATION_AVAILABLE = False
+    notion_router = None
+
 # Chat system imports
 try:
     import sys
@@ -98,6 +108,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Notion integration router
+if NOTION_INTEGRATION_AVAILABLE and notion_router:
+    app.include_router(notion_router, prefix="/api", tags=["notion"])
+    print("✅ Notion integration routes added")
+else:
+    print("⚠️  Notion integration routes not available")
 
 @app.on_event("startup")
 async def startup_event():
@@ -2479,6 +2496,34 @@ async def get_chat_status():
         "multi_model_ready": multi_chat_system is not None,
         "has_loaded_data": hasattr(chat_system, 'current_file_data') and chat_system.current_file_data is not None if chat_system else False
     }
+
+@app.get("/api/chat/models")
+async def get_chat_models():
+    """Get available chat models"""
+    if not CHAT_SYSTEM_AVAILABLE or multi_chat_system is None:
+        return {
+            "available_models": ["fallback"],
+            "default_model": "fallback",
+            "system_ready": False
+        }
+    
+    try:
+        # Get available models from multi-model system
+        available_models = multi_chat_system.get_available_models() if hasattr(multi_chat_system, 'get_available_models') else ["faiss", "mistral"]
+        
+        return {
+            "available_models": available_models,
+            "default_model": available_models[0] if available_models else "faiss",
+            "system_ready": True
+        }
+        
+    except Exception as e:
+        print(f"❌ Get models error: {e}")
+        return {
+            "available_models": ["faiss", "mistral"],
+            "default_model": "faiss",
+            "system_ready": True
+        }
 
 @app.post("/api/chat/enhanced") 
 async def enhanced_chat_query(request: dict):

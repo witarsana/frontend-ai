@@ -26,8 +26,63 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Session Storage Keys
+  const STORAGE_KEY = `chat_session_${sessionId}`;
+  const MODEL_KEY = `chat_model_${sessionId}`;
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Save messages to sessionStorage
+  const saveMessagesToStorage = (messagesToSave: ChatMessage[]) => {
+    try {
+      const serializedMessages = messagesToSave.map(msg => ({
+        ...msg,
+        timestamp: msg.timestamp.toISOString() // Convert Date to string
+      }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(serializedMessages));
+      sessionStorage.setItem(MODEL_KEY, selectedModel);
+      console.log(`💾 Saved ${messagesToSave.length} messages to session storage`);
+    } catch (error) {
+      console.error('❌ Error saving messages to storage:', error);
+    }
+  };
+
+  // Load messages from sessionStorage
+  const loadMessagesFromStorage = (): ChatMessage[] => {
+    try {
+      const savedMessages = sessionStorage.getItem(STORAGE_KEY);
+      const savedModel = sessionStorage.getItem(MODEL_KEY);
+      
+      if (savedModel) {
+        setSelectedModel(savedModel as ChatModel);
+      }
+      
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        const restoredMessages = parsedMessages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp) // Convert string back to Date
+        }));
+        console.log(`📂 Loaded ${restoredMessages.length} messages from session storage`);
+        return restoredMessages;
+      }
+    } catch (error) {
+      console.error('❌ Error loading messages from storage:', error);
+    }
+    return [];
+  };
+
+  // Clear session storage when browser closes (handled automatically by sessionStorage)
+  const clearSessionStorage = () => {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(MODEL_KEY);
+      console.log('🗑️ Cleared chat session storage');
+    } catch (error) {
+      console.error('❌ Error clearing session storage:', error);
+    }
   };
 
   // Auto-resize textarea
@@ -47,6 +102,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
     scrollToBottom();
   }, [messages]);
 
+  // Save messages to storage whenever messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveMessagesToStorage(messages);
+    }
+  }, [messages]);
+
+  // Save selected model whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem(MODEL_KEY, selectedModel);
+  }, [selectedModel]);
+
   useEffect(() => {
     // Initialize chat when component mounts
     initializeChat();
@@ -58,6 +125,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
   const initializeChat = async () => {
     try {
       console.log(`🔄 Loading chat data for session: ${sessionId}`);
+      
+      // First, try to load from session storage
+      const savedMessages = loadMessagesFromStorage();
+      if (savedMessages.length > 0) {
+        console.log(`📱 Restored ${savedMessages.length} messages from session storage`);
+        setMessages(savedMessages);
+        return; // Don't need to fetch from server if we have saved messages
+      }
       
       const response = await fetch(`/api/chat/load/${sessionId}`, {
         method: 'POST',
@@ -300,10 +375,43 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
                 AI Assistant
               </div>
               <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '2px', fontWeight: '400' }}>
-                Ready to analyze your meeting
+                {messages.length > 1 ? `${messages.length - 1} messages • Session active` : 'Ready to analyze your meeting'}
               </div>
             </div>
           </div>
+          
+          {/* Clear conversation button */}
+          {messages.length > 1 && (
+            <button
+              onClick={() => {
+                setMessages([]);
+                clearSessionStorage();
+                initializeChat(); // Reinitialize with welcome message
+              }}
+              style={{
+                padding: '6px 12px',
+                fontSize: '12px',
+                color: 'rgba(255,255,255,0.9)',
+                backgroundColor: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontWeight: '500'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+              }}
+              title="Clear conversation (will reset when browser closes)"
+            >
+              🗑️ Clear
+            </button>
+          )}
           
           {/* Model Selection Dropdown - Enhanced */}
           <select

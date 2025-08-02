@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ChatInterface from "./ChatInterface";
+import NotionService, { ActionItemDetail } from "../services/notionApi";
 
 interface Segment {
   id?: number;
@@ -77,6 +78,14 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playingSegmentIndex, setPlayingSegmentIndex] = useState<number | null>(null);
+  
+  // Notion integration states
+  const [notionSyncStates, setNotionSyncStates] = useState<{[key: number]: {
+    loading: boolean;
+    success: boolean;
+    error?: string;
+    message?: string;
+  }}>({});
   
   // Use backend-provided clean data directly
   const cleanSummary = transcription.fullResult?.clean_summary || transcription.summary || '';
@@ -332,6 +341,98 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
   React.useEffect(() => {
     setCurrentPage(1);
   }, [itemsPerPage]);
+
+  // Notion integration function
+  const handleAddToNotion = async (actionItem: ActionItemDetail, index: number) => {
+    try {
+      // Set loading state
+      setNotionSyncStates(prev => ({
+        ...prev,
+        [index]: { loading: true, success: false, message: "Adding to Notion..." }
+      }));
+
+      // Get meeting context for AI enhancement
+      const meetingContext = cleanSummary || transcription.summary || '';
+      const sessionId = transcription.id;
+
+      // Call Notion service to create page
+      const result = await NotionService.createActionItemPage(actionItem, meetingContext, sessionId);
+
+      if (result.success) {
+        // Success state
+        setNotionSyncStates(prev => ({
+          ...prev,
+          [index]: { 
+            loading: false, 
+            success: true, 
+            message: `Successfully added to Notion! Click to view.` 
+          }
+        }));
+
+        // Show success notification
+        console.log('✅ Action item added to Notion:', result.url);
+        
+        // Optional: Open Notion page
+        if (result.url) {
+          setTimeout(() => {
+            if (window.confirm('Action item added successfully! Would you like to view it in Notion?')) {
+              window.open(result.url, '_blank');
+            }
+          }, 500);
+        }
+
+        // Reset state after 5 seconds
+        setTimeout(() => {
+          setNotionSyncStates(prev => ({
+            ...prev,
+            [index]: { loading: false, success: false }
+          }));
+        }, 5000);
+
+      } else {
+        // Error state
+        setNotionSyncStates(prev => ({
+          ...prev,
+          [index]: { 
+            loading: false, 
+            success: false, 
+            error: result.error,
+            message: `Failed: ${result.error}` 
+          }
+        }));
+
+        // Reset error state after 5 seconds
+        setTimeout(() => {
+          setNotionSyncStates(prev => ({
+            ...prev,
+            [index]: { loading: false, success: false }
+          }));
+        }, 5000);
+      }
+
+    } catch (error: any) {
+      console.error('Error adding to Notion:', error);
+      
+      // Error state
+      setNotionSyncStates(prev => ({
+        ...prev,
+        [index]: { 
+          loading: false, 
+          success: false, 
+          error: error.message || 'Unknown error',
+          message: `Error: ${error.message || 'Failed to add to Notion'}` 
+        }
+      }));
+
+      // Reset error state after 5 seconds
+      setTimeout(() => {
+        setNotionSyncStates(prev => ({
+          ...prev,
+          [index]: { loading: false, success: false }
+        }));
+      }, 5000);
+    }
+  };
 
   // Auto-scroll to current segment when playing
   React.useEffect(() => {
@@ -1591,54 +1692,63 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                               )}
 
                               <button
-                                onClick={() => {
-                                  // Create Notion URL with task details
-                                  const notionUrl = `https://www.notion.so/`;
-
-                                  // Copy task details to clipboard for easy pasting in Notion
-                                  const taskDetails = `${task}${
-                                    assignee ? `\nAssignee: ${assignee}` : ""
-                                  }${
-                                    deadline ? `\nDeadline: ${deadline}` : ""
-                                  }`;
-                                  navigator.clipboard
-                                    .writeText(taskDetails)
-                                    .then(() => {
-                                      console.log(
-                                        "Task details copied to clipboard"
-                                      );
-                                    });
-
-                                  // Try to open Notion app first, fallback to web
-                                  const notionAppUrl = `notion://www.notion.so/`;
-                                  window.open(notionAppUrl, "_blank") ||
-                                    window.open(notionUrl, "_blank");
-                                }}
+                                onClick={() => handleAddToNotion({
+                                  task: task || "Unknown task",
+                                  assignee: assignee || undefined,
+                                  deadline: deadline || undefined,
+                                  priority: "Medium",
+                                  status: "Not Started"
+                                }, index)}
+                                disabled={notionSyncStates[index]?.loading}
                                 style={{
                                   padding: "6px 12px",
-                                  backgroundColor: "#000000",
+                                  backgroundColor: notionSyncStates[index]?.loading 
+                                    ? "#9ca3af" 
+                                    : notionSyncStates[index]?.success 
+                                    ? "#10b981" 
+                                    : "#000000",
                                   color: "white",
                                   border: "none",
                                   borderRadius: "6px",
                                   fontSize: "11px",
                                   fontWeight: "600",
-                                  cursor: "pointer",
+                                  cursor: notionSyncStates[index]?.loading ? "not-allowed" : "pointer",
                                   display: "flex",
                                   alignItems: "center",
                                   gap: "4px",
                                   transition: "all 0.2s ease",
+                                  opacity: notionSyncStates[index]?.loading ? 0.7 : 1,
                                 }}
                                 onMouseOver={(e) => {
-                                  e.currentTarget.style.backgroundColor = "#1f1f1f";
-                                  e.currentTarget.style.transform = "translateY(-1px)";
+                                  if (!notionSyncStates[index]?.loading) {
+                                    e.currentTarget.style.backgroundColor = notionSyncStates[index]?.success 
+                                      ? "#059669" 
+                                      : "#1f1f1f";
+                                    e.currentTarget.style.transform = "translateY(-1px)";
+                                  }
                                 }}
                                 onMouseOut={(e) => {
-                                  e.currentTarget.style.backgroundColor = "#000000";
-                                  e.currentTarget.style.transform = "translateY(0px)";
+                                  if (!notionSyncStates[index]?.loading) {
+                                    e.currentTarget.style.backgroundColor = notionSyncStates[index]?.success 
+                                      ? "#10b981" 
+                                      : "#000000";
+                                    e.currentTarget.style.transform = "translateY(0px)";
+                                  }
                                 }}
+                                title={notionSyncStates[index]?.message || "Add action item to Notion database"}
                               >
-                                <span style={{ fontSize: "12px" }}>📝</span>
-                                Add to Notion
+                                <span style={{ fontSize: "12px" }}>
+                                  {notionSyncStates[index]?.loading 
+                                    ? "⏳" 
+                                    : notionSyncStates[index]?.success 
+                                    ? "✅" 
+                                    : "📝"}
+                                </span>
+                                {notionSyncStates[index]?.loading 
+                                  ? "Adding..." 
+                                  : notionSyncStates[index]?.success 
+                                  ? "Added!" 
+                                  : "Add to Notion"}
                               </button>
                             </div>
                           );
