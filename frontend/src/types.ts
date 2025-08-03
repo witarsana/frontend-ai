@@ -61,9 +61,34 @@ export interface AppState {
   filteredTranscript: TranscriptItem[];
 }
 
+export interface NotionProperties {
+  Priority: string;
+  Category: string;
+  "Due Date": string;
+  Assigned: string;
+  Status: string;
+}
+
+export interface NotionReady {
+  title: string;
+  properties: NotionProperties;
+}
+
+export interface EnhancedActionItem {
+  title: string;
+  description: string;
+  priority: "High" | "Medium" | "Low";
+  category: "Immediate" | "Short-term" | "Strategic" | "Ongoing";
+  timeframe: string;
+  assigned_to: string;
+  tags: string[];
+  notion_ready: NotionReady;
+}
+
 export interface SummaryData {
   meetingSummary: string;
-  actionItems: string[];
+  actionItems: string[]; // Legacy compatibility
+  enhancedActionItems?: EnhancedActionItem[]; // New rich format
   keyDecisions: string[];
   speakerPoints: string[];
   pointOfView: string[];

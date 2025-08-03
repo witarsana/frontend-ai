@@ -690,14 +690,15 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
                 # Extract all data from unified analysis
                 narrative_summary = analysis_result.get("narrative_summary", "")
                 speaker_points = analysis_result.get("speaker_points", [])
-                action_items = analysis_result.get("action_items", [])
+                enhanced_action_items = analysis_result.get("enhanced_action_items", [])
                 key_decisions = analysis_result.get("key_decisions", [])
                 
                 # Update result with clean separated data (NO REDUNDANCY)
                 final_result["summary"] = narrative_summary  # Clean narrative summary only
                 final_result["clean_summary"] = narrative_summary  # Same as summary now
                 final_result["speaker_points"] = speaker_points  # Structured speaker data
-                final_result["action_items"] = action_items  # Structured action items
+                final_result["enhanced_action_items"] = enhanced_action_items  # Rich structured action items
+                final_result["action_items"] = [item.get("title", "Unknown task") for item in enhanced_action_items]  # Legacy compatibility
                 final_result["key_decisions"] = key_decisions  # Structured decisions
                 final_result["point_of_view"] = []  # Deprecated, data moved to speaker_points
                 final_result["tags"] = ["conversation", "transcription", "ai-analysis"]
@@ -746,7 +747,7 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
                     with open(result_file, 'w', encoding='utf-8') as f:
                         json.dump(safe_result, f, ensure_ascii=False, indent=2)
                 
-                print(f"✅ Unified analysis generated with {len(action_items)} action items, {len(key_decisions)} key decisions, and {len(speaker_points)} speaker groups")
+                print(f"✅ Unified analysis generated with {len(enhanced_action_items)} enhanced action items, {len(key_decisions)} key decisions, and {len(speaker_points)} speaker groups")
                 
             except Exception as e:
                 print(f"⚠️ Summary generation failed (transcript still available): {e}")
@@ -1904,7 +1905,7 @@ def clean_summary_text(summary: str, action_items: list, key_decisions: list) ->
 async def generate_unified_analysis(transcript_segments: list) -> dict:
     """
     Generate all analysis data in one AI call without redundancy
-    Returns: dict with narrative_summary, speaker_points, action_items, key_decisions
+    Returns: dict with narrative_summary, speaker_points, enhanced_action_items, key_decisions
     """
     global api_providers
     
@@ -1914,7 +1915,27 @@ async def generate_unified_analysis(transcript_segments: list) -> dict:
         return {
             "narrative_summary": "❌ No transcript available for analysis.",
             "speaker_points": [],
-            "action_items": ["Review transcript for detailed insights"],
+            "enhanced_action_items": [
+                {
+                    "title": "Check Transcript Quality",
+                    "description": "Review transcript generation process and reprocess if needed",
+                    "priority": "High",
+                    "category": "Immediate",
+                    "timeframe": "1-3 days",
+                    "assigned_to": "Team",
+                    "tags": ["technical", "quality-check"],
+                    "notion_ready": {
+                        "title": "Check Transcript Quality",
+                        "properties": {
+                            "Priority": "High",
+                            "Category": "Immediate",
+                            "Due Date": "3 days from now",
+                            "Assigned": "Team",
+                            "Status": "Not Started"
+                        }
+                    }
+                }
+            ],
             "key_decisions": ["Audio successfully processed with AI technology"]
         }
     
@@ -1950,15 +1971,20 @@ async def generate_unified_analysis(transcript_segments: list) -> dict:
             result = json.loads(json_str)
             
             # Validate required fields
-            required_fields = ["narrative_summary", "speaker_points", "action_items", "key_decisions"]
+            required_fields = ["narrative_summary", "speaker_points", "enhanced_action_items", "key_decisions"]
             for field in required_fields:
                 if field not in result:
-                    result[field] = [] if field != "narrative_summary" else "No summary available"
+                    if field == "narrative_summary":
+                        result[field] = "No summary available"
+                    elif field == "enhanced_action_items":
+                        result[field] = []
+                    else:
+                        result[field] = []
             
             print(f"✅ Unified analysis generated successfully!")
             print(f"   - Narrative summary: {len(result.get('narrative_summary', ''))} chars")
             print(f"   - Speaker points: {len(result.get('speaker_points', []))} speakers")
-            print(f"   - Action items: {len(result.get('action_items', []))} items")
+            print(f"   - Enhanced action items: {len(result.get('enhanced_action_items', []))} items")
             print(f"   - Key decisions: {len(result.get('key_decisions', []))} decisions")
             
             return result
@@ -1973,7 +1999,27 @@ async def generate_unified_analysis(transcript_segments: list) -> dict:
         return {
             "narrative_summary": f"❌ Analysis generation failed: {str(e)}",
             "speaker_points": [],
-            "action_items": ["Review transcript for detailed insights"],
+            "enhanced_action_items": [
+                {
+                    "title": "Retry Analysis",
+                    "description": "Manual review of transcript or retry analysis with different parameters",
+                    "priority": "Medium",
+                    "category": "Immediate",
+                    "timeframe": "1-3 days",
+                    "assigned_to": "Team",
+                    "tags": ["technical", "retry"],
+                    "notion_ready": {
+                        "title": "Retry Analysis",
+                        "properties": {
+                            "Priority": "Medium",
+                            "Category": "Immediate", 
+                            "Due Date": "3 days from now",
+                            "Assigned": "Team",
+                            "Status": "Not Started"
+                        }
+                    }
+                }
+            ],
             "key_decisions": ["Audio successfully processed with AI technology"]
         }
 

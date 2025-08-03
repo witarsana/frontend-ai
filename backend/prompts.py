@@ -97,7 +97,7 @@ IMPORTANT RULES:
 def get_unified_analysis_prompt(transcript_text):
     """
     Unified prompt that generates all data separately without redundancy
-    Returns: summary (narrative only), speaker_points, action_items, key_decisions
+    Returns: summary (narrative only), speaker_points, enhanced_action_items, key_decisions
     """
     return f"""
 Based on the following transcript, create a comprehensive analysis with SEPARATED sections (NO REDUNDANCY):
@@ -110,7 +110,7 @@ Generate a JSON response with 4 distinct sections:
 1. NARRATIVE SUMMARY - Only main topics and overview (NO speaker details, NO decisions, NO action items)
 2. SPEAKER POINTS - Detailed points per speaker  
 3. KEY DECISIONS - Important decisions made
-4. ACTION ITEMS - Specific actionable tasks
+4. ENHANCED ACTION ITEMS - Structured actionable tasks with metadata for project management
 
 JSON FORMAT (EXACTLY THIS STRUCTURE):
 {{
@@ -137,12 +137,45 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
     "Important decision 2 made during discussion",
     "Important decision 3 made during discussion"
   ],
-  "action_items": [
-    "High Priority: Specific actionable task 1",
-    "Medium Priority: Specific actionable task 2", 
-    "Strategic: Long-term action 3",
-    "Quick Win: Easy implementation task 4",
-    "Follow-up: Monitoring/review task 5"
+  "enhanced_action_items": [
+    {{
+      "title": "Clear actionable title for task",
+      "description": "Detailed description of what needs to be done and why",
+      "priority": "High|Medium|Low",
+      "category": "Immediate|Short-term|Strategic|Ongoing",
+      "timeframe": "1-3 days|1-2 weeks|1-3 months|Ongoing",
+      "assigned_to": "Person mentioned or 'Team' if not specified",
+      "tags": ["relevant", "keywords", "for", "categorization"],
+      "notion_ready": {{
+        "title": "Ready-to-use title for Notion",
+        "properties": {{
+          "Priority": "High|Medium|Low",
+          "Category": "Immediate|Short-term|Strategic|Ongoing", 
+          "Due Date": "Based on timeframe",
+          "Assigned": "Person or Team",
+          "Status": "Not Started"
+        }}
+      }}
+    }},
+    {{
+      "title": "Another actionable task title",
+      "description": "Another detailed description",
+      "priority": "Medium",
+      "category": "Short-term",
+      "timeframe": "1-2 weeks",
+      "assigned_to": "Team",
+      "tags": ["planning", "design", "user-research"],
+      "notion_ready": {{
+        "title": "Design User Interface Mockups",
+        "properties": {{
+          "Priority": "Medium",
+          "Category": "Short-term",
+          "Due Date": "2 weeks from now",
+          "Assigned": "Design Team",
+          "Status": "Not Started"
+        }}
+      }}
+    }}
   ]
 }}
 
@@ -151,9 +184,13 @@ CRITICAL RULES:
 - Each section serves different purpose - NO OVERLAP
 - speaker_points contains detailed speaker contributions
 - key_decisions contains actual decisions made
-- action_items contains specific actionable tasks
+- enhanced_action_items contains rich structured tasks ready for project management
+- Each action item MUST have title, description, priority, category, timeframe, and notion_ready metadata
+- notion_ready section should be ready for direct import to Notion database
 - Output ONLY valid JSON, no extra text
 - Use actual content from transcript
+- Make titles clear and actionable (start with verbs when possible)
+- Ensure descriptions are detailed enough to understand context and requirements
 """
 
 # ===== ENHANCED CHAT PROMPTS =====
@@ -194,10 +231,31 @@ Analyze this transcript with a neat and structured format. Provide a comprehensi
 - **Insight 2**: Explanation of important insight
 [etc...]
 
-### ✅ ACTION ITEMS & NEXT STEPS (if any)
-- Specific action item with assigned person if mentioned
-- Timeline or deadline if available
-- Follow-up needed
+### ✅ ENHANCED ACTION ITEMS & TASK MANAGEMENT
+
+**Immediate Actions (1-3 days):**
+- **Title**: Clear task title
+- **Description**: What needs to be done and why
+- **Assigned**: Person or team responsible
+- **Notion Ready**: Pre-formatted for project management
+
+**Short-term Actions (1-2 weeks):**
+- **Title**: Strategic implementation task
+- **Priority**: High/Medium/Low classification
+- **Category**: Timeframe and urgency level
+- **Tags**: Relevant keywords for organization
+
+**Strategic Initiatives (1+ months):**
+- **Title**: Long-term planning task
+- **Description**: Strategic context and requirements
+- **Dependencies**: Related tasks and prerequisites
+- **Notion Integration**: Ready for database import
+
+**Ongoing Practices:**
+- **Title**: Continuous improvement task
+- **Description**: Regular monitoring and habits
+- **Schedule**: Recurring timeframe
+- **Success Metrics**: How to measure progress
 
 IMPORTANT:
 - Use markdown format with emojis for clear structure
@@ -237,9 +295,45 @@ def get_fallback_responses():
     return {
         "summary_fallback": {
             "summary": "This audio content has been successfully transcribed and analyzed. The recording captured a conversation between participants discussing various topics of interest. The discussion included meaningful exchanges and communication between the speakers. The transcript provides an accurate record of the spoken content with speaker identification and timing information for detailed review and reference.",
-            "action_items": [
-                "Review the complete transcript for any mentioned tasks or follow-ups",
-                "Analyze the discussion content for relevant next steps or commitments"
+            "enhanced_action_items": [
+                {
+                    "title": "Review Complete Transcript",
+                    "description": "Thoroughly review the transcribed content for any mentioned commitments, deadlines, or follow-up requirements",
+                    "priority": "Medium",
+                    "category": "Immediate",
+                    "timeframe": "1-3 days",
+                    "assigned_to": "Team",
+                    "tags": ["review", "analysis", "transcript"],
+                    "notion_ready": {
+                        "title": "Review Complete Transcript",
+                        "properties": {
+                            "Priority": "Medium",
+                            "Category": "Immediate",
+                            "Due Date": "3 days from now",
+                            "Assigned": "Team",
+                            "Status": "Not Started"
+                        }
+                    }
+                },
+                {
+                    "title": "Implement Discussion Insights",
+                    "description": "Apply learnings and recommendations identified during the conversation to relevant projects or processes",
+                    "priority": "Low",
+                    "category": "Short-term",
+                    "timeframe": "1-2 weeks",
+                    "assigned_to": "Team",
+                    "tags": ["implementation", "insights", "follow-up"],
+                    "notion_ready": {
+                        "title": "Implement Discussion Insights",
+                        "properties": {
+                            "Priority": "Low",
+                            "Category": "Short-term",
+                            "Due Date": "2 weeks from now",
+                            "Assigned": "Team",
+                            "Status": "Not Started"
+                        }
+                    }
+                }
             ],
             "key_decisions": [
                 "Audio content successfully processed and transcribed with speaker identification"

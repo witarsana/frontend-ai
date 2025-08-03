@@ -132,6 +132,19 @@ class FAISSChatSystem:
                 })
                 texts_to_encode.append(f"Action: {item}")
         
+        # Add next steps  
+        if "next_steps" in self.current_file_data and self.current_file_data["next_steps"]:
+            for step in self.current_file_data["next_steps"]:
+                step_text = f"{step.get('category', 'Unknown')} ({step.get('timeframe', 'No timeframe')}): {step.get('description', 'No description')}"
+                self.segments.append({
+                    "text": step_text,
+                    "speaker": "System",
+                    "timestamp": 0,
+                    "type": "next_step",
+                    "context": f"Next Step: {step_text}"
+                })
+                texts_to_encode.append(f"Next Step: {step_text}")
+        
         # Add key decisions
         if "key_decisions" in self.current_file_data and self.current_file_data["key_decisions"]:
             for decision in self.current_file_data["key_decisions"]:
@@ -256,6 +269,7 @@ class FAISSChatSystem:
         is_summary_question = any(word in query_lower for word in ["summary", "ringkasan", "summarize"])
         is_action_question = any(word in query_lower for word in ["action", "tindakan", "todo", "task"])
         is_decision_question = any(word in query_lower for word in ["decision", "keputusan", "decide", "conclusion"])
+        is_next_steps_question = any(word in query_lower for word in ["next", "langkah", "selanjutnya", "future", "follow", "recommendations"])
         
         # Build response based on query type and relevant segments
         response_parts = []
@@ -267,6 +281,14 @@ class FAISSChatSystem:
                 response_parts.append("**Meeting Summary:**")
                 response_parts.append(summary_segments[0]["segment"]["text"][:500] + "...")
                 sources.append({"type": "summary", "content": "Meeting summary"})
+        
+        elif is_next_steps_question:
+            next_step_segments = [s for s in relevant_segments if s["segment"]["type"] == "next_step"]
+            if next_step_segments:
+                response_parts.append("**Next Steps & Recommendations:**")
+                for i, seg in enumerate(next_step_segments[:4], 1):
+                    response_parts.append(f"{i}. {seg['segment']['text']}")
+                sources.append({"type": "next_steps", "content": f"{len(next_step_segments)} strategic steps"})
         
         elif is_action_question:
             action_segments = [s for s in relevant_segments if s["segment"]["type"] == "action_item"]
@@ -363,6 +385,7 @@ class FAISSChatSystem:
             "What are the main topics discussed?",
             "What decisions were made?",
             "What action items were mentioned?",
+            "What are the next steps and recommendations?",
             "Can you summarize the meeting?",
             "What questions were asked?",
             "What was discussed at the beginning?",
@@ -389,6 +412,7 @@ class FAISSChatSystem:
                 "transcript": len([s for s in self.segments if s["type"] == "transcript"]),
                 "summary": len([s for s in self.segments if s["type"] == "summary"]),
                 "action_items": len([s for s in self.segments if s["type"] == "action_item"]),
+                "next_steps": len([s for s in self.segments if s["type"] == "next_step"]),
                 "decisions": len([s for s in self.segments if s["type"] == "decision"])
             }
         }

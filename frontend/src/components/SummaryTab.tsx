@@ -24,6 +24,30 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
     isRegenerating
   });
 
+  const handleAddToNotion = async (actionItem: any) => {
+    try {
+      console.log('🗃️ Adding to Notion:', actionItem);
+      
+      // Format data for Notion API
+      const notionData = {
+        title: actionItem.notion_ready?.title || actionItem.title,
+        properties: actionItem.notion_ready?.properties || {},
+        description: actionItem.description,
+        tags: actionItem.tags || []
+      };
+
+      // Show success message (replace with actual Notion API call)
+      alert(`Task "${notionData.title}" ready to be added to Notion!\n\nProperties:\n${JSON.stringify(notionData.properties, null, 2)}`);
+      
+      // TODO: Implement actual Notion API integration
+      // await notionAPI.createTask(notionData);
+      
+    } catch (error) {
+      console.error('❌ Error adding to Notion:', error);
+      alert('Error adding task to Notion. Please try again.');
+    }
+  };
+
   const handleRegenerateSummary = async () => {
     console.log('🔄 Regenerate button clicked, jobId:', jobId);
     
@@ -285,7 +309,86 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
           </div>
         )}
 
-        {summaryData?.action_items && summaryData.action_items.length > 0 && (
+        {/* Enhanced Action Items - Show enhanced format if available, fallback to legacy */}
+        {summaryData?.enhanced_action_items && summaryData.enhanced_action_items.length > 0 ? (
+          <div className="summary-section structured-section enhanced-action-items-section">
+            <h3 className="section-title">
+              <span className="section-icon">�</span>
+              ENHANCED ACTION ITEMS & TASK MANAGEMENT
+            </h3>
+            <div className="section-content">
+              {summaryData.enhanced_action_items.map((item: any, index: number) => (
+                <div key={index} className={`enhanced-action-item priority-${item.priority?.toLowerCase()} category-${item.category?.toLowerCase()}`}>
+                  <div className="action-header">
+                    <div className="action-title-group">
+                      <h4 className="action-title">{item.title}</h4>
+                      <div className="action-badges">
+                        <span className={`priority-badge priority-${item.priority?.toLowerCase()}`}>
+                          {item.priority}
+                        </span>
+                        <span className={`category-badge category-${item.category?.toLowerCase()}`}>
+                          {item.category}
+                        </span>
+                        <span className="timeframe-badge">
+                          {item.timeframe}
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      className="notion-add-button"
+                      onClick={() => handleAddToNotion(item)}
+                      title="Add to Notion"
+                    >
+                      <span className="notion-icon">📝</span>
+                      Add to Notion
+                    </button>
+                  </div>
+                  
+                  <div className="action-description">
+                    {item.description}
+                  </div>
+                  
+                  <div className="action-metadata">
+                    <div className="assigned-to">
+                      <span className="metadata-label">👤 Assigned:</span>
+                      <span className="metadata-value">{item.assigned_to}</span>
+                    </div>
+                    {item.tags && item.tags.length > 0 && (
+                      <div className="action-tags">
+                        <span className="metadata-label">🏷️ Tags:</span>
+                        <div className="tags-list">
+                          {item.tags.map((tag: string, tagIndex: number) => (
+                            <span key={tagIndex} className="tag">{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notion Preview */}
+                  <div className="notion-preview">
+                    <div className="notion-preview-header">
+                      <span className="notion-logo">🗃️</span>
+                      <span className="notion-preview-title">Notion Preview</span>
+                    </div>
+                    <div className="notion-preview-content">
+                      <div className="notion-task-title">{item.notion_ready?.title || item.title}</div>
+                      <div className="notion-properties">
+                        {item.notion_ready?.properties && Object.entries(item.notion_ready.properties).map(([key, value]) => (
+                          <div key={key} className="notion-property">
+                            <span className="property-key">{key}:</span>
+                            <span className="property-value">{String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : summaryData?.action_items && summaryData.action_items.length > 0 && (
+          // Legacy action items display
           <div className="summary-section structured-section">
             <h3 className="section-title">
               <span className="section-icon">📋</span>
