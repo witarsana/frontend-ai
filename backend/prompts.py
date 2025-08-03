@@ -142,21 +142,23 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
   ],
   "enhanced_action_items": [
     {{
-      "title": "[Specific action verb + unique details from this content]",
-      "description": "[Detailed explanation of HOW to do this specific action, WHY it's important based on the content, and WHAT outcome to expect. Include specific context from the conversation.]",
+      "title": "[Action verb + specific methodology/framework from key_decisions]",
+      "description": "[COMPREHENSIVE 3-5 sentence description including: WHAT (specific action based on key insight), WHY (reference to key_decision that justifies this), HOW (step-by-step guidance from conversation), CONTEXT (specific examples/quotes/frameworks discussed), OUTCOME (expected result based on insight). Include background context, implementation steps, and practical examples when mentioned.]",
       "priority": "High|Medium|Low",
       "category": "Immediate|Short-term|Strategic|Ongoing",
       "timeframe": "Today|This week|1-2 weeks|1-3 months|Ongoing",
       "assigned_to": "Self|Team|Organization",
       "tags": ["content-specific", "keywords", "from", "actual", "discussion"],
+      "related_key_decision": "[Title of key_decision this action implements]",
       "notion_ready": {{
-        "title": "[Unique action title based on content]",
+        "title": "[Unique action title based on content and key insights]",
         "properties": {{
           "Priority": "High|Medium|Low",
           "Category": "Immediate|Short-term|Strategic|Ongoing", 
-          "Due Date": "[Specific timeframe based on content]",
-          "Assigned": "[Based on content context]",
-          "Status": "Not Started"
+          "Due Date": "[Specific timeframe based on content urgency]",
+          "Assigned": "[Based on content context and action scope]",
+          "Status": "Not Started",
+          "Source Insight": "[Key decision title this implements]"
         }}
       }}
     }}
@@ -185,20 +187,34 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
 - ALWAYS extract at least 3-5 key insights if the content has valuable information
 
 ⚡ CRITICAL RULES FOR NEXT STEPS (enhanced_action_items):
-- ONLY create actions that are DIRECTLY RELEVANT to the content discussed
-- NO generic tasks - every action must be content-specific and unique
-- Each action should be DISTINCTLY DIFFERENT with unique payloads for Notion
-- Think: "What specific action should someone take based on THIS conversation?"
-- Title: Start with action verb + specific details from the content
-- Description: Include HOW to do it, WHY based on the content, specific context
-- Make actions immediately valuable and uniquely tailored to this content
-- Examples of content-specific actions:
-  * If battery analogy discussed: "Assess Your Personal Battery Level Using [Specific Method Mentioned]"
-  * If book mentioned: "Read '[Specific Book Title]' and Apply [Specific Concept Discussed]"
-  * If tool shared: "Implement [Specific Tool/Method] for [Specific Use Case from Discussion]"
-- Each action should have DIFFERENT priority, category, timeframe, and tags
+- CREATE COMPREHENSIVE action items that are DIRECTLY DERIVED from key_decisions identified
+- LINK each action to specific insights from key_decisions for maximum value
+- Each action should be DISTINCTLY DIFFERENT with unique, detailed payloads for Notion
+- Think: "How can someone IMPLEMENT the key insights from THIS specific conversation?"
+
+🎯 ACTION ITEM ENHANCEMENT RULES:
+- Title: Start with action verb + specific methodology/framework from key_decisions
+- Description: Must include:
+  * WHAT: Clear, specific action based on key insight
+  * WHY: Reference to the key_decision that justifies this action
+  * HOW: Step-by-step guidance or methodology mentioned in conversation
+  * CONTEXT: Specific examples, quotes, or frameworks from the discussion
+  * OUTCOME: Expected result or benefit based on the insight
+
+- Make descriptions COMPREHENSIVE (3-5 sentences minimum) with:
+  * Background context from the conversation
+  * Specific implementation steps
+  * Connection to key insights discussed
+  * Practical examples when mentioned
+  * Expected outcomes or benefits
+
+- Examples of ENHANCED content-specific actions:
+  * "Implement the Battery Analogy Assessment System: Use David Kode's battery methodology (0-100%) to evaluate mental energy levels daily. This framework, discussed in relation to stress management, helps identify when recharge is needed. Rate your current battery level each morning and evening, noting patterns that indicate when you're approaching burnout zones below 30%."
+  * "Apply [Specific Framework Name] in [Context]: Based on the detailed discussion of [specific methodology], implement this approach by [specific steps mentioned]. This addresses the key insight about [specific problem/opportunity discussed] and should result in [specific outcome mentioned]."
+
+- Each action should have DIFFERENT priority, category, timeframe, and tags based on insight importance
 - AVOID: generic actions like "Review transcript" or "Follow up"
-- FOCUS: actions that apply the specific insights and recommendations from THIS conversation
+- FOCUS: actions that transform key_decisions into practical, implementable next steps with rich context
 
 🚫 ABSOLUTE PROHIBITIONS:
 - NO static/generic content that could apply to any transcript
