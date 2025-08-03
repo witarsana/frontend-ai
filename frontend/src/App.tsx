@@ -12,11 +12,76 @@ const App: React.FC = () => {
   const [sessionTranscriptions, setSessionTranscriptions] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'upload' | 'history' | 'processing'>('upload');
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [activeJobs, setActiveJobs] = useState<any[]>([]);
 
   // Check API connection on mount
   useEffect(() => {
     checkAPIConnection();
+    loadActiveJobs(); // Load active jobs from localStorage
   }, []);
+
+  // Load active jobs from localStorage
+  const loadActiveJobs = () => {
+    try {
+      const storedJobs = localStorage.getItem('activeJobs');
+      if (storedJobs) {
+        const jobs = JSON.parse(storedJobs);
+        // Filter out jobs older than 2 hours
+        const maxAge = 2 * 60 * 60 * 1000; // 2 hours
+        const validJobs = jobs.filter((job: any) => 
+          Date.now() - job.timestamp < maxAge
+        );
+        setActiveJobs(validJobs);
+        
+        // Clean up localStorage if we removed any expired jobs
+        if (validJobs.length !== jobs.length) {
+          localStorage.setItem('activeJobs', JSON.stringify(validJobs));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading active jobs:', error);
+      setActiveJobs([]);
+    }
+  };
+
+  // Add job to active jobs list
+  const addActiveJob = (jobId: string, filename: string, status: string = 'initializing') => {
+    const newJob = {
+      jobId,
+      filename,
+      status,
+      progress: 0,
+      timestamp: Date.now(),
+      startTime: new Date(),
+    };
+    
+    setActiveJobs(prev => {
+      const filtered = prev.filter(job => job.jobId !== jobId); // Remove if exists
+      const updated = [newJob, ...filtered];
+      localStorage.setItem('activeJobs', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Update job status in active jobs list
+  const updateActiveJob = (jobId: string, updates: any) => {
+    setActiveJobs(prev => {
+      const updated = prev.map(job => 
+        job.jobId === jobId ? { ...job, ...updates } : job
+      );
+      localStorage.setItem('activeJobs', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Remove job from active jobs list
+  const removeActiveJob = (jobId: string) => {
+    setActiveJobs(prev => {
+      const updated = prev.filter(job => job.jobId !== jobId);
+      localStorage.setItem('activeJobs', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   // Auto-resume job when API connection is established
   useEffect(() => {
@@ -50,6 +115,8 @@ const App: React.FC = () => {
       const maxAge = 2 * 60 * 60 * 1000; // 2 hours
       if (Date.now() - job.timestamp > maxAge) {
         localStorage.removeItem('currentProcessingJob');
+        // Also clean up any old progress data
+        localStorage.removeItem(`job_progress_${job.jobId}`);
         return;
       }
 
@@ -60,18 +127,29 @@ const App: React.FC = () => {
           const status = await aiAPI.getStatus(job.jobId);
           
           // If job is still processing, auto-resume
-          if (status.status === 'transcribing' || status.status === 'preprocessing' || status.status === 'generating_summary') {
-            console.log('Auto-resuming job:', job.jobId);
+          if (status.status === 'transcribing' || status.status === 'preprocessing' || status.status === 'generating_summary' || status.status === 'pending') {
+            console.log('🔄 Auto-resuming job:', job.jobId, 'Status:', status.status, 'Progress:', status.progress + '%');
             setCurrentJobId(job.jobId);
             setViewMode('processing');
           } else if (status.status === 'completed' || status.status === 'error') {
             // Job is done, clean up
+            console.log('🧹 Cleaning up completed job:', job.jobId, 'Status:', status.status);
             localStorage.removeItem('currentProcessingJob');
+            localStorage.removeItem(`job_progress_${job.jobId}`);
           }
         } catch (error) {
           // Job might not exist anymore
-          console.log('Stored job no longer exists, cleaning up');
+          console.log('🗑️ Stored job no longer exists, cleaning up');
           localStorage.removeItem('currentProcessingJob');
+          localStorage.removeItem(`job_progress_${job.jobId}`);
+        }
+      } else {
+        // If we're not connected to API but have saved progress, still show it
+        const savedProgress = localStorage.getItem(`job_progress_${job.jobId}`);
+        if (savedProgress) {
+          console.log('📶 API not connected but showing saved progress for:', job.jobId);
+          setCurrentJobId(job.jobId);
+          setViewMode('processing');
         }
       }
     } catch (error) {
@@ -107,10 +185,39 @@ const App: React.FC = () => {
       if (viewMode !== 'processing') {
         checkAndResumeJob();
       }
+      // Update active jobs status
+      updateActiveJobsStatus();
     }, 5000); // Check every 5 seconds
 
     return () => clearInterval(interval);
   }, [apiConnected, viewMode, checkAndResumeJob]);
+
+  // Update status of all active jobs
+  const updateActiveJobsStatus = async () => {
+    if (!apiConnected || activeJobs.length === 0) return;
+
+    for (const job of activeJobs) {
+      try {
+        const status = await aiAPI.getStatus(job.jobId);
+        
+        // Update job status
+        updateActiveJob(job.jobId, {
+          status: status.status,
+          progress: status.progress || 0,
+          lastUpdated: Date.now()
+        });
+        
+        // Remove completed or errored jobs
+        if (status.status === 'completed' || status.status === 'error') {
+          setTimeout(() => removeActiveJob(job.jobId), 2000); // Remove after 2 seconds to show final status
+        }
+      } catch (error) {
+        // Job might not exist anymore, remove it
+        console.log(`Job ${job.jobId} no longer exists, removing from active jobs`);
+        removeActiveJob(job.jobId);
+      }
+    }
+  };
 
   const handleFileSelect = async (
     file: File,
@@ -137,6 +244,9 @@ const App: React.FC = () => {
         });
         
         console.log("Upload response:", uploadResponse);
+        
+        // Add to active jobs list
+        addActiveJob(uploadResponse.job_id, file.name, 'pending');
         
         // Set current job ID and switch to processing view
         setCurrentJobId(uploadResponse.job_id);
@@ -168,12 +278,21 @@ const App: React.FC = () => {
     
     // Simulate processing with fake job ID
     const fakeJobId = `sim_${Date.now()}`;
+    
+    // Add to active jobs list
+    addActiveJob(fakeJobId, file.name, 'initializing');
+    
     setCurrentJobId(fakeJobId);
     setViewMode('processing');
   };
 
   const handleProcessingComplete = async (result: any) => {
     console.log("Processing completed:", result);
+    
+    // Remove from active jobs list
+    if (currentJobId) {
+      removeActiveJob(currentJobId);
+    }
     
     // Add completed transcription to session
     const newTranscription = {
@@ -202,6 +321,12 @@ const App: React.FC = () => {
 
   const handleProcessingError = (error: any) => {
     console.error("Processing error:", error);
+    
+    // Remove from active jobs list
+    if (currentJobId) {
+      removeActiveJob(currentJobId);
+    }
+    
     // Go back to upload view on error
     setViewMode('upload');
     setCurrentJobId(null);
@@ -458,6 +583,199 @@ const App: React.FC = () => {
                   }}>
                     Processing in background... Click "View Details" to monitor progress
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Active Jobs Dashboard */}
+            {activeJobs.length > 0 && (
+              <div style={{
+                backgroundColor: '#f8f9fa',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '24px',
+                border: '1px solid #dee2e6'
+              }}>
+                <h3 style={{
+                  margin: '0 0 16px 0',
+                  color: '#495057',
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  ⚡ Active Processing Jobs ({activeJobs.length})
+                </h3>
+                
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  {activeJobs.map((job) => {
+                    const elapsed = Math.floor((Date.now() - job.timestamp) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    const elapsedTime = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                    
+                    return (
+                      <div
+                        key={job.jobId}
+                        style={{
+                          backgroundColor: 'white',
+                          borderRadius: '8px',
+                          padding: '16px',
+                          border: '1px solid #e9ecef',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          marginBottom: '12px'
+                        }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{
+                              fontWeight: '600',
+                              color: '#343a40',
+                              fontSize: '14px',
+                              marginBottom: '4px'
+                            }}>
+                              📄 {job.filename}
+                            </div>
+                            <div style={{
+                              fontSize: '12px',
+                              color: '#6c757d',
+                              fontFamily: 'monospace'
+                            }}>
+                              Job ID: {job.jobId}
+                            </div>
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-end',
+                            gap: '4px'
+                          }}>
+                            <span style={{
+                              fontSize: '11px',
+                              color: '#6c757d'
+                            }}>
+                              ⏱️ {elapsedTime}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setCurrentJobId(job.jobId);
+                                setViewMode('processing');
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                backgroundColor: '#007acc',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              📊 View
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px'
+                        }}>
+                          <div style={{
+                            flex: 1,
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: '6px',
+                            padding: '8px 12px',
+                            border: '1px solid #e9ecef'
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              marginBottom: '4px'
+                            }}>
+                              <span style={{
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                color: '#495057'
+                              }}>
+                                Status
+                              </span>
+                              <span style={{
+                                fontSize: '11px',
+                                color: '#6c757d'
+                              }}>
+                                {job.progress || 0}%
+                              </span>
+                            </div>
+                            
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}>
+                              <div style={{
+                                flex: 1,
+                                height: '6px',
+                                backgroundColor: '#e9ecef',
+                                borderRadius: '3px',
+                                overflow: 'hidden'
+                              }}>
+                                <div style={{
+                                  height: '100%',
+                                  backgroundColor: job.status === 'completed' ? '#28a745' :
+                                                  job.status === 'error' ? '#dc3545' :
+                                                  job.status === 'transcribing' ? '#007acc' :
+                                                  '#ffc107',
+                                  width: `${job.progress || 0}%`,
+                                  transition: 'width 0.3s ease'
+                                }} />
+                              </div>
+                              
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: '500',
+                                color: job.status === 'completed' ? '#28a745' :
+                                        job.status === 'error' ? '#dc3545' :
+                                        job.status === 'transcribing' ? '#007acc' :
+                                        '#856404',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>
+                                {job.status === 'transcribing' ? '🎵 Transcribing' :
+                                 job.status === 'preprocessing' ? '⚙️ Preprocessing' :
+                                 job.status === 'generating_summary' ? '📝 Summarizing' :
+                                 job.status === 'completed' ? '✅ Completed' :
+                                 job.status === 'error' ? '❌ Error' :
+                                 job.status === 'pending' ? '⏳ Pending' :
+                                 '🔄 Initializing'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div style={{
+                  marginTop: '12px',
+                  padding: '8px 12px',
+                  backgroundColor: '#e7f1ff',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: '#0056b3'
+                }}>
+                  💡 Jobs persist across page refreshes and tabs. Click "View" to monitor detailed progress.
                 </div>
               </div>
             )}

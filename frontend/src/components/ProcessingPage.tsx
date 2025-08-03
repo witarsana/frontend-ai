@@ -15,6 +15,10 @@ const spinKeyframes = `
     0% { transform: translateX(-100%); }
     100% { transform: translateX(100%); }
   }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 `;
 
 // Inject the CSS into the document head
@@ -69,6 +73,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
   const [isPolling, setIsPolling] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
   const [startTime] = useState(Date.now());
+  const [isResumed, setIsResumed] = useState(false);
 
   const api = new AITranscriptionAPI();
 
@@ -83,7 +88,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
 
     try {
       const statusResponse = await api.getStatus(jobId);
-      setStatus({
+      const newStatus = {
         status: statusResponse.status,
         progress: statusResponse.progress,
         stage_progress: (statusResponse as any).stage_progress,
@@ -95,7 +100,21 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
         current_stage: (statusResponse as any).current_stage,
         stage_detail: (statusResponse as any).stage_detail,
         processing_info: (statusResponse as any).processing_info
-      });
+      };
+      
+      setStatus(newStatus);
+      
+      // Save progress to localStorage for persistence across page refreshes
+      if (newStatus.status !== 'completed' && newStatus.status !== 'error') {
+        localStorage.setItem(`job_progress_${jobId}`, JSON.stringify({
+          progress: newStatus.progress,
+          stage_progress: newStatus.stage_progress,
+          message: newStatus.message,
+          status: newStatus.status,
+          current_stage: newStatus.current_stage,
+          timestamp: Date.now()
+        }));
+      }
       
       // Enhanced logging with stage information
       const stageInfo = (statusResponse as any).stage_detail ? 
@@ -105,6 +124,9 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
       if (statusResponse.status === 'completed') {
         setIsPolling(false);
         addLog('✅ Processing completed successfully!');
+        
+        // Clear saved progress since job is done
+        localStorage.removeItem(`job_progress_${jobId}`);
         
         if (onComplete) {
           // Get the result and call onComplete
@@ -119,6 +141,10 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
         setIsPolling(false);
         const errorMsg = statusResponse.error || 'Unknown error';
         addLog(`❌ Error: ${errorMsg}`);
+        
+        // Clear saved progress since job failed
+        localStorage.removeItem(`job_progress_${jobId}`);
+        
         if (onError) {
           onError(errorMsg);
         }
@@ -136,6 +162,27 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
     }
 
     addLog(`🚀 Starting to monitor job: ${jobId}`);
+    
+    // Check if we have saved progress for this job
+    const savedProgress = localStorage.getItem(`job_progress_${jobId}`);
+    if (savedProgress) {
+      try {
+        const progressData = JSON.parse(savedProgress);
+        addLog(`📊 Resuming from saved progress: ${progressData.progress}%`);
+        setStatus(prev => ({
+          ...prev,
+          ...progressData,
+          // Don't override error state if job actually failed
+          status: progressData.status === 'error' ? 'error' : prev.status
+        }));
+        setIsResumed(true);
+        
+        // Hide resume notification after 5 seconds
+        setTimeout(() => setIsResumed(false), 5000);
+      } catch (error) {
+        addLog(`⚠️ Failed to restore saved progress: ${error}`);
+      }
+    }
     
     // Save current job to localStorage for resume capability
     localStorage.setItem('currentProcessingJob', JSON.stringify({
@@ -157,6 +204,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
       // Only clear localStorage if job is completed or error
       if (status.status === 'completed' || status.status === 'error') {
         localStorage.removeItem('currentProcessingJob');
+        localStorage.removeItem(`job_progress_${jobId}`);
       }
     };
   }, [jobId, status.status]);
@@ -358,6 +406,27 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           </span>
           <span style={{ fontWeight: '600' }}>{status.progress}%</span>
         </div>
+
+        {/* Resume Notification */}
+        {isResumed && (
+          <div style={{
+            backgroundColor: '#d1fae5',
+            border: '1px solid #10b981',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            fontSize: '14px',
+            color: '#047857',
+            animation: 'fadeIn 0.5s ease-out'
+          }}>
+            <span style={{ marginRight: '8px', fontSize: '16px' }}>🔄</span>
+            <span>
+              <strong>Progress Resumed:</strong> Continuing from {status.progress}% after page refresh/navigation
+            </span>
+          </div>
+        )}
 
         {/* Current Stage Indicator */}
         {status.current_stage && (
@@ -604,9 +673,30 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           color: '#6b7280',
           fontSize: '12px'
         }}>
-          🔄 Auto-refreshing every 3 seconds...
+          🔄 Auto-refreshing every 1 second...
         </div>
       )}
+
+      {/* Progress Persistence Info */}
+      <div style={{
+        backgroundColor: '#f0f9ff',
+        border: '1px solid #0ea5e9',
+        borderRadius: '8px',
+        padding: '16px',
+        marginTop: '20px',
+        fontSize: '13px',
+        color: '#0369a1'
+      }}>
+        <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
+          💡 Progress Persistence Feature:
+        </div>
+        <ul style={{ margin: '0', paddingLeft: '16px' }}>
+          <li>Your progress is automatically saved and will resume if you refresh the page</li>
+          <li>You can safely switch tabs or close this window - progress will continue</li>
+          <li>Return anytime to check status using the same browser</li>
+          <li>Progress data is stored locally for up to 2 hours</li>
+        </ul>
+      </div>
     </div>
   );
 };
