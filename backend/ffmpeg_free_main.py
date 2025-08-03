@@ -10,20 +10,8 @@ import json
 from faster_whisper import WhisperModel
 import whisper  # Simple whisper for fast transcription
 
-# Mistral AI import - compatible with version 0.4.2
-try:
-    from mistralai.client import MistralClient
-    MISTRAL_AVAILABLE = True
-    print("✅ Mistral AI client imported successfully")
-except ImportError:
-    try:
-        from mistralai import Mistral as MistralClient
-        MISTRAL_AVAILABLE = True
-        print("✅ Mistral AI legacy import successful")
-    except ImportError:
-        print("⚠️  Mistral AI not available - AI features will be limited")
-        MistralClient = None
-        MISTRAL_AVAILABLE = False
+# DEBUGGING: Only use Faster-Whisper for transcription
+print("🔧 DEBUG MODE: Only using Faster-Whisper engine")
 
 from typing import Dict, List, Any, Optional
 import traceback
@@ -84,26 +72,16 @@ class ChatResponse(BaseModel):
     timestamp: str
     confidence: float
 
-# Deepgram imports (optional - handle compatibility issues)
-DEEPGRAM_AVAILABLE = False
-try:
-    from deepgram import DeepgramClient, PrerecordedOptions, FileSource
-    DEEPGRAM_AVAILABLE = True
-    print("✅ Deepgram SDK available")
-except ImportError:
-    print("⚠️  Deepgram SDK not installed, using Faster-Whisper only")
-except SyntaxError:
-    print("⚠️  Deepgram SDK requires Python 3.10+, current: Python 3.9 - using Faster-Whisper only")
-    print("💡 To use Deepgram: upgrade to Python 3.10+ or use pyenv to switch Python versions")
-except Exception as e:
-    print(f"⚠️  Deepgram SDK error: {e}, using Faster-Whisper only")
+# Deepgram imports - DISABLED FOR DEBUGGING
+# DEEPGRAM_AVAILABLE = False
+print("🔧 DEBUG MODE: Deepgram engine disabled")
 
 # Load .env file from parent directory
 import os
 from pathlib import Path
 load_dotenv(Path(__file__).parent.parent / '.env')
 
-app = FastAPI(title="AI Meeting Transcription - Dual Engine", version="2.0.0")
+app = FastAPI(title="AI Meeting Transcription - Faster-Whisper Only", version="2.0.0")
 
 # CORS middleware
 app.add_middleware(
@@ -139,12 +117,13 @@ chat_system = None
 multi_chat_system = None
 api_providers = None  # Our new multi-provider system
 
-# Configuration
-TRANSCRIPTION_ENGINE = os.getenv("TRANSCRIPTION_ENGINE", "faster-whisper")  # "faster-whisper" or "deepgram"
+# Configuration - DEBUGGING: Force Faster-Whisper only
+TRANSCRIPTION_ENGINE = "faster-whisper"  # Hardcoded to faster-whisper for debugging
+print("🔧 DEBUG MODE: Forced engine = faster-whisper")
 
 def load_models():
-    """Load AI models with error handling"""
-    global whisper_model, simple_whisper_model, mistral_client, diarization_pipeline, deepgram_client, api_providers
+    """Load AI models with error handling - DEBUGGING: Only Faster-Whisper"""
+    global whisper_model, simple_whisper_model, mistral_client, diarization_pipeline, api_providers
     
     try:
         print(f"🔧 Transcription engine: {TRANSCRIPTION_ENGINE}")
@@ -164,32 +143,17 @@ def load_models():
             except Exception as e:
                 print(f"⚠️ Simple Whisper model loading failed: {e}")
         
-        # Always try to initialize Deepgram client for availability check
-        if deepgram_client is None and DEEPGRAM_AVAILABLE:
-            api_key = os.getenv("DEEPGRAM_API_KEY")
-            if api_key:
-                deepgram_client = DeepgramClient(api_key)
-                print("✅ Deepgram client initialized!")
-            else:
-                print("❌ DEEPGRAM_API_KEY not found")
-        elif not DEEPGRAM_AVAILABLE:
-            print("❌ Deepgram SDK not available")
+        # DEBUGGING: Skip Deepgram and Mistral initialization
+        print("🔧 DEBUG MODE: Skipping Deepgram and Mistral initialization")
         
-        # Load Faster-Whisper if needed or if it's the current engine
-        if TRANSCRIPTION_ENGINE == "faster-whisper" or whisper_model is None:
-            if whisper_model is None:
-                print("Loading Faster-Whisper model (small - High Performance)...")
-                whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
-                print("✅ Faster-Whisper model loaded!")
+        # Load Faster-Whisper (always load since it's the only engine)
+        if whisper_model is None:
+            print("Loading Faster-Whisper model (small - High Performance)...")
+            whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+            print("✅ Faster-Whisper model loaded!")
         
-        # Load Mistral client
-        if mistral_client is None:
-            api_key = os.getenv("MISTRAL_API_KEY")
-            if api_key:
-                mistral_client = MistralClient(api_key=api_key)
-                print("✅ Mistral client initialized!")
-            else:
-                print("⚠️  MISTRAL_API_KEY not found")
+        # DEBUGGING: Skip Mistral client initialization
+        print("🔧 DEBUG MODE: Skipping Mistral client initialization")
         
         if diarization_pipeline is None:
             try:
@@ -360,31 +324,24 @@ async def get_result(job_id: str):
 
 @app.get("/api/config")
 async def get_config():
-    """Get current transcription engine configuration"""
+    """Get current transcription engine configuration - DEBUGGING: Only Faster-Whisper"""
     return {
         "transcription_engine": TRANSCRIPTION_ENGINE,
         "engines_available": {
             "faster_whisper": whisper_model is not None,
-            "deepgram": deepgram_client is not None and DEEPGRAM_AVAILABLE
+            # DEBUGGING: Removed deepgram availability
         },
-        "deepgram_sdk_available": DEEPGRAM_AVAILABLE,
-        "fallback_enabled": True
+        "fallback_enabled": False  # DEBUGGING: No fallback needed
     }
 
 @app.post("/api/config/engine")
 async def set_transcription_engine(engine: str):
-    """Set transcription engine (faster-whisper or deepgram)"""
-    global TRANSCRIPTION_ENGINE, whisper_model, deepgram_client
+    """Set transcription engine - DEBUGGING: Only faster-whisper allowed"""
+    global TRANSCRIPTION_ENGINE
     
-    if engine not in ["faster-whisper", "deepgram"]:
-        raise HTTPException(status_code=400, detail="Invalid engine. Use 'faster-whisper' or 'deepgram'")
-    
-    # Check if Deepgram is requested but not available
-    if engine == "deepgram" and not DEEPGRAM_AVAILABLE:
-        raise HTTPException(status_code=400, detail="Deepgram SDK not available. Please install or use faster-whisper")
-    
-    if engine == "deepgram" and not os.getenv("DEEPGRAM_API_KEY"):
-        raise HTTPException(status_code=400, detail="DEEPGRAM_API_KEY not configured")
+    # DEBUGGING: Only allow faster-whisper
+    if engine != "faster-whisper":
+        raise HTTPException(status_code=400, detail="DEBUG MODE: Only 'faster-whisper' engine is allowed")
     
     # Update configuration
     old_engine = TRANSCRIPTION_ENGINE
@@ -427,7 +384,7 @@ async def get_available_engines():
                 "accuracy": "very_high",
                 "languages": "multilingual",
                 "features": ["real_time", "speaker_diarization", "smart_formatting", "word_timestamps"],
-                "available": deepgram_client is not None and DEEPGRAM_AVAILABLE,
+                "available": False,  # DEBUGGING: Deepgram disabled
                 "quota": "12000_minutes_free_monthly",
                 "max_duration_recommended": "45_minutes",
                 "max_file_size_recommended": "80MB",
@@ -607,40 +564,75 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progr
         
         print("✅ Fast transcription completed!")
         
-        # Simple speaker assignment - EXACTLY like mainSample.py
+        # SMART speaker detection instead of simple time-based
         segments_with_speakers = []
         total_segments = len(whisper_result["segments"])
         
         if progress:
-            progress.update_stage("transcription", 75, f"Processing {total_segments} segments...")
+            progress.update_stage("transcription", 75, f"Analyzing {total_segments} segments for speakers...")
+        
+        # Analyze conversation patterns to detect real speaker count
+        speaker_count = analyze_smart_speaker_patterns(whisper_result["segments"])
+        print(f"🎯 Smart detection found {speaker_count} speakers in conversation")
+        
+        if progress:
+            progress.update_stage("transcription", 80, f"Detected {speaker_count} speakers, assigning segments...")
+        
+        # Smart speaker assignment based on conversation flow
+        current_speaker = 1
+        last_speaker_change = 0
+        speaker_stats = {i+1: {"total_time": 0, "segment_count": 0, "avg_length": 0} for i in range(speaker_count)}
         
         for i, segment in enumerate(whisper_result["segments"]):
-            # Simple speaker assignment: alternate every 30 seconds
-            speaker_id = int(segment['start'] // 30) % 2
-            speaker_label = f"Speaker {speaker_id + 1}"
+            segment_text = segment['text'].strip()
+            segment_duration = segment['end'] - segment['start']
+            time_since_last = segment['start'] - (whisper_result["segments"][i-1]['end'] if i > 0 else 0)
+            
+            # Smart speaker change detection
+            should_change_speaker = detect_speaker_change(
+                segment_text, 
+                whisper_result["segments"][i-1]['text'].strip() if i > 0 else "",
+                time_since_last,
+                i - last_speaker_change,
+                speaker_count
+            )
+            
+            if should_change_speaker and i > 0:
+                current_speaker = (current_speaker % speaker_count) + 1
+                last_speaker_change = i
+                print(f"🔄 Speaker change detected at {segment['start']:.1f}s → Speaker {current_speaker}")
+            
+            # Track speaker statistics
+            speaker_stats[current_speaker]["total_time"] += segment_duration
+            speaker_stats[current_speaker]["segment_count"] += 1
+            speaker_stats[current_speaker]["avg_length"] += len(segment_text)
             
             segments_with_speakers.append({
                 "id": i,
                 "start": segment['start'],
                 "end": segment['end'],
-                "text": segment['text'].strip(),
-                "speaker": f"speaker-{speaker_id + 1:02d}",
-                "speaker_name": speaker_label,
+                "text": segment_text,
+                "speaker": f"speaker-{current_speaker:02d}",
+                "speaker_name": f"Speaker {current_speaker}",
                 "confidence": 0.8,  # Fixed confidence
                 "tags": [],
-                "assigned_speaker": speaker_id + 1
+                "assigned_speaker": current_speaker,
+                "duration": segment_duration
             })
             
             # Update progress periodically during segment processing
-            if progress and i % 25 == 0:  # More frequent updates (every 25 segments instead of 50)
-                segment_progress = 75 + (i / total_segments) * 20  # 75% to 95%
-                progress.update_stage("transcription", segment_progress, f"Processing segments: {i+1}/{total_segments}")
-            elif progress and i % 10 == 0 and total_segments <= 50:  # For smaller files, update every 10 segments
-                segment_progress = 75 + (i / total_segments) * 20
+            if progress and i % 25 == 0:
+                segment_progress = 80 + (i / total_segments) * 15  # 80% to 95%
                 progress.update_stage("transcription", segment_progress, f"Processing segments: {i+1}/{total_segments}")
         
+        # Calculate final speaker statistics
+        for speaker_id in speaker_stats:
+            if speaker_stats[speaker_id]["segment_count"] > 0:
+                speaker_stats[speaker_id]["avg_length"] /= speaker_stats[speaker_id]["segment_count"]
+                print(f"👤 Speaker {speaker_id}: {speaker_stats[speaker_id]['segment_count']} segments, {speaker_stats[speaker_id]['total_time']:.1f}s total, {speaker_stats[speaker_id]['avg_length']:.0f} avg chars")
+        
         if progress:
-            progress.update_stage("transcription", 100, f"All {total_segments} segments processed")
+            progress.update_stage("transcription", 100, f"Smart speaker analysis completed: {speaker_count} speakers detected")
         
         # Get audio duration
         duration = whisper_result.get("segments", [])[-1]["end"] if whisper_result.get("segments") else 0
@@ -651,17 +643,20 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progr
             "text": whisper_result["text"],
             "language": whisper_result.get("language", "unknown"),
             "duration": duration,
+            "speaker_stats": speaker_stats,
+            "detected_speakers": speaker_count,
             "audio_info": {
-                "method": "mainSample_style",
+                "method": "smart_speaker_detection",
                 "model": "base",
                 "sample_rate": 16000,
                 "channels": 1,
                 "processing_time": "fast",
-                "total_segments": total_segments
+                "total_segments": total_segments,
+                "speaker_detection": "conversation_pattern_analysis"
             }
         }
         
-        print(f"✅ mainSample.py style processing complete: {len(segments_with_speakers)} segments, {duration:.1f}s")
+        print(f"✅ Smart speaker transcription complete: {len(segments_with_speakers)} segments, {duration:.1f}s, {speaker_count} speakers")
         
         return result
         
@@ -1026,307 +1021,92 @@ def _preprocess_audio_sync(file_path: str) -> str:
         return file_path
 
 async def transcribe_with_librosa(audio_path: str, job_id: str = None) -> Dict[Any, Any]:
-    """Transcribe using preprocessed audio with smart engine selection based on file size"""
+    """
+    OPTIMIZED transcription using fast approach from mainSample.py
+    Skip heavy preprocessing and use direct Simple Whisper for speed
+    """
     
-    # Smart engine selection: Check file size and duration first
-    should_use_whisper = False
-    auto_fallback_reason = None
+    print(f"🚀 OPTIMIZED transcription starting: {os.path.basename(audio_path)}")
     
-    if TRANSCRIPTION_ENGINE == "deepgram" and deepgram_client:
-        try:
-            # Pre-check file size and duration to avoid unnecessary Deepgram timeouts
-            file_size = os.path.getsize(audio_path) / (1024 * 1024)  # MB
-            audio_data, _ = librosa.load(audio_path, sr=16000, mono=True)
-            duration_minutes = len(audio_data) / (16000 * 60)
-            
-            print(f"🔍 Pre-analysis: {file_size:.1f}MB, {duration_minutes:.1f} minutes")
-            
-            # Auto-fallback criteria for large files
-            if duration_minutes > 45 or file_size > 80:  # More conservative limits
-                print(f"🚀 Auto-selecting Faster-Whisper for large file ({duration_minutes:.1f} min, {file_size:.1f}MB)")
-                should_use_whisper = True
-                
-                # Create detailed fallback reason for frontend notification
-                reasons = []
-                if duration_minutes > 45:
-                    reasons.append(f"duration {duration_minutes:.1f} minutes (>45 min)")
-                if file_size > 80:
-                    reasons.append(f"file size {file_size:.1f}MB (>80MB)")
-                
-                auto_fallback_reason = {
-                    "reason": "large_file_auto_fallback",
-                    "message": f"File exceeds Deepgram limits: {', '.join(reasons)}. Automatically switching to Faster-Whisper for reliable processing.",
-                    "details": {
-                        "file_size_mb": round(file_size, 1),
-                        "duration_minutes": round(duration_minutes, 1),
-                        "max_size_mb": 80,
-                        "max_duration_min": 45
-                    },
-                    "recommendation": "Faster-Whisper is recommended for large files and provides excellent accuracy with no timeout limits."
-                }
-                
-                # Update job status with fallback notification
-                if job_id:
-                    processing_jobs[job_id]["progress"] = 35
-                    processing_jobs[job_id]["message"] = f"Large file detected ({duration_minutes:.1f} min, {file_size:.1f}MB). Switching to Faster-Whisper..."
-                    processing_jobs[job_id]["auto_fallback"] = auto_fallback_reason
-                    
-            else:
-                print(f"✅ File size OK for Deepgram, proceeding...")
-                
-        except Exception as e:
-            print(f"⚠️  Pre-analysis failed: {e}, proceeding with original engine selection")
+    # DEBUGGING: Always use fast transcription approach
+    print("🔧 DEBUG MODE: Using fast Simple Whisper approach for all files")
     
-    # Engine selection logic
-    if TRANSCRIPTION_ENGINE == "deepgram" and deepgram_client and not should_use_whisper:
-        try:
-            return await transcribe_with_deepgram(audio_path, job_id)
-        except Exception as e:
-            if "timeout" in str(e).lower() or "timed out" in str(e).lower():
-                print(f"❌ Deepgram timeout: {e}")
-                print(f"🔄 Falling back to Faster-Whisper...")
-                
-                # Update job status with timeout fallback notification
-                if job_id:
-                    processing_jobs[job_id]["timeout_fallback"] = {
-                        "reason": "deepgram_timeout",
-                        "message": "Deepgram processing timed out. Continuing with Faster-Whisper for reliable results.",
-                        "original_error": str(e)
-                    }
-                
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(None, _transcribe_librosa_sync, audio_path, job_id)
-                return result
-            else:
-                raise e
-    else:
-        # Use Faster-Whisper (either by choice or auto-fallback)
-        if should_use_whisper:
-            print(f"🎙️ Using Faster-Whisper for large file processing...")
-            if job_id:
-                processing_jobs[job_id]["progress"] = 45
-                processing_jobs[job_id]["message"] = "Processing with Faster-Whisper (optimized for large files)..."
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, _transcribe_librosa_sync, audio_path, job_id)
-        return result
-
-async def transcribe_with_deepgram(audio_path: str, job_id: str = None) -> Dict[Any, Any]:
-    """Transcribe using Deepgram API with enhanced error handling for large files"""
     try:
-        print(f"🌐 Transcribing with Deepgram: {audio_path}")
+        # Use fast transcription approach like mainSample.py
+        result = await fast_transcribe_with_whisper(audio_path, job_id)
         
-        if not os.path.exists(audio_path):
-            raise Exception(f"Audio file not found: {audio_path}")
+        # Add auto_fallback info to show we're using optimized approach
+        if job_id and "auto_fallback" not in result:
+            result["auto_fallback"] = {
+                "reason": "optimized_fast_transcription",
+                "message": "Using optimized Simple Whisper for maximum speed (like mainSample.py)",
+                "details": {
+                    "approach": "direct_whisper",
+                    "preprocessing": "minimal",
+                    "speaker_detection": "simple_time_based"
+                }
+            }
         
-        if not deepgram_client:
-            raise Exception("Deepgram client not initialized")
-        
-        # Check file size and duration for optimization
-        file_size = os.path.getsize(audio_path) / (1024 * 1024)  # MB
-        audio_data, _ = librosa.load(audio_path, sr=16000, mono=True)
-        duration_minutes = len(audio_data) / (16000 * 60)
-        
-        print(f"📊 Deepgram upload: {file_size:.1f}MB, {duration_minutes:.1f} minutes")
-        
-        # Warning for very large files
-        if duration_minutes > 60:
-            print(f"⚠️  Large file detected ({duration_minutes:.1f} min). This may take longer or timeout.")
-        
-        # Update progress
-        if job_id:
-            processing_jobs[job_id]["progress"] = 40
-            processing_jobs[job_id]["message"] = f"Uploading {file_size:.1f}MB to Deepgram..."
-        
-        # Read audio file
-        with open(audio_path, "rb") as audio_file:
-            buffer_data = audio_file.read()
-        
-        payload = {
-            "buffer": buffer_data,
-        }
-        
-        # Configure options with timeout considerations
-        options = PrerecordedOptions(
-            model="nova-2",  # Latest high-accuracy model
-            language="en",  
-            smart_format=True,
-            punctuate=True,
-            diarize=True,  # Speaker diarization
-            utterances=True,
-            paragraphs=True,
-            multichannel=False,
-            alternatives=1,
-            # confidence=True,  # This parameter is not supported in current SDK version
-            summarize="v2"  # Get summary from Deepgram
-        )
-        
-        # Update progress
-        if job_id:
-            processing_jobs[job_id]["progress"] = 60
-            processing_jobs[job_id]["message"] = f"Processing {duration_minutes:.1f} min audio with Deepgram AI..."
-        
-        # Add timeout for large files (increase timeout based on duration)
-        import asyncio
-        timeout_seconds = max(300, int(duration_minutes * 10))  # At least 5 min, or 10 sec per minute of audio
-        print(f"⏱️  Setting timeout: {timeout_seconds} seconds")
-        
-        try:
-            # Use asyncio timeout for better control
-            response = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(
-                    None, 
-                    lambda: deepgram_client.listen.prerecorded.v("1").transcribe_file(payload, options)
-                ),
-                timeout=timeout_seconds
-            )
-        except asyncio.TimeoutError:
-            raise Exception(f"Deepgram timeout after {timeout_seconds} seconds. File too large ({duration_minutes:.1f} min).")
-        
-        # Update progress
-        if job_id:
-            processing_jobs[job_id]["progress"] = 70
-            processing_jobs[job_id]["message"] = "Processing Deepgram results..."
-        
-        # Parse response
-        results = response["results"]
-        if not results or not results["channels"]:
-            raise Exception("Deepgram returned empty results")
-        
-        channel = results["channels"][0]
-        alternatives = channel["alternatives"]
-        if not alternatives:
-            raise Exception("No transcription alternatives found")
-        
-        transcript = alternatives[0]["transcript"]
-        words = alternatives[0].get("words", [])
-        paragraphs = alternatives[0].get("paragraphs", {}).get("paragraphs", [])
-        
-        # Get audio info
-        audio_data, _ = librosa.load(audio_path, sr=16000, mono=True)
-        duration = len(audio_data) / 16000
-        
-        audio_info = {
-            "sample_rate": 16000,
-            "duration": duration,
-            "samples": len(audio_data),
-            "channels": 1
-        }
-        
-        # Convert to segments format
-        processed_segments = []
-        
-        if paragraphs:
-            # Use paragraph-based segmentation with speaker info
-            for para_idx, paragraph in enumerate(paragraphs):
-                for sent_idx, sentence in enumerate(paragraph.get("sentences", [])):
-                    segment_words = sentence.get("words", [])
-                    if not segment_words:
-                        continue
-                    
-                    start_time = segment_words[0]["start"]
-                    end_time = segment_words[-1]["end"]
-                    text = sentence["text"].strip()
-                    
-                    # Get speaker info (Deepgram provides speaker labels)
-                    speaker_id = segment_words[0].get("speaker", 0)
-                    speaker_name = f"Speaker {speaker_id + 1}"
-                    
-                    confidence = sum(word.get("confidence", 0.5) for word in segment_words) / len(segment_words)
-                    
-                    processed_segments.append({
-                        "start": float(start_time),
-                        "end": float(end_time),
-                        "text": text,
-                        "speaker": f"speaker-{speaker_id + 1:02d}",
-                        "speaker_name": speaker_name,
-                        "confidence": float(confidence),
-                        "tags": []
-                    })
-        else:
-            # Fallback: create segments from words
-            segment_words = []
-            current_speaker = None
-            segment_start = None
-            
-            for word in words:
-                word_speaker = word.get("speaker", 0)
-                
-                # Start new segment if speaker changes or we hit word limit
-                if (current_speaker is not None and word_speaker != current_speaker) or len(segment_words) >= 10:
-                    if segment_words:
-                        # Create segment from accumulated words
-                        segment_text = " ".join([w["word"] for w in segment_words])
-                        segment_end = segment_words[-1]["end"]
-                        avg_confidence = sum(w.get("confidence", 0.5) for w in segment_words) / len(segment_words)
-                        
-                        processed_segments.append({
-                            "start": float(segment_start),
-                            "end": float(segment_end),
-                            "text": segment_text.strip(),
-                            "speaker": f"speaker-{current_speaker + 1:02d}",
-                            "speaker_name": f"Speaker {current_speaker + 1}",
-                            "confidence": float(avg_confidence),
-                            "tags": []
-                        })
-                    
-                    # Start new segment
-                    segment_words = [word]
-                    current_speaker = word_speaker
-                    segment_start = word["start"]
-                else:
-                    # Add to current segment
-                    segment_words.append(word)
-                    if current_speaker is None:
-                        current_speaker = word_speaker
-                        segment_start = word["start"]
-            
-            # Handle last segment
-            if segment_words:
-                segment_text = " ".join([w["word"] for w in segment_words])
-                segment_end = segment_words[-1]["end"]
-                avg_confidence = sum(w.get("confidence", 0.5) for w in segment_words) / len(segment_words)
-                
-                processed_segments.append({
-                    "start": float(segment_start),
-                    "end": float(segment_end),
-                    "text": segment_text.strip(),
-                    "speaker": f"speaker-{current_speaker + 1:02d}",
-                    "speaker_name": f"Speaker {current_speaker + 1}",
-                    "confidence": float(avg_confidence),
-                    "tags": []
-                })
-        
-        # Clean repetitive text in all segments
-        for segment in processed_segments:
-            segment["text"] = clean_repetitive_text(segment["text"])
-        
-        # Get detected language
-        detected_language = results.get("summary", {}).get("language", "id")
-        
-        print(f"✅ Deepgram transcription complete: {len(processed_segments)} segments, {duration:.1f}s")
-        
-        return {
-            "text": transcript,
-            "language": detected_language,
-            "segments": processed_segments,
-            "duration": duration,
-            "audio_info": audio_info,
-            "engine": "deepgram",
-            "model": "nova-2"
-        }
+        return result
         
     except Exception as e:
-        print(f"❌ Deepgram transcription error: {e}")
-        print(f"🔄 Falling back to Faster-Whisper...")
+        print(f"❌ Fast transcription failed: {e}")
+        print("🔄 Falling back to Faster-Whisper...")
         
-        # Fallback to Faster-Whisper
-        global whisper_model
-        if whisper_model is None:
-            load_models()
-        
+        # Fallback to faster-whisper if simple whisper fails
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, _transcribe_librosa_sync, audio_path, job_id)
+        
+        # Add timeout fallback info
+        if job_id:
+            result["timeout_fallback"] = {
+                "reason": "simple_whisper_failed",
+                "message": "Simple Whisper failed, used Faster-Whisper as backup",
+                "original_error": str(e)
+            }
+        
         return result
+
+# DEBUGGING: Removed old engine selection logic - now using fast approach only
+
+async def transcribe_with_deepgram(audio_path: str, job_id: str = None) -> Dict[Any, Any]:
+    """DEBUGGING: Disabled Deepgram for debugging - fallback to Faster-Whisper"""
+    print("🔧 DEBUG MODE: Deepgram disabled, falling back to Faster-Whisper")
+    
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, _transcribe_librosa_sync, audio_path, job_id)
+    
+    # Add timeout fallback info
+    if job_id:
+        result["timeout_fallback"] = {
+            "reason": "deepgram_disabled_debug",
+            "message": "Deepgram disabled for debugging, used Faster-Whisper",
+        }
+    
+    return result
+
+# DEBUGGING: Removed broken Deepgram implementation - clean up starts here
+
+async def transcribe_with_deepgram_original(audio_path: str, job_id: str = None) -> Dict[Any, Any]:
+    """DEBUGGING: Disabled Deepgram original implementation - fallback to Faster-Whisper"""
+    print("� DEBUG MODE: Original Deepgram disabled, falling back to Faster-Whisper")
+    
+    # Load Faster-Whisper if needed
+    global whisper_model
+    if whisper_model is None:
+        load_models()
+    
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, _transcribe_librosa_sync, audio_path, job_id)
+    
+    # Add timeout fallback info
+    if job_id:
+        result["timeout_fallback"] = {
+            "reason": "deepgram_original_disabled_debug",
+            "message": "Original Deepgram disabled for debugging, used Faster-Whisper",
+        }
+    
+    return result
 
 def fast_algorithmic_speaker_assignment(segments: List) -> Dict:
     """Dynamic speaker detection based on audio patterns and conversation flow"""
@@ -1566,7 +1346,132 @@ def perform_speaker_diarization(audio_path: str) -> Dict:
         print(f"❌ Diarization error: {e}")
         return {}
 
-def assign_speakers_to_segments(whisper_segments: List, speaker_segments: Dict) -> List:
+def analyze_smart_speaker_patterns(segments: List) -> int:
+    """
+    Analyze conversation patterns to intelligently detect speaker count
+    Based on pauses, text patterns, and conversation flow
+    """
+    total_segments = len(segments)
+    
+    if total_segments < 5:
+        return 1  # Too short to determine multiple speakers
+    
+    # Analyze pause patterns (indicator of speaker changes)
+    pause_changes = 0
+    text_length_variations = []
+    response_indicators = 0
+    question_indicators = 0
+    
+    for i in range(1, min(total_segments, 50)):  # Sample first 50 segments for speed
+        prev_segment = segments[i-1]
+        current_segment = segments[i]
+        
+        # Time gap analysis
+        time_gap = current_segment['start'] - prev_segment['end']
+        if time_gap > 1.0:  # Significant pause
+            pause_changes += 1
+        
+        # Text length variance (different speakers often have different patterns)
+        text_length_variations.append(len(current_segment['text']))
+        
+        # Conversation flow indicators
+        current_text = current_segment['text'].lower()
+        prev_text = prev_segment['text'].lower()
+        
+        # Response indicators (suggests multiple speakers)
+        response_words = ["ya", "iya", "oh", "mm", "hmm", "betul", "benar", "tidak", "nggak", "ok", "oke"]
+        question_words = ["apa", "kenapa", "bagaimana", "kapan", "dimana", "siapa", "apakah"]
+        
+        if any(word in current_text for word in response_words):
+            response_indicators += 1
+        
+        if any(word in prev_text for word in question_words):
+            question_indicators += 1
+    
+    # Calculate conversation metrics
+    sample_size = min(total_segments, 50)
+    pause_ratio = pause_changes / sample_size
+    response_ratio = response_indicators / sample_size
+    question_ratio = question_indicators / sample_size
+    
+    # Text length variance analysis
+    if len(text_length_variations) > 5:
+        import statistics
+        mean_length = statistics.mean(text_length_variations)
+        variance = statistics.stdev(text_length_variations) if len(text_length_variations) > 1 else 0
+        normalized_variance = variance / mean_length if mean_length > 0 else 0
+    else:
+        normalized_variance = 0
+    
+    # Smart speaker count estimation
+    if pause_ratio > 0.4 and response_ratio > 0.2:
+        estimated_speakers = 3  # Active discussion with multiple participants
+    elif pause_ratio > 0.25 and (response_ratio > 0.15 or question_ratio > 0.1):
+        estimated_speakers = 2  # Clear conversation between two people
+    elif pause_ratio > 0.15 and normalized_variance > 0.3:
+        estimated_speakers = 2  # Different speaking patterns detected
+    else:
+        estimated_speakers = 1  # Likely monologue or presentation
+    
+    # Cap at reasonable maximum for performance
+    estimated_speakers = min(estimated_speakers, 4)
+    
+    print(f"📈 Smart Analysis: pause_ratio={pause_ratio:.2f}, response_ratio={response_ratio:.2f}, text_variance={normalized_variance:.2f} → {estimated_speakers} speakers")
+    return estimated_speakers
+
+def detect_speaker_change(current_text: str, prev_text: str, time_gap: float, segments_since_change: int, total_speakers: int) -> bool:
+    """
+    Detect if current segment should have a different speaker
+    Based on conversation flow, timing, and content analysis
+    """
+    # Don't change too frequently (minimum 3 segments per speaker)
+    if segments_since_change < 3:
+        return False
+    
+    # Strong indicators for speaker change
+    change_probability = 0.0
+    
+    # Factor 1: Time gap (long pause suggests speaker change)
+    if time_gap > 3.0:
+        change_probability += 0.6
+    elif time_gap > 1.5:
+        change_probability += 0.3
+    elif time_gap > 0.8:
+        change_probability += 0.1
+    
+    # Factor 2: Response patterns
+    current_lower = current_text.lower()
+    prev_lower = prev_text.lower()
+    
+    # Short responses often indicate speaker change
+    if len(current_text) < 30 and len(prev_text) > 50:
+        change_probability += 0.4
+    
+    # Response words suggest different speaker
+    response_words = ["ya", "iya", "oh", "mm", "hmm", "betul", "benar", "tidak", "nggak", "ok", "oke", "baik"]
+    if any(word in current_lower for word in response_words):
+        change_probability += 0.3
+    
+    # Question-answer pattern
+    question_indicators = ["apa", "kenapa", "bagaimana", "kapan", "dimana", "siapa", "apakah", "?"]
+    if any(indicator in prev_lower for indicator in question_indicators):
+        change_probability += 0.4
+    
+    # Factor 3: Prevent too long segments for one speaker
+    if segments_since_change > 15:  # More than 15 segments for one speaker is unusual in conversation
+        change_probability += 0.2
+    
+    # Factor 4: Natural conversation flow (alternate speakers)
+    if segments_since_change > 8 and total_speakers > 1:
+        change_probability += 0.1
+    
+    # Decision threshold
+    should_change = change_probability > 0.5
+    
+    if should_change:
+        print(f"🔄 Speaker change triggered: gap={time_gap:.1f}s, prob={change_probability:.2f}, segments_since={segments_since_change}")
+    
+    return should_change
     """ULTRA-FAST speaker assignment - optimized for ALL files"""
     total_segments = len(whisper_segments)
     total_speakers = len(speaker_segments)
@@ -1788,13 +1693,18 @@ def _transcribe_librosa_sync(audio_path: str, job_id: str = None) -> Dict[Any, A
                 processing_jobs[job_id]["message"] = "Using fallback speaker detection..."
             speaker_segments = simple_speaker_detection(audio_path, processed_segments)
         
-        # Assign speakers to segments
+        # Apply smart speaker assignment to segments
         if job_id:
             processing_jobs[job_id]["progress"] = 75
-            processing_jobs[job_id]["message"] = "Assigning speakers to transcript segments..."
+            processing_jobs[job_id]["message"] = "Assigning speakers using smart detection..."
         
-        print(f"👥 Assigning speakers to {len(processed_segments)} segments...")
-        processed_segments = assign_speakers_to_segments(processed_segments, speaker_segments)
+        print(f"👥 SMART speaker assignment to {len(processed_segments)} segments...")
+        speaker_assignment_result = fast_algorithmic_speaker_assignment(processed_segments)
+        
+        # Update segments with speaker assignments
+        if speaker_assignment_result and "segments" in speaker_assignment_result:
+            processed_segments = speaker_assignment_result["segments"]
+            print(f"✅ Smart speaker assignment complete: {len(processed_segments)} segments with speakers")
         
         # Clean repetitive text in all segments
         print(f"🧹 Cleaning repetitive text in {len(processed_segments)} segments...")

@@ -112,7 +112,7 @@ Analyze this content thoroughly and generate a JSON response with 4 distinct sec
 
 JSON FORMAT (EXACTLY THIS STRUCTURE):
 {{
-  "narrative_summary": "### Meeting Summary\\n\\n#### Main Topics Discussed\\n\\n1. **Topic 1**: Description...\\n2. **Topic 2**: Description...\\n\\n[NARRATIVE OVERVIEW ONLY - NO speaker points, decisions, or action items]",
+  "narrative_summary": "### Meeting Summary\\n\\n#### Main Topics Discussed\\n\\n1. **Topic 1**: Description...\\n2. **Topic 2**: Description...\\n\\nProvide comprehensive overview of main topics and themes discussed in the meeting.",
   "speaker_points": [
     {{
       "speaker": "Speaker 1 (Name)",
