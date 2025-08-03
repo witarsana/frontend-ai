@@ -184,7 +184,8 @@ const App: React.FC = () => {
       text: result.transcript ? result.transcript.map((seg: any) => seg.text).join(" ") : "No transcript available",
       segments: result.transcript || [],
       summary: result.summary || null,
-      actionItems: result.enhanced_action_items || result.action_items || [],
+      // actionItems: REMOVED - No longer using basic action items feature
+      enhancedActionItems: result.enhanced_action_items || [], // Keep enhanced action items - this is the better feature
       keyDecisions: result.enhanced_key_decisions || result.key_decisions || [],
       sentiment: result.sentiment || null,
       participants: result.speakers || [],

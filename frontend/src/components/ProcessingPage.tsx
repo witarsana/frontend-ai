@@ -1,6 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { AITranscriptionAPI } from '../services/api';
 
+// Add CSS animation for spinning icon, pulse indicator, and shimmer effect
+const spinKeyframes = `
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+`;
+
+// Inject the CSS into the document head
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = spinKeyframes;
+  document.head.appendChild(style);
+}
+
 interface ProcessingStatus {
   status: string;
   progress: number;
@@ -153,7 +176,17 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
       case 'completed': return '✅';
       case 'error': return '❌';
       case 'processing': 
-      case 'transcribing': return '⚙️';
+      case 'transcribing': 
+      case 'ai_analysis':
+        return (
+          <span style={{
+            display: 'inline-block',
+            animation: 'spin 1s linear infinite',
+            fontSize: '24px'
+          }}>
+            ⚙️
+          </span>
+        );
       default: return '🔄';
     }
   };
@@ -181,6 +214,16 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           fontSize: '28px'
         }}>
           {getStatusIcon()} Processing Your Audio
+          {(status.status === 'processing' || status.status === 'transcribing' || status.status === 'ai_analysis') && (
+            <span style={{
+              marginLeft: '12px',
+              fontSize: '16px',
+              color: '#10b981',
+              fontWeight: 'normal'
+            }}>
+              - System Working...
+            </span>
+          )}
         </h1>
         <p style={{ 
           margin: '0', 
@@ -232,22 +275,57 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           </span>
         </div>
 
-        {/* Progress Bar with Enhanced Details */}
+        {/* Progress Bar with Enhanced Gradient Effect */}
         <div style={{
           width: '100%',
-          height: '12px',
+          height: '16px',
           backgroundColor: '#e5e7eb',
-          borderRadius: '6px',
+          borderRadius: '8px',
           overflow: 'hidden',
-          marginBottom: '12px'
+          marginBottom: '12px',
+          position: 'relative'
         }}>
           <div style={{
             width: `${status.progress}%`,
             height: '100%',
-            backgroundColor: getStatusColor(),
-            transition: 'width 0.3s ease',
-            borderRadius: '6px'
-          }} />
+            background: status.status === 'completed' 
+              ? 'linear-gradient(90deg, #10b981, #059669)'
+              : status.status === 'error'
+              ? 'linear-gradient(90deg, #ef4444, #dc2626)'
+              : 'linear-gradient(90deg, #3b82f6, #1d4ed8, #1e40af)',
+            transition: 'width 0.5s ease-out',
+            borderRadius: '8px',
+            position: 'relative'
+          }}>
+            {/* Animated shimmer effect for active processing */}
+            {(status.status === 'processing' || status.status === 'transcribing' || status.status === 'ai_analysis') && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+                animation: 'shimmer 2s infinite',
+                borderRadius: '8px'
+              }} />
+            )}
+          </div>
+          {/* Progress percentage overlay */}
+          {status.progress > 10 && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '8px',
+              transform: 'translateY(-50%)',
+              color: 'white',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+            }}>
+              {status.progress}%
+            </div>
+          )}
         </div>
 
         <div style={{
@@ -257,9 +335,49 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           color: '#6b7280',
           marginBottom: '8px'
         }}>
-          <span>{status.message}</span>
-          <span>{status.progress}%</span>
+          <span>
+            {status.message}
+            {(status.status === 'processing' || status.status === 'transcribing' || status.status === 'ai_analysis') && (
+              <span style={{
+                marginLeft: '8px',
+                color: '#10b981',
+                animation: 'pulse 1.5s ease-in-out infinite'
+              }}>
+                ● ACTIVE
+              </span>
+            )}
+            {status.estimated_remaining && (
+              <span style={{
+                marginLeft: '8px',
+                color: '#9ca3af',
+                fontSize: '12px'
+              }}>
+                (Est. {status.estimated_remaining} remaining)
+              </span>
+            )}
+          </span>
+          <span style={{ fontWeight: '600' }}>{status.progress}%</span>
         </div>
+
+        {/* Current Stage Indicator */}
+        {status.current_stage && (
+          <div style={{
+            backgroundColor: '#f0f9ff',
+            border: '1px solid #0ea5e9',
+            borderRadius: '6px',
+            padding: '8px 12px',
+            marginBottom: '12px',
+            fontSize: '13px',
+            color: '#0369a1'
+          }}>
+            <strong>Current Stage:</strong> {status.current_stage}
+            {status.stage_progress && (
+              <span style={{ marginLeft: '8px', fontWeight: '600' }}>
+                ({status.stage_progress}%)
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Stage Progress Details */}
         {status.stage_detail && (
@@ -317,6 +435,48 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
                 {status.estimated_remaining && status.estimated_remaining !== "Almost done!" && ` • Est. remaining: ${status.estimated_remaining}`}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Processing Steps Overview */}
+        {(status.status === 'processing' || status.status === 'transcribing' || status.status === 'ai_analysis') && (
+          <div style={{
+            backgroundColor: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '12px'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: '12px'
+            }}>
+              <div style={{
+                width: '16px',
+                height: '16px',
+                backgroundColor: '#f59e0b',
+                borderRadius: '50%',
+                marginRight: '8px',
+                animation: 'pulse 1.5s infinite'
+              }} />
+              <strong style={{ color: '#92400e' }}>
+                System is actively processing your audio file
+              </strong>
+            </div>
+            <div style={{
+              fontSize: '13px',
+              color: '#78350f',
+              lineHeight: '1.4'
+            }}>
+              The AI is working on transcribing your audio and generating insights. 
+              This process can take a few minutes depending on file length.
+              {status.elapsed_time && (
+                <span style={{ display: 'block', marginTop: '4px', fontWeight: '600' }}>
+                  Processing time so far: {status.elapsed_time}
+                </span>
+              )}
+            </div>
           </div>
         )}
 

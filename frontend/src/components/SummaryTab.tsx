@@ -131,14 +131,14 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
     }
 
     // Check if we have structured data to avoid duplication
-    const hasStructuredActionItems = summaryData?.action_items && summaryData.action_items.length > 0;
+    // const hasStructuredActionItems = REMOVED - No longer using action items
     const hasStructuredKeyDecisions = summaryData?.key_decisions && summaryData.key_decisions.length > 0;
 
     // If we have structured data, clean the summary text first
     let cleanedText = text;
     
-    if (hasStructuredActionItems || hasStructuredKeyDecisions) {
-      // Remove ACTION ITEMS and KEPUTUSAN sections completely from text
+    if (hasStructuredKeyDecisions) {
+      // Remove KEPUTUSAN sections completely from text (action items section removal no longer needed)
       const lines = text.split('\n');
       const filteredLines: string[] = [];
       let skipSection = false;
@@ -147,8 +147,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
         const trimmedLine = line.trim();
         
         // Check if this line starts a section we want to skip
-        if (trimmedLine.toLowerCase().includes('action items') || 
-            trimmedLine.toLowerCase().includes('keputusan')) {
+        if (trimmedLine.toLowerCase().includes('keputusan')) {
           skipSection = true;
           continue;
         }
@@ -156,7 +155,6 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
         // Check if we're starting a new section (reset skip) - support both formats
         if ((trimmedLine.startsWith('#### ') || 
              (trimmedLine.startsWith('**') && trimmedLine.endsWith('**'))) && 
-            !trimmedLine.toLowerCase().includes('action items') && 
             !trimmedLine.toLowerCase().includes('keputusan')) {
           skipSection = false;
         }
@@ -309,7 +307,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
         )}
 
         {/* Show fallback message if no content */}
-        {!parsedSummary.hasContent && (!summaryData?.action_items?.length && !summaryData?.key_decisions?.length) && (
+        {!parsedSummary.hasContent && (!summaryData?.key_decisions?.length) && (
           <div className="summary-box no-content">
             <div className="summary-text">
               <p>{summaryText}</p>
@@ -368,18 +366,11 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
           </div>
         )}
 
-        {/* Enhanced Action Items - Always use enhanced format */}
-        {console.log('DEBUG summaryData:', {
-          has_enhanced_action_items: !!summaryData?.enhanced_action_items,
-          enhanced_length: summaryData?.enhanced_action_items?.length,
-          has_action_items: !!summaryData?.action_items,
-          action_length: summaryData?.action_items?.length,
-          summaryData_keys: summaryData ? Object.keys(summaryData) : []
-        })}
+        {/* Enhanced Action Items - Keep this feature active */}
         {summaryData?.enhanced_action_items && summaryData.enhanced_action_items.length > 0 && (
           <div className="summary-section structured-section enhanced-action-items-section">
             <h3 className="section-title">
-              <span className="section-icon">�</span>
+              <span className="section-icon">📋</span>
               ENHANCED ACTION ITEMS & TASK MANAGEMENT
             </h3>
             <div className="section-content">

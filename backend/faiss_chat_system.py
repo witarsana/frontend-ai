@@ -120,11 +120,12 @@ class FAISSChatSystem:
             })
             texts_to_encode.append(f"Summary: {summary_text}")
         
-        # Add action items
-        if "action_items" in self.current_file_data and self.current_file_data["action_items"]:
-            for item in self.current_file_data["action_items"]:
+        # Add enhanced action items instead of legacy ones
+        if "enhanced_action_items" in self.current_file_data and self.current_file_data["enhanced_action_items"]:
+            for item in self.current_file_data["enhanced_action_items"]:
+                item_text = item.get("title", "") if isinstance(item, dict) else str(item)
                 self.segments.append({
-                    "text": item,
+                    "text": item_text,
                     "speaker": "System",
                     "timestamp": 0,
                     "type": "action_item",

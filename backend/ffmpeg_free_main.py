@@ -841,7 +841,7 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
             "job_id": job_id,
             "transcript": transcription["segments"],
             "summary": None,  # Will be generated after saving
-            "action_items": [],
+            # "action_items": [],  # DISABLED: We only use enhanced_action_items now
             "key_decisions": [],
             "tags": ["conversation", "transcription"],
             "speakers": unique_speakers if unique_speakers else ["Speaker 1"],
@@ -891,7 +891,7 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
             final_result["clean_summary"] = narrative_summary  # Same as summary now
             final_result["speaker_points"] = speaker_points  # Structured speaker data
             final_result["enhanced_action_items"] = enhanced_action_items  # Rich structured action items
-            final_result["action_items"] = [item.get("title", "Unknown task") for item in enhanced_action_items]  # Legacy compatibility
+            # NO legacy action_items - frontend should use enhanced_action_items only
             final_result["key_decisions"] = key_decisions  # Enhanced structured decisions and insights
             final_result["point_of_view"] = []  # Deprecated, data moved to speaker_points
             final_result["tags"] = ["conversation", "transcription", "ai-analysis"]
@@ -1945,11 +1945,11 @@ def validate_simple_result(result: Dict) -> Dict:
     # Simple defaults compatible with frontend format
     simple_defaults = {
         "summary": "This audio content has been successfully transcribed and analyzed using advanced AI processing. The conversation captured meaningful dialogue between participants with professional insights and clear communication patterns. The discussion demonstrates structured exchanges with valuable content suitable for business and strategic applications.",
-        "action_items": [
-            "Review complete transcript for detailed insights and strategic planning",
-            "Analyze discussion content for actionable business implications",
-            "Follow up on key discussion points within next business cycle"
-        ],
+        # "action_items": [  # DISABLED: We only use enhanced_action_items now
+        #     "Review complete transcript for detailed insights and strategic planning",
+        #     "Analyze discussion content for actionable business implications", 
+        #     "Follow up on key discussion points within next business cycle"
+        # ],
         "key_decisions": [
             "Audio content successfully processed with enhanced AI capabilities",
             "Structured analysis format enables improved decision-making processes",
@@ -1997,25 +1997,25 @@ def validate_simple_result(result: Dict) -> Dict:
     else:
         final_result["summary"] = simple_defaults["summary"]
     
-    # Handle action_items - support both simple list and complex object format
-    if "action_items" in result and result["action_items"]:
-        if isinstance(result["action_items"], list):
-            # Check if list contains strings or objects
-            action_items = []
-            for item in result["action_items"]:
-                if isinstance(item, str):
-                    action_items.append(item)
-                elif isinstance(item, dict) and "task" in item:
-                    # Extract task from complex format
-                    action_items.append(item["task"])
-                elif isinstance(item, dict):
-                    # Convert dict to string
-                    action_items.append(str(item))
-            final_result["action_items"] = action_items if action_items else simple_defaults["action_items"]
-        else:
-            final_result["action_items"] = simple_defaults["action_items"]
-    else:
-        final_result["action_items"] = simple_defaults["action_items"]
+    # Handle action_items - DISABLED: We only use enhanced_action_items now
+    # if "action_items" in result and result["action_items"]:
+    #     if isinstance(result["action_items"], list):
+    #         # Check if list contains strings or objects
+    #         action_items = []
+    #         for item in result["action_items"]:
+    #             if isinstance(item, str):
+    #                 action_items.append(item)
+    #             elif isinstance(item, dict) and "task" in item:
+    #                 # Extract task from complex format
+    #                 action_items.append(item["task"])
+    #             elif isinstance(item, dict):
+    #                 # Convert dict to string
+    #                 action_items.append(str(item))
+    #         final_result["action_items"] = action_items if action_items else simple_defaults["action_items"]
+    #     else:
+    #         final_result["action_items"] = simple_defaults["action_items"]
+    # else:
+    #     final_result["action_items"] = simple_defaults["action_items"]
     
     # Handle key_decisions - support both simple list and complex object format  
     if "key_decisions" in result and result["key_decisions"]:
@@ -2038,7 +2038,7 @@ def validate_simple_result(result: Dict) -> Dict:
     
     print(f"✅ Final result validated with keys: {list(final_result.keys())}")
     print(f"📝 Summary length: {len(final_result['summary'])} chars")
-    print(f"📋 Action items: {len(final_result['action_items'])} items")
+    # print(f"📋 Action items: {len(final_result['action_items'])} items")  # DISABLED: using enhanced only
     print(f"🎯 Key decisions: {len(final_result['key_decisions'])} decisions")
     
     # Add basic required fields for compatibility
@@ -2346,12 +2346,13 @@ async def extract_structured_data_from_summary(transcript_segments: list) -> tup
             print(f"Extracted JSON: {json_str[:500]}...")
             raise Exception(f"Invalid JSON response from AI: {json_err}")
         
-        action_items = result.get("action_items", [])
+        # action_items = result.get("action_items", [])  # DISABLED: using enhanced only
         key_decisions = result.get("key_decisions", [])
         point_of_view = result.get("point_of_view", [])
         
-        print(f"✅ AI extracted {len(action_items)} action items, {len(key_decisions)} decisions, {len(point_of_view)} point of view")
-        return action_items, key_decisions, point_of_view
+        # print(f"✅ AI extracted {len(action_items)} action items, {len(key_decisions)} decisions, {len(point_of_view)} point of view")  # DISABLED
+        print(f"✅ AI extracted {len(key_decisions)} decisions, {len(point_of_view)} point of view")
+        return [], key_decisions, point_of_view  # Return empty action_items
         
     except Exception as e:
         print(f"❌ AI extraction error: {e}")
@@ -2359,13 +2360,13 @@ async def extract_structured_data_from_summary(transcript_segments: list) -> tup
 
 def generate_basic_structured_data() -> tuple:
     """Generate basic structured data when AI is not available - only 3 fields"""
-    action_items = [
-        "High Priority Action 1: Review complete transcript to identify specific action items",
-        "Medium Priority Action 2: Analyze discussion to find actions that need to be taken",
-        "Strategic Action 3: Create implementation plan based on discussion results",
-        "Quick Win Action 4: Implement quick and easy actions",
-        "Follow-up Action 5: Conduct evaluation and follow up on important points discussed"
-    ]
+    # action_items = [  # DISABLED: using enhanced only
+    #     "High Priority Action 1: Review complete transcript to identify specific action items",
+    #     "Medium Priority Action 2: Analyze discussion to find actions that need to be taken",
+    #     "Strategic Action 3: Create implementation plan based on discussion results",
+    #     "Quick Win Action 4: Implement quick and easy actions",
+    #     "Follow-up Action 5: Conduct evaluation and follow up on important points discussed"
+    # ]
     
     key_decisions = [
         "Audio successfully processed and transcribed with high accuracy",
@@ -2378,7 +2379,7 @@ def generate_basic_structured_data() -> tuple:
         "Speaker 2: Provided constructive alternative viewpoint"
     ]
     
-    return action_items, key_decisions, point_of_view
+    return [], key_decisions, point_of_view  # Return empty action_items
 
 async def generate_comprehensive_summary(transcript_segments: list) -> str:
     """Generate comprehensive summary like the reference file with better formatting"""
@@ -2560,7 +2561,7 @@ async def reprocess_summary(job_id: str):
         existing_result.update({
             "summary": summary_result.get("narrative_summary", ""),  # Clean narrative summary
             "enhanced_action_items": enhanced_action_items,  # Rich structured action items  
-            "action_items": [item.get("title", "Unknown task") for item in enhanced_action_items],  # Legacy compatibility
+            # "action_items": [item.get("title", "Unknown task") for item in enhanced_action_items],  # DISABLED: No legacy compatibility
             "key_decisions": key_decisions,  # Enhanced structured decisions and insights
             "speaker_points": speaker_points,  # Structured speaker data
             "point_of_view": [],  # Deprecated, moved to speaker_points
@@ -2599,7 +2600,7 @@ async def reprocess_summary(job_id: str):
             raise HTTPException(status_code=500, detail=f"Failed to save reprocessed result: {str(save_error)}")
         
         print(f"✅ Summary reprocessed successfully for job: {job_id}")
-        print(f"📊 Extracted {len(enhanced_action_items)} action items, {len(key_decisions)} key decisions, and {len(speaker_points)} speaker groups")
+        print(f"📊 Extracted {len(enhanced_action_items)} enhanced action items, {len(key_decisions)} key decisions, and {len(speaker_points)} speaker groups")
         
         return existing_result  # Return the full updated result
         

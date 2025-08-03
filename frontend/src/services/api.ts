@@ -77,7 +77,7 @@ export interface APIResultResponse {
     tags: string[];
   }>;
   summary: string;
-  action_items: string[];
+  // action_items: REMOVED - No longer using basic action items feature
   enhanced_action_items?: Array<{
     title: string;
     description: string;
@@ -86,11 +86,11 @@ export interface APIResultResponse {
     timeframe: string;
     assigned_to: string;
     tags: string[];
-    notion_ready: {
+    notion_ready?: {
       title: string;
       properties: Record<string, any>;
     };
-  }>;
+  }>; // Keep enhanced action items - this is the better feature
   key_decisions: string[];
   enhanced_key_decisions?: Array<{
     title: string;
@@ -376,7 +376,7 @@ export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
     })),
     summary: {
       overview: apiResult.summary,
-      actionItems: apiResult.enhanced_action_items || apiResult.action_items,
+      // actionItems: REMOVED - No longer using action items feature
       keyDecisions: apiResult.enhanced_key_decisions || apiResult.key_decisions,
       tags: apiResult.tags,
       participants: apiResult.participants,

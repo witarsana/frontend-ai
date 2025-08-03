@@ -95,8 +95,8 @@ export interface KeyDecision {
 
 export interface SummaryData {
   meetingSummary: string;
-  actionItems: string[]; // Legacy compatibility
-  enhancedActionItems?: EnhancedActionItem[]; // New rich format
+  // actionItems: REMOVED - No longer using basic action items feature
+  enhancedActionItems: EnhancedActionItem[]; // Keep enhanced action items - this is the better feature
   keyDecisions: string[] | KeyDecision[]; // Support both legacy and new format
   speakerPoints: string[];
   pointOfView: string[];
