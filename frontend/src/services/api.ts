@@ -78,7 +78,27 @@ export interface APIResultResponse {
   }>;
   summary: string;
   action_items: string[];
+  enhanced_action_items?: Array<{
+    title: string;
+    description: string;
+    priority: string;
+    category: string;
+    timeframe: string;
+    assigned_to: string;
+    tags: string[];
+    notion_ready: {
+      title: string;
+      properties: Record<string, any>;
+    };
+  }>;
   key_decisions: string[];
+  enhanced_key_decisions?: Array<{
+    title: string;
+    description: string;
+    category: string;
+    impact: string;
+    tags: string[];
+  }>;
   tags: string[];
   speakers: string[];
   participants: string[];
@@ -356,8 +376,8 @@ export function convertAPIResultToFrontendFormat(apiResult: APIResultResponse) {
     })),
     summary: {
       overview: apiResult.summary,
-      actionItems: apiResult.action_items,
-      keyDecisions: apiResult.key_decisions,
+      actionItems: apiResult.enhanced_action_items || apiResult.action_items,
+      keyDecisions: apiResult.enhanced_key_decisions || apiResult.key_decisions,
       tags: apiResult.tags,
       participants: apiResult.participants,
       meetingType: apiResult.meeting_type,

@@ -4,9 +4,25 @@ import { AITranscriptionAPI } from '../services/api';
 interface ProcessingStatus {
   status: string;
   progress: number;
+  stage_progress?: number;
   message: string;
   error?: string;
   result_available?: boolean;
+  elapsed_time?: string;
+  estimated_remaining?: string;
+  current_stage?: string;
+  stage_detail?: {
+    name: string;
+    progress: number;
+    weight: number;
+    description?: string;
+  };
+  processing_info?: {
+    total_stages: number;
+    current_stage_index: number;
+    stage_start: number;
+    stage_end: number;
+  };
 }
 
 interface ProcessingPageProps {
@@ -47,12 +63,21 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
       setStatus({
         status: statusResponse.status,
         progress: statusResponse.progress,
+        stage_progress: (statusResponse as any).stage_progress,
         message: statusResponse.message || 'Processing...',
         error: statusResponse.error,
-        result_available: (statusResponse as any).result_available
+        result_available: (statusResponse as any).result_available,
+        elapsed_time: (statusResponse as any).elapsed_time,
+        estimated_remaining: (statusResponse as any).estimated_remaining,
+        current_stage: (statusResponse as any).current_stage,
+        stage_detail: (statusResponse as any).stage_detail,
+        processing_info: (statusResponse as any).processing_info
       });
       
-      addLog(`Status: ${statusResponse.status} (${statusResponse.progress}%) - ${statusResponse.message || 'Processing...'}`);
+      // Enhanced logging with stage information
+      const stageInfo = (statusResponse as any).stage_detail ? 
+        ` [${(statusResponse as any).stage_detail.name}: ${(statusResponse as any).stage_progress || 0}%]` : '';
+      addLog(`Status: ${statusResponse.status} (${statusResponse.progress}%)${stageInfo} - ${statusResponse.message || 'Processing...'}`);
 
       if (statusResponse.status === 'completed') {
         setIsPolling(false);
@@ -99,8 +124,8 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
     // Start polling immediately
     pollStatus();
     
-    // Set up polling interval
-    const interval = setInterval(pollStatus, 3000); // Poll every 3 seconds
+    // Set up polling interval  
+    const interval = setInterval(pollStatus, 1000); // Poll every 1 second for better responsiveness
     
     return () => {
       clearInterval(interval);
@@ -207,7 +232,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           </span>
         </div>
 
-        {/* Progress Bar */}
+        {/* Progress Bar with Enhanced Details */}
         <div style={{
           width: '100%',
           height: '12px',
@@ -220,7 +245,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
             width: `${status.progress}%`,
             height: '100%',
             backgroundColor: getStatusColor(),
-            transition: 'width 0.5s ease',
+            transition: 'width 0.3s ease',
             borderRadius: '6px'
           }} />
         </div>
@@ -229,11 +254,71 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           fontSize: '14px',
-          color: '#6b7280'
+          color: '#6b7280',
+          marginBottom: '8px'
         }}>
           <span>{status.message}</span>
           <span>{status.progress}%</span>
         </div>
+
+        {/* Stage Progress Details */}
+        {status.stage_detail && (
+          <div style={{
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '12px'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '8px'
+            }}>
+              <span style={{ fontWeight: 'bold', color: '#374151' }}>
+                {status.stage_detail.name}
+              </span>
+              <span style={{ 
+                backgroundColor: getStatusColor(),
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '11px'
+              }}>
+                {status.stage_progress || status.stage_detail.progress}%
+              </span>
+            </div>
+            
+            <div style={{
+              width: '100%',
+              height: '6px',
+              backgroundColor: '#e2e8f0',
+              borderRadius: '3px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${status.stage_progress || status.stage_detail.progress}%`,
+                height: '100%',
+                backgroundColor: getStatusColor(),
+                transition: 'width 0.3s ease',
+                borderRadius: '3px'
+              }} />
+            </div>
+
+            {status.processing_info && (
+              <div style={{
+                fontSize: '12px',
+                color: '#6b7280',
+                marginTop: '8px'
+              }}>
+                Stage {status.processing_info.current_stage_index} of {status.processing_info.total_stages}
+                {status.elapsed_time && ` • Elapsed: ${status.elapsed_time}`}
+                {status.estimated_remaining && status.estimated_remaining !== "Almost done!" && ` • Est. remaining: ${status.estimated_remaining}`}
+              </div>
+            )}
+          </div>
+        )}
 
         {status.error && (
           <div style={{

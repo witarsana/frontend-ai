@@ -9,7 +9,6 @@ export interface ActionItemDetail {
   status?: string;
   category?: string;
   description?: string;
-  meeting_context?: string;
 }
 
 export interface NotionActionItem {

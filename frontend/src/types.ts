@@ -85,11 +85,19 @@ export interface EnhancedActionItem {
   notion_ready: NotionReady;
 }
 
+export interface KeyDecision {
+  title: string;
+  description: string;
+  category: "Decision" | "Insight" | "Strategy" | "Learning" | "Best Practice" | "Framework";
+  impact: "High" | "Medium" | "Low";
+  actionable: boolean;
+}
+
 export interface SummaryData {
   meetingSummary: string;
   actionItems: string[]; // Legacy compatibility
   enhancedActionItems?: EnhancedActionItem[]; // New rich format
-  keyDecisions: string[];
+  keyDecisions: string[] | KeyDecision[]; // Support both legacy and new format
   speakerPoints: string[];
   pointOfView: string[];
 }

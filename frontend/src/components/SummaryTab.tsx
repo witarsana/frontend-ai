@@ -28,23 +28,49 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
     try {
       console.log('🗃️ Adding to Notion:', actionItem);
       
-      // Format data for Notion API
-      const notionData = {
-        title: actionItem.notion_ready?.title || actionItem.title,
-        properties: actionItem.notion_ready?.properties || {},
-        description: actionItem.description,
-        tags: actionItem.tags || []
+      // Import Notion API service
+      const { default: notionAPI } = await import('../services/notionApi');
+      
+      // Format action item data for backend API (matching expected payload)
+      const actionItemPayload = {
+        task: actionItem.title || actionItem.task || 'Unknown Task',
+        priority: actionItem.priority || 'Medium',
+        status: actionItem.status || 'Not Started',
+        assignee: actionItem.assigned_to || actionItem.assignee || '',
+        deadline: actionItem.timeframe || '',
+        category: actionItem.category || 'General',
+        description: actionItem.description || ''
       };
 
-      // Show success message (replace with actual Notion API call)
-      alert(`Task "${notionData.title}" ready to be added to Notion!\n\nProperties:\n${JSON.stringify(notionData.properties, null, 2)}`);
+      // Use current session's summary for meeting context (not static)
+      const meetingContext = summaryData?.summary || localSummary || 'No meeting context available';
       
-      // TODO: Implement actual Notion API integration
-      // await notionAPI.createTask(notionData);
+      console.log('📤 Sending to Notion API:', {
+        actionItem: actionItemPayload,
+        meetingContext: meetingContext.substring(0, 100) + '...',
+        sessionId: jobId
+      });
+
+      // Call actual Notion API
+      const result = await notionAPI.createActionItemPage(
+        actionItemPayload,
+        meetingContext,
+        jobId || 'unknown-session'
+      );
+
+      if (result.success) {
+        alert(`✅ Task "${actionItemPayload.task}" berhasil ditambahkan ke Notion!\n\n${result.message || 'Task created successfully'}`);
+        if (result.url) {
+          console.log('🔗 Notion page URL:', result.url);
+        }
+      } else {
+        throw new Error(result.error || 'Failed to create Notion page');
+      }
       
     } catch (error) {
       console.error('❌ Error adding to Notion:', error);
-      alert('Error adding task to Notion. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`❌ Error adding task to Notion: ${errorMessage}`);
     }
   };
 
@@ -291,26 +317,66 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
           </div>
         )}
 
-        {/* Structured Data Sections - Always show if available */}
+        {/* Key Decisions - Enhanced display with card format */}
         {summaryData?.key_decisions && summaryData.key_decisions.length > 0 && (
           <div className="summary-section structured-section">
             <h3 className="section-title">
-              <span className="section-icon">✅</span>
-              KEPUTUSAN ATAU KESIMPULAN
+              <span className="section-icon">💡</span>
+              KEY TAKEAWAYS & INSIGHTS
             </h3>
             <div className="section-content">
-              {summaryData.key_decisions.map((decision: string, index: number) => (
-                <div key={index} className="bullet-point">
-                  <span className="bullet">•</span>
-                  <span className="bullet-text">{decision}</span>
+              {/* Check if we have enhanced key decisions or simple array */}
+              {Array.isArray(summaryData.key_decisions) && 
+               summaryData.key_decisions.length > 0 && 
+               typeof summaryData.key_decisions[0] === 'object' ? (
+                /* Enhanced key decisions format */
+                <div className="key-decisions-grid">
+                  {summaryData.key_decisions.map((decision: any, index: number) => (
+                    <div key={index} className="key-decision-card">
+                      <div className="decision-header">
+                        <h4 className="decision-title">{decision.title}</h4>
+                        <div className="decision-meta">
+                          <span className={`category-badge category-${decision.category?.toLowerCase()}`}>
+                            {decision.category}
+                          </span>
+                          <span className={`impact-badge impact-${decision.impact?.toLowerCase()}`}>
+                            {decision.impact} Impact
+                          </span>
+                          {decision.actionable && (
+                            <span className="actionable-badge">
+                              ⚡ Actionable
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="decision-description">{decision.description}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                /* Legacy simple string array format */
+                <div className="key-decisions-simple">
+                  {summaryData.key_decisions.map((decision: string, index: number) => (
+                    <div key={index} className="bullet-point">
+                      <span className="bullet">•</span>
+                      <span className="bullet-text">{decision}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Enhanced Action Items - Show enhanced format if available, fallback to legacy */}
-        {summaryData?.enhanced_action_items && summaryData.enhanced_action_items.length > 0 ? (
+        {/* Enhanced Action Items - Always use enhanced format */}
+        {console.log('DEBUG summaryData:', {
+          has_enhanced_action_items: !!summaryData?.enhanced_action_items,
+          enhanced_length: summaryData?.enhanced_action_items?.length,
+          has_action_items: !!summaryData?.action_items,
+          action_length: summaryData?.action_items?.length,
+          summaryData_keys: summaryData ? Object.keys(summaryData) : []
+        })}
+        {summaryData?.enhanced_action_items && summaryData.enhanced_action_items.length > 0 && (
           <div className="summary-section structured-section enhanced-action-items-section">
             <h3 className="section-title">
               <span className="section-icon">�</span>
@@ -383,22 +449,6 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ summaryData, jobId, onSummaryRe
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : summaryData?.action_items && summaryData.action_items.length > 0 && (
-          // Legacy action items display
-          <div className="summary-section structured-section">
-            <h3 className="section-title">
-              <span className="section-icon">📋</span>
-              ACTION ITEMS
-            </h3>
-            <div className="section-content">
-              {summaryData.action_items.map((item: string, index: number) => (
-                <div key={index} className="bullet-point">
-                  <span className="bullet">•</span>
-                  <span className="bullet-text">{item}</span>
                 </div>
               ))}
             </div>

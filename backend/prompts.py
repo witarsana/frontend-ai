@@ -47,8 +47,6 @@ TASK: Create a complete summary in an easy-to-read and informative format like a
 
 Format output in ENGLISH with the following COMPLETE 4 SECTIONS structure:
 
-### Meeting Summary
-
 #### Main Topics Discussed
 1. **[Topic 1]**: Brief and informative explanation of the topic discussed
 2. **[Topic 2]**: Brief and informative explanation of the topic discussed  
@@ -96,21 +94,21 @@ IMPORTANT RULES:
 
 def get_unified_analysis_prompt(transcript_text):
     """
-    Unified prompt that generates all data separately without redundancy
-    Returns: summary (narrative only), speaker_points, enhanced_action_items, key_decisions
+    Enhanced unified prompt focused on extracting rich Key Takeaways and specific Next Steps
+    Returns: summary (narrative only), speaker_points, key_decisions (insights), enhanced_action_items (next steps)
     """
     return f"""
-Based on the following transcript, create a comprehensive analysis with SEPARATED sections (NO REDUNDANCY):
+Based on the following transcript, extract MAXIMUM VALUE by deeply analyzing the content for rich insights and actionable next steps:
 
 TRANSCRIPT:
-{transcript_text[:5000]}
+{transcript_text[:8000]}
 
-Generate a JSON response with 4 distinct sections:
+Analyze this content thoroughly and generate a JSON response with 4 distinct sections:
 
 1. NARRATIVE SUMMARY - Only main topics and overview (NO speaker details, NO decisions, NO action items)
-2. SPEAKER POINTS - Detailed points per speaker  
-3. KEY DECISIONS - Important decisions made
-4. ENHANCED ACTION ITEMS - Structured actionable tasks with metadata for project management
+2. SPEAKER POINTS - Detailed points per speaker with their specific contributions and expertise  
+3. KEY TAKEAWAYS - Extract 5-8 VALUABLE INSIGHTS from actual content discussed
+4. NEXT STEPS - Extract 3-5 SPECIFIC ACTIONABLE ITEMS that are unique and directly relevant to this content
 
 JSON FORMAT (EXACTLY THIS STRUCTURE):
 {{
@@ -133,45 +131,30 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
     }}
   ],
   "key_decisions": [
-    "Important decision 1 made during discussion",
-    "Important decision 2 made during discussion",
-    "Important decision 3 made during discussion"
+    {{
+      "title": "[Specific insight/concept/framework title from actual conversation - NOT generic]",
+      "description": "[Deep explanation of WHY this insight matters, HOW it works, specific context from the conversation, and practical implications. Make this educational and valuable.]",
+      "category": "Framework|Concept|Insight|Strategy|Tool|Best Practice|Learning|Methodology|Principle",
+      "impact": "High|Medium|Low",
+      "actionable": true|false
+    }}
   ],
   "enhanced_action_items": [
     {{
-      "title": "Clear actionable title for task",
-      "description": "Detailed description of what needs to be done and why",
+      "title": "[Specific action verb + unique details from this content]",
+      "description": "[Detailed explanation of HOW to do this specific action, WHY it's important based on the content, and WHAT outcome to expect. Include specific context from the conversation.]",
       "priority": "High|Medium|Low",
       "category": "Immediate|Short-term|Strategic|Ongoing",
-      "timeframe": "1-3 days|1-2 weeks|1-3 months|Ongoing",
-      "assigned_to": "Person mentioned or 'Team' if not specified",
-      "tags": ["relevant", "keywords", "for", "categorization"],
+      "timeframe": "Today|This week|1-2 weeks|1-3 months|Ongoing",
+      "assigned_to": "Self|Team|Organization",
+      "tags": ["content-specific", "keywords", "from", "actual", "discussion"],
       "notion_ready": {{
-        "title": "Ready-to-use title for Notion",
+        "title": "[Unique action title based on content]",
         "properties": {{
           "Priority": "High|Medium|Low",
           "Category": "Immediate|Short-term|Strategic|Ongoing", 
-          "Due Date": "Based on timeframe",
-          "Assigned": "Person or Team",
-          "Status": "Not Started"
-        }}
-      }}
-    }},
-    {{
-      "title": "Another actionable task title",
-      "description": "Another detailed description",
-      "priority": "Medium",
-      "category": "Short-term",
-      "timeframe": "1-2 weeks",
-      "assigned_to": "Team",
-      "tags": ["planning", "design", "user-research"],
-      "notion_ready": {{
-        "title": "Design User Interface Mockups",
-        "properties": {{
-          "Priority": "Medium",
-          "Category": "Short-term",
-          "Due Date": "2 weeks from now",
-          "Assigned": "Design Team",
+          "Due Date": "[Specific timeframe based on content]",
+          "Assigned": "[Based on content context]",
           "Status": "Not Started"
         }}
       }}
@@ -179,19 +162,51 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
   ]
 }}
 
-CRITICAL RULES:
-- narrative_summary MUST NOT contain speaker points, decisions, or action items
-- Each section serves different purpose - NO OVERLAP
-- speaker_points contains detailed speaker contributions
-- key_decisions contains actual decisions made
-- enhanced_action_items contains rich structured tasks ready for project management
-- Each action item MUST have title, description, priority, category, timeframe, and notion_ready metadata
-- notion_ready section should be ready for direct import to Notion database
-- Output ONLY valid JSON, no extra text
-- Use actual content from transcript
-- Make titles clear and actionable (start with verbs when possible)
-- Ensure descriptions are detailed enough to understand context and requirements
-"""
+🎯 CRITICAL RULES FOR KEY TAKEAWAYS (key_decisions):
+- ONLY extract insights that were ACTUALLY DISCUSSED in the conversation
+- NO generic examples - every insight must be content-specific
+- Focus on: concepts mentioned, frameworks explained, strategies discussed, tools shared, principles revealed
+- Think: "What unique insight can I learn from THIS specific conversation?"
+- Title: Use exact terminology/phrases from the conversation when possible
+- Description: Explain WHY this insight is valuable with specific context from the discussion
+- Make each takeaway feel like a "golden nugget" worth remembering and referencing
+- Examples of content-specific insights:
+  * If discussing stress: "The Battery Analogy for Mental Energy" (if actually mentioned)
+  * If discussing leadership: "[Specific leadership principle mentioned by name]"
+  * If discussing business: "[Specific strategy or framework discussed]"
+- AVOID: generic insights that could apply to any conversation
+- FOCUS: unique wisdom, specific methodologies, actual quotes/concepts shared
+
+⚡ CRITICAL RULES FOR NEXT STEPS (enhanced_action_items):
+- ONLY create actions that are DIRECTLY RELEVANT to the content discussed
+- NO generic tasks - every action must be content-specific and unique
+- Each action should be DISTINCTLY DIFFERENT with unique payloads for Notion
+- Think: "What specific action should someone take based on THIS conversation?"
+- Title: Start with action verb + specific details from the content
+- Description: Include HOW to do it, WHY based on the content, specific context
+- Make actions immediately valuable and uniquely tailored to this content
+- Examples of content-specific actions:
+  * If battery analogy discussed: "Assess Your Personal Battery Level Using [Specific Method Mentioned]"
+  * If book mentioned: "Read '[Specific Book Title]' and Apply [Specific Concept Discussed]"
+  * If tool shared: "Implement [Specific Tool/Method] for [Specific Use Case from Discussion]"
+- Each action should have DIFFERENT priority, category, timeframe, and tags
+- AVOID: generic actions like "Review transcript" or "Follow up"
+- FOCUS: actions that apply the specific insights and recommendations from THIS conversation
+
+🚫 ABSOLUTE PROHIBITIONS:
+- NO static/generic content that could apply to any transcript
+- NO placeholder examples in actual output
+- NO repeated action items with same payload structure
+- NO insights that weren't actually discussed
+- NO actions that don't relate to specific content
+- EVERY field must be uniquely filled based on actual conversation content
+
+✅ SUCCESS CRITERIA:
+- Key takeaways feel like premium content highlights worth saving
+- Action items are so specific they could only come from THIS conversation
+- Each action item has completely different Notion payload values
+- Someone reading this would immediately know what specific content was discussed
+- All insights and actions are directly traceable to actual conversation content"""
 
 # ===== ENHANCED CHAT PROMPTS =====
 
@@ -388,6 +403,30 @@ def validate_prompt_length(prompt: str, max_length: int = 8000) -> bool:
     Validasi panjang prompt untuk mencegah error
     """
     return len(prompt) <= max_length
+
+def get_structured_data_extraction_prompt(transcript_text):
+    """
+    Prompt untuk ekstraksi data terstruktur dari transcript
+    """
+    return f"""
+Extract structured data from this transcript:
+
+{transcript_text}
+
+Extract and format the following:
+1. Action items
+2. Key decisions  
+3. Point of view from speakers
+
+Format output as JSON:
+{{
+  "action_items": ["item1", "item2"],
+  "key_decisions": ["decision1", "decision2"],  
+  "point_of_view": ["perspective1", "perspective2"]
+}}
+
+Output in ENGLISH only.
+"""
 
 def get_prompt_stats(prompt: str) -> dict:
     """

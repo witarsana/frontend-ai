@@ -1542,46 +1542,161 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                       }}
                     >
                       {transcription.keyDecisions.map((decision, index) => {
-                        const decisionText = typeof decision === "object" && decision !== null && "decision" in decision
-                          ? decision.decision
-                          : typeof decision === "string"
-                          ? decision
-                          : "Unknown decision";
-                        const impact = typeof decision === "object" && decision !== null && "impact" in decision
-                          ? decision.impact
-                          : null;
+                        // Handle both enhanced and legacy key decisions
+                        const title = 
+                          typeof decision === "object" && decision !== null && "title" in decision
+                            ? String(decision.title)
+                            : typeof decision === "object" && decision !== null && "decision" in decision
+                            ? String(decision.decision)
+                            : typeof decision === "string"
+                            ? decision
+                            : "Unknown decision";
+                        
+                        const description = 
+                          typeof decision === "object" && decision !== null && "description" in decision
+                            ? String(decision.description)
+                            : null;
+                            
+                        const impact = 
+                          typeof decision === "object" && decision !== null && "impact" in decision
+                            ? String(decision.impact)
+                            : null;
+                            
+                        const category = 
+                          typeof decision === "object" && decision !== null && "category" in decision
+                            ? String(decision.category)
+                            : null;
+                            
+                        const actionable = 
+                          typeof decision === "object" && decision !== null && "actionable" in decision
+                            ? Boolean(decision.actionable)
+                            : false;
 
                         return (
                           <div key={index} style={{
                             marginBottom: index < transcription.keyDecisions!.length - 1 ? "12px" : "0",
-                            padding: "12px",
+                            padding: "14px",
                             backgroundColor: "#f0f9ff",
                             borderRadius: "8px",
                             border: "1px solid #e0f2fe",
                             borderLeft: "4px solid #3b82f6",
                           }}>
+                            {/* Title */}
                             <div style={{
-                              fontSize: "13px",
+                              fontSize: "14px",
                               lineHeight: "1.5",
                               color: "#374151",
-                              marginBottom: impact ? "8px" : "0",
+                              marginBottom: description ? "8px" : "4px",
                               display: "flex",
                               alignItems: "flex-start",
                               gap: "8px"
                             }}>
                               <span style={{ color: "#3b82f6", fontSize: "14px", fontWeight: "bold", marginTop: "2px" }}>💡</span>
-                              <span>{decisionText}</span>
+                              <span style={{ fontWeight: "600", fontSize: "15px" }}>{title}</span>
+                              {category && (
+                                <span
+                                  style={{
+                                    marginLeft: "8px",
+                                    padding: "2px 8px",
+                                    backgroundColor: "#8b5cf6",
+                                    color: "white",
+                                    borderRadius: "12px",
+                                    fontSize: "11px",
+                                    fontWeight: "500"
+                                  }}
+                                >
+                                  {category}
+                                </span>
+                              )}
                             </div>
-                            {impact && (
+                            
+                            {description && (
                               <div style={{
-                                fontSize: "12px",
+                                fontSize: "13px",
+                                lineHeight: "1.5",
                                 color: "#6b7280",
-                                fontStyle: "italic",
-                                marginLeft: "22px"
+                                marginLeft: "22px",
+                                marginBottom: impact || category ? "8px" : "0"
                               }}>
-                                <strong>📊 Impact:</strong> {impact}
+                                {description}
                               </div>
                             )}
+
+                            <div style={{ 
+                              display: "flex", 
+                              alignItems: "center", 
+                              gap: "12px", 
+                              marginLeft: "22px",
+                              flexWrap: "wrap",
+                              justifyContent: "space-between"
+                            }}>
+                              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                {impact && (
+                                  <div style={{
+                                    fontSize: "12px",
+                                    color: "#6b7280",
+                                    fontStyle: "italic",
+                                  }}>
+                                    <strong>📊 Impact:</strong> {impact}
+                                  </div>
+                                )}
+                                {actionable && (
+                                  <div style={{
+                                    fontSize: "12px",
+                                    color: "#16a34a",
+                                    fontWeight: "600",
+                                  }}>
+                                    ⚡ Actionable
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {actionable && (
+                                <button
+                                  onClick={() => handleAddToNotion({
+                                    task: title || "Unknown decision",
+                                    assignee: "Team",
+                                    deadline: "TBD",
+                                    priority: impact === "High" ? "High" : impact === "Medium" ? "Medium" : "Low",
+                                    status: "Not Started",
+                                    description: description || "",
+                                    category: category || "Decision"
+                                  }, 1000 + index)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    fontSize: "11px",
+                                    fontWeight: "500",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    backgroundColor: notionSyncStates[1000 + index]?.loading 
+                                      ? "#d1d5db" 
+                                      : notionSyncStates[1000 + index]?.success 
+                                      ? "#10b981" 
+                                      : "#6366f1",
+                                    color: "white",
+                                    cursor: notionSyncStates[1000 + index]?.loading ? "not-allowed" : "pointer",
+                                    transition: "all 0.2s ease",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}
+                                  disabled={notionSyncStates[1000 + index]?.loading}
+                                >
+                                  <span style={{ fontSize: "12px" }}>
+                                    {notionSyncStates[1000 + index]?.loading 
+                                      ? "⏳" 
+                                      : notionSyncStates[1000 + index]?.success 
+                                      ? "✅" 
+                                      : "📝"}
+                                  </span>
+                                  {notionSyncStates[1000 + index]?.loading 
+                                    ? "Adding..." 
+                                    : notionSyncStates[1000 + index]?.success 
+                                    ? "Added!" 
+                                    : "Add to Notion"}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -1614,26 +1729,43 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                         }}
                       >
                         {transcription.actionItems.map((item, index) => {
-                          // Extract action item details with proper type checking
-                          const task =
-                            typeof item === "object" &&
-                            item !== null &&
-                            "task" in item
-                              ? item.task
+                          // Handle both enhanced and legacy action items
+                          const title = 
+                            typeof item === "object" && item !== null && "title" in item
+                              ? String(item.title)
+                              : typeof item === "object" && item !== null && "task" in item
+                              ? String(item.task)
                               : typeof item === "string"
                               ? item
                               : "Unknown task";
-                          const assignee =
-                            typeof item === "object" &&
-                            item !== null &&
-                            "assignee" in item
-                              ? item.assignee
+                          
+                          const description = 
+                            typeof item === "object" && item !== null && "description" in item
+                              ? String(item.description)
                               : null;
+                              
+                          const priority = 
+                            typeof item === "object" && item !== null && "priority" in item
+                              ? String(item.priority)
+                              : null;
+                              
+                          const category = 
+                            typeof item === "object" && item !== null && "category" in item
+                              ? String(item.category)
+                              : null;
+                              
+                          const assignee =
+                            typeof item === "object" && item !== null && "assigned_to" in item
+                              ? String(item.assigned_to)
+                              : typeof item === "object" && item !== null && "assignee" in item
+                              ? String(item.assignee)
+                              : null;
+                              
                           const deadline =
-                            typeof item === "object" &&
-                            item !== null &&
-                            "deadline" in item
-                              ? item.deadline
+                            typeof item === "object" && item !== null && "timeframe" in item
+                              ? String(item.timeframe)
+                              : typeof item === "object" && item !== null && "deadline" in item
+                              ? String(item.deadline)
                               : null;
 
                           return (
@@ -1650,7 +1782,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                                 lineHeight: "1.4",
                               }}
                             >
-                              <div style={{ marginBottom: "8px" }}>
+                              <div style={{ marginBottom: description ? "8px" : "4px" }}>
                                 <span
                                   style={{
                                     color: "#059669",
@@ -1664,11 +1796,54 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                                   style={{
                                     fontWeight: "600",
                                     color: "#374151",
+                                    fontSize: "15px"
                                   }}
                                 >
-                                  {task}
+                                  {title}
                                 </span>
+                                {priority && (
+                                  <span
+                                    style={{
+                                      marginLeft: "8px",
+                                      padding: "2px 8px",
+                                      backgroundColor: priority === "High" ? "#ef4444" : priority === "Medium" ? "#f59e0b" : "#10b981",
+                                      color: "white",
+                                      borderRadius: "12px",
+                                      fontSize: "11px",
+                                      fontWeight: "500"
+                                    }}
+                                  >
+                                    {priority}
+                                  </span>
+                                )}
+                                {category && (
+                                  <span
+                                    style={{
+                                      marginLeft: "8px",
+                                      padding: "2px 8px",
+                                      backgroundColor: "#6366f1",
+                                      color: "white",
+                                      borderRadius: "12px",
+                                      fontSize: "11px",
+                                      fontWeight: "500"
+                                    }}
+                                  >
+                                    {category}
+                                  </span>
+                                )}
                               </div>
+                              
+                              {/* Description */}
+                              {description && (
+                                <div style={{ 
+                                  marginBottom: "8px",
+                                  color: "#4b5563",
+                                  fontSize: "13px",
+                                  lineHeight: "1.4"
+                                }}>
+                                  {description}
+                                </div>
+                              )}
 
                               {(assignee || deadline) && (
                                 <div
@@ -1693,11 +1868,13 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
 
                               <button
                                 onClick={() => handleAddToNotion({
-                                  task: task || "Unknown task",
+                                  task: title || "Unknown task",
                                   assignee: assignee || undefined,
                                   deadline: deadline || undefined,
-                                  priority: "Medium",
-                                  status: "Not Started"
+                                  priority: priority || "Medium",
+                                  status: "Not Started",
+                                  description: description || "",
+                                  category: category || "Action Item"
                                 }, index)}
                                 disabled={notionSyncStates[index]?.loading}
                                 style={{

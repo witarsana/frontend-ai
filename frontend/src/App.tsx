@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { aiAPI, EngineAPI, TranscriptionEngine } from "./services/api";
 import newLogoTranskribo from "./assets/new-logo-transkribo.png";
 
@@ -13,11 +13,17 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<'upload' | 'history' | 'processing'>('upload');
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
 
-  // Check API connection and auto-resume job on mount
+  // Check API connection on mount
   useEffect(() => {
     checkAPIConnection();
-    checkAndResumeJob();
   }, []);
+
+  // Auto-resume job when API connection is established
+  useEffect(() => {
+    if (apiConnected) {
+      checkAndResumeJob();
+    }
+  }, [apiConnected]);
 
   const checkAPIConnection = async () => {
     try {
@@ -33,7 +39,7 @@ const App: React.FC = () => {
   };
 
   // Auto-resume functionality - check for ongoing jobs and continue monitoring
-  const checkAndResumeJob = async () => {
+  const checkAndResumeJob = useCallback(async () => {
     try {
       const storedJob = localStorage.getItem('currentProcessingJob');
       if (!storedJob) return;
@@ -71,7 +77,40 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Error checking for resumable job:', error);
     }
-  };
+  }, [apiConnected]);
+
+  // Listen for localStorage changes to sync processing state across tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'currentProcessingJob') {
+        if (e.newValue) {
+          // New processing job started in another tab
+          const job = JSON.parse(e.newValue);
+          console.log('Processing job detected from another tab:', job.jobId);
+          setCurrentJobId(job.jobId);
+          setViewMode('processing');
+        } else {
+          // Processing job removed (completed/cancelled)
+          console.log('Processing job removed from another tab');
+          // Don't automatically switch back to avoid interrupting user
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Periodic check for localStorage changes (for same tab resume)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (viewMode !== 'processing') {
+        checkAndResumeJob();
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [apiConnected, viewMode, checkAndResumeJob]);
 
   const handleFileSelect = async (
     file: File,
@@ -145,8 +184,8 @@ const App: React.FC = () => {
       text: result.transcript ? result.transcript.map((seg: any) => seg.text).join(" ") : "No transcript available",
       segments: result.transcript || [],
       summary: result.summary || null,
-      actionItems: result.action_items || [],
-      keyDecisions: result.key_decisions || [],
+      actionItems: result.enhanced_action_items || result.action_items || [],
+      keyDecisions: result.enhanced_key_decisions || result.key_decisions || [],
       sentiment: result.sentiment || null,
       participants: result.speakers || [],
       duration: result.duration || null,

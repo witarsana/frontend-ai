@@ -2,6 +2,11 @@ import os
 from openai import OpenAI
 import requests
 from typing import Dict, List, Any, Optional
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load .env file from parent directory
+load_dotenv(Path(__file__).parent.parent / '.env')
 
 # Optional ollama import
 try:
@@ -30,7 +35,7 @@ def initialize_providers(config=None):
     model_openrouter = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")
     model_deepseek = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     model_huggingface = os.getenv("HUGGINGFACE_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct")
-    model_mistral = os.getenv("MISTRAL_MODEL", "mistral-tiny")
+    model_mistral = os.getenv("MISTRAL_MODEL", "mistral-large-2411")
     
     # Initialize clients
     client_openrouter = None
@@ -70,14 +75,16 @@ def initialize_providers(config=None):
     # Initialize Mistral client
     if mistral_ready:
         try:
-            from mistralai.client import MistralClient
-            client_mistral = MistralClient(api_key=mistral_token)
-            print(f"✅ Mistral initialized with model: {model_mistral}")
+            # Try new Mistral client first
+            from mistralai import Mistral
+            client_mistral = Mistral(api_key=mistral_token)
+            print(f"✅ Mistral (new API) initialized with model: {model_mistral}")
         except ImportError:
             try:
-                from mistralai import Mistral as MistralClient
+                # Fallback to legacy client
+                from mistralai.client import MistralClient
                 client_mistral = MistralClient(api_key=mistral_token)
-                print(f"✅ Mistral (legacy) initialized with model: {model_mistral}")
+                print(f"✅ Mistral (legacy API) initialized with model: {model_mistral}")
             except Exception as e:
                 print(f"❌ Mistral initialization failed: {e}")
                 mistral_ready = False
@@ -158,27 +165,29 @@ def call_api(
                     *image_contents
                 ]
             
-            # Try new API format first
+            # Check if it's new Mistral client or legacy client
+            client = clients['mistral']
             try:
-                response = clients['mistral'].chat.completions.create(
+                # Try new Mistral API method first (mistralai.Mistral)
+                response = client.chat.complete(
                     model=models['mistral'],
                     messages=messages,
                     max_tokens=max_tokens
                 )
                 content = response.choices[0].message.content.strip()
             except AttributeError:
-                # Fallback to older API format
-                response = clients['mistral'].chat.complete(
+                # Legacy MistralClient method - direct call
+                response = client.chat(
                     model=models['mistral'],
                     messages=messages,
                     max_tokens=max_tokens
                 )
                 content = response.choices[0].message.content.strip()
-            
+                
             print(f"Response received from Mistral (Model: {models['mistral']})")
             return content
-        except Exception as e:
-            print(f"Mistral API call failed: {str(e)}. Trying DeepSeek...")
+        except Exception as mistral_error:
+            print(f"Mistral API call failed: {str(mistral_error)}. Trying DeepSeek...")
 
     # Try DeepSeek
     if ready['deepseek']:

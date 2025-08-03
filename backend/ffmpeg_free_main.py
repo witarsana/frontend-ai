@@ -29,6 +29,8 @@ from typing import Dict, List, Any, Optional
 import traceback
 import librosa
 import soundfile as sf
+import sys
+import soundfile as sf
 import numpy as np
 from pyannote.audio import Pipeline
 import torch
@@ -96,7 +98,10 @@ except SyntaxError:
 except Exception as e:
     print(f"⚠️  Deepgram SDK error: {e}, using Faster-Whisper only")
 
-load_dotenv()
+# Load .env file from parent directory
+import os
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / '.env')
 
 app = FastAPI(title="AI Meeting Transcription - Dual Engine", version="2.0.0")
 
@@ -527,7 +532,7 @@ async def get_audio_file(job_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def fast_transcribe_with_whisper(file_path: str, job_id: str = None) -> Dict[Any, Any]:
+async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progress: 'ProgressTracker' = None) -> Dict[Any, Any]:
     """
     Fast transcription using simple Whisper approach from mainSample.py
     No complex preprocessing, no heavy diarization
@@ -538,35 +543,76 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None) -> Di
         # Ensure simple whisper model is loaded
         global simple_whisper_model
         if simple_whisper_model is None:
+            if progress:
+                progress.update_stage("transcription", 5, "Loading Whisper model...")
             print("🔄 Loading Simple Whisper model...")
             simple_whisper_model = whisper.load_model("base")
             print("✅ Simple Whisper model loaded!")
         
-        # Update progress
-        if job_id:
-            processing_jobs[job_id] = {
-                "status": "transcribing", 
-                "progress": 40,
-                "message": f"Fast transcribing with Whisper...",
-                "result_available": False
-            }
+        # Update progress for transcription start
+        if progress:
+            progress.update_stage("transcription", 10, "Starting Whisper transcription...")
         
-        # Direct transcription - EXACTLY like mainSample.py
-        def _transcribe_sync():
+        # Direct transcription with progress simulation
+        async def _transcribe_with_progress():
             print(f"📝 Transcribing {os.path.basename(file_path)}...")
-            result = simple_whisper_model.transcribe(file_path, word_timestamps=True)
-            print("✅ Transcription completed!")
-            print("🗣️ Adding speaker labels...")
-            return result
+            if progress:
+                progress.update_stage("transcription", 20, "Whisper processing audio...")
+            
+            # Start progress simulation in background
+            import threading
+            progress_stop = threading.Event()
+            
+            def simulate_progress():
+                """Simulate gradual progress while Whisper is working"""
+                current_progress = 20
+                while not progress_stop.is_set() and current_progress < 65:
+                    progress_stop.wait(5)  # Update every 5 seconds
+                    if not progress_stop.is_set():
+                        current_progress = min(65, current_progress + 2)  # Increase by 2% every 5 sec
+                        if progress:
+                            progress.update_stage("transcription", current_progress, f"Whisper processing audio... ({current_progress}%)")
+            
+            # Start progress thread
+            progress_thread = threading.Thread(target=simulate_progress)
+            progress_thread.start()
+            
+            try:
+                # Run transcription in executor to avoid blocking
+                def _transcribe_sync():
+                    return simple_whisper_model.transcribe(file_path, word_timestamps=True)
+                
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, _transcribe_sync)
+                
+                # Stop progress simulation
+                progress_stop.set()
+                progress_thread.join()
+                
+                if progress:
+                    progress.update_stage("transcription", 70, "Transcription completed, processing segments...")
+                
+                print("✅ Transcription completed!")
+                print("🗣️ Adding speaker labels...")
+                return result
+                
+            except Exception as e:
+                # Stop progress simulation on error
+                progress_stop.set()
+                progress_thread.join()
+                raise e
         
-        # Run in thread to avoid blocking
-        loop = asyncio.get_event_loop()
-        whisper_result = await loop.run_in_executor(None, _transcribe_sync)
+        # Run transcription with progress
+        whisper_result = await _transcribe_with_progress()
         
         print("✅ Fast transcription completed!")
         
         # Simple speaker assignment - EXACTLY like mainSample.py
         segments_with_speakers = []
+        total_segments = len(whisper_result["segments"])
+        
+        if progress:
+            progress.update_stage("transcription", 75, f"Processing {total_segments} segments...")
         
         for i, segment in enumerate(whisper_result["segments"]):
             # Simple speaker assignment: alternate every 30 seconds
@@ -585,11 +631,16 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None) -> Di
                 "assigned_speaker": speaker_id + 1
             })
             
-            # Update progress periodically
-            if job_id and i % 50 == 0:
-                progress = min(50 + (i / len(whisper_result["segments"])) * 20, 70)
-                processing_jobs[job_id]["progress"] = int(progress)
-                processing_jobs[job_id]["message"] = f"Processing segment {i+1}/{len(whisper_result['segments'])}"
+            # Update progress periodically during segment processing
+            if progress and i % 25 == 0:  # More frequent updates (every 25 segments instead of 50)
+                segment_progress = 75 + (i / total_segments) * 20  # 75% to 95%
+                progress.update_stage("transcription", segment_progress, f"Processing segments: {i+1}/{total_segments}")
+            elif progress and i % 10 == 0 and total_segments <= 50:  # For smaller files, update every 10 segments
+                segment_progress = 75 + (i / total_segments) * 20
+                progress.update_stage("transcription", segment_progress, f"Processing segments: {i+1}/{total_segments}")
+        
+        if progress:
+            progress.update_stage("transcription", 100, f"All {total_segments} segments processed")
         
         # Get audio duration
         duration = whisper_result.get("segments", [])[-1]["end"] if whisper_result.get("segments") else 0
@@ -605,7 +656,8 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None) -> Di
                 "model": "base",
                 "sample_rate": 16000,
                 "channels": 1,
-                "processing_time": "fast"
+                "processing_time": "fast",
+                "total_segments": total_segments
             }
         }
         
@@ -619,29 +671,170 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None) -> Di
         traceback.print_exc()
         raise e
 
+class ProgressTracker:
+    """Enhanced progress tracking with detailed stages and accurate percentages"""
+    
+    def __init__(self, job_id: str):
+        self.job_id = job_id
+        self.start_time = datetime.now()
+        self.stages = {
+            "initialization": {"weight": 5, "start": 0, "end": 5},
+            "model_loading": {"weight": 10, "start": 5, "end": 15},
+            "audio_analysis": {"weight": 5, "start": 15, "end": 20},
+            "transcription": {"weight": 45, "start": 20, "end": 65},
+            "speaker_processing": {"weight": 10, "start": 65, "end": 75},
+            "ai_analysis": {"weight": 20, "start": 75, "end": 95},
+            "finalization": {"weight": 5, "start": 95, "end": 100}
+        }
+        self.current_stage = None
+        self.stage_progress = 0
+    
+    def update_stage(self, stage_name: str, stage_progress: float = 0, message: str = ""):
+        """Update current stage and progress with immediate processing job update"""
+        if stage_name not in self.stages:
+            print(f"⚠️ Unknown stage: {stage_name}")
+            return
+        
+        self.current_stage = stage_name
+        self.stage_progress = max(0, min(100, stage_progress))
+        
+        stage_info = self.stages[stage_name]
+        stage_range = stage_info["end"] - stage_info["start"]
+        overall_progress = stage_info["start"] + (self.stage_progress / 100) * stage_range
+        
+        # Calculate elapsed time and estimate remaining
+        elapsed = (datetime.now() - self.start_time).total_seconds()
+        if overall_progress > 5:  # Only estimate after some progress
+            estimated_total = (elapsed / overall_progress) * 100
+            remaining = max(0, estimated_total - elapsed)
+        else:
+            remaining = 0
+        
+        # Enhanced status message for better user experience
+        stage_display_name = stage_name.replace('_', ' ').title()
+        if message:
+            detailed_message = f"{stage_display_name}: {message}"
+        else:
+            detailed_message = f"{stage_display_name} ({self.stage_progress:.0f}%)"
+        
+        # Update processing job with detailed info - IMMEDIATE UPDATE
+        processing_jobs[self.job_id] = {
+            "status": stage_name,
+            "progress": int(overall_progress),
+            "stage_progress": int(self.stage_progress),
+            "message": detailed_message,
+            "result_available": False,
+            "elapsed_time": f"{elapsed:.1f}s",
+            "estimated_remaining": f"{remaining:.1f}s" if remaining > 0 else "Almost done!",
+            "current_stage": stage_name,
+            "stage_detail": {
+                "name": stage_display_name,
+                "progress": int(self.stage_progress),
+                "weight": stage_info["weight"],
+                "description": message or f"Processing {stage_display_name.lower()}"
+            },
+            "processing_info": {
+                "total_stages": len(self.stages),
+                "current_stage_index": list(self.stages.keys()).index(stage_name) + 1,
+                "stage_start": stage_info["start"],
+                "stage_end": stage_info["end"]
+            }
+        }
+        
+        print(f"📊 [{overall_progress:5.1f}%] {stage_name}: {message or 'Processing...'} (Stage: {self.stage_progress:.1f}%)")
+        
+        # Force a small delay to ensure the update is persisted
+        import time
+        time.sleep(0.1)
+    
+    def complete(self, final_data: dict = None):
+        """Mark processing as complete"""
+        elapsed = (datetime.now() - self.start_time).total_seconds()
+        final_update = {
+            "status": "completed",
+            "progress": 100,
+            "stage_progress": 100,
+            "message": "Processing completed successfully!",
+            "result_available": True,
+            "elapsed_time": f"{elapsed:.1f}s",
+            "estimated_remaining": "0s",
+            "current_stage": "completed",
+            "stage_detail": {
+                "name": "Completed",
+                "progress": 100,
+                "weight": 100
+            }
+        }
+        
+        if final_data:
+            final_update.update(final_data)
+        
+        processing_jobs[self.job_id] = final_update
+        print(f"✅ Processing completed in {elapsed:.1f}s")
+    
+    def error(self, error_message: str):
+        """Mark processing as failed"""
+        elapsed = (datetime.now() - self.start_time).total_seconds()
+        processing_jobs[self.job_id] = {
+            "status": "error",
+            "progress": 0,
+            "stage_progress": 0,
+            "error": error_message,
+            "message": f"Processing failed: {error_message}",
+            "result_available": False,
+            "elapsed_time": f"{elapsed:.1f}s",
+            "current_stage": "error"
+        }
+        print(f"❌ Processing failed after {elapsed:.1f}s: {error_message}")
+
 async def process_audio_librosa(job_id: str, file_path: str, filename: str):
-    """Process audio using fast Whisper approach (inspired by mainSample.py)"""
+    """Process audio using fast Whisper approach with enhanced progress tracking"""
+    progress = ProgressTracker(job_id)
+    
     try:
         print(f"⚡ Starting FAST processing: {filename}")
         
-        # Load models
-        processing_jobs[job_id] = {"status": "loading_models", "progress": 10, "message": "Loading AI models..."}
-        load_models()
+        # Stage 1: Initialization
+        progress.update_stage("initialization", 50, f"Initializing processing for {filename}")
         
-        # Use fast transcription (no heavy preprocessing)
-        processing_jobs[job_id] = {"status": "transcribing", "progress": 30, "message": "Fast transcribing with Whisper..."}
+        # Get file info for better progress estimation
+        file_size = os.path.getsize(file_path) / (1024 * 1024)  # MB
+        progress.update_stage("initialization", 100, f"File analyzed: {file_size:.1f}MB")
+        
+        # Stage 2: Load models
+        progress.update_stage("model_loading", 20, "Loading AI models...")
+        load_models()
+        progress.update_stage("model_loading", 100, "AI models loaded successfully")
+        
+        # Stage 3: Audio analysis
+        progress.update_stage("audio_analysis", 30, "Analyzing audio format...")
+        # Quick audio info check
+        try:
+            import librosa
+            duration = librosa.get_duration(path=file_path)
+            progress.update_stage("audio_analysis", 100, f"Audio analyzed: {duration:.1f}s duration")
+        except:
+            progress.update_stage("audio_analysis", 100, "Audio format validated")
+        
+        # Stage 4: Transcription (this is the longest stage)
+        progress.update_stage("transcription", 0, "Starting transcription with Whisper...")
         
         # Fast transcription using simple Whisper approach
-        transcription = await fast_transcribe_with_whisper(file_path, job_id)
+        transcription = await fast_transcribe_with_whisper(file_path, job_id, progress)
         
         if not transcription or not transcription.get("segments"):
             raise Exception("Transcription failed or returned empty result")
         
-        # Prepare final result
-        processing_jobs[job_id] = {"status": "finalizing", "progress": 80, "message": "Finalizing results..."}
+        # Stage 5: Speaker processing
+        progress.update_stage("speaker_processing", 30, "Processing speaker information...")
         
         # Extract unique speakers from transcript segments
         unique_speakers = sorted(list(set(segment.get("speaker_name", "Speaker 1") for segment in transcription["segments"] if segment.get("speaker_name"))))
+        
+        progress.update_stage("speaker_processing", 70, f"Identified {len(unique_speakers)} speakers")
+        
+        # Prepare final result
+        progress.update_stage("speaker_processing", 100, "Speaker processing completed")
         
         final_result = {
             "filename": filename,
@@ -662,6 +855,9 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
             "processed_at": datetime.now().isoformat()
         }
         
+        # Stage 6: AI Analysis (most complex stage)
+        progress.update_stage("finalization", 20, "Saving initial results...")
+        
         # Save initial result without summary
         results_dir = os.path.join(os.path.dirname(__file__), "results")
         os.makedirs(results_dir, exist_ok=True)
@@ -669,98 +865,100 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
         with open(result_file, 'w', encoding='utf-8') as f:
             json.dump(final_result, f, ensure_ascii=False, indent=2)
         
-            # Generate comprehensive summary automatically after transcription
-            print(f"🧠 Generating comprehensive summary automatically...")
-            
-            # Update status to show summary generation
-            processing_jobs[job_id] = {
-                "status": "generating_summary", 
-                "progress": 90,
-                "message": "Generating comprehensive AI summary...",
-                "result_available": False,
-                "word_count": final_result["word_count"],
-                "duration": final_result["duration"]
-            }
-            
-            try:
-                # Generate unified analysis using new no-redundancy approach
-                print(f"🧠 Generating unified analysis (no redundancy)...")
-                analysis_result = await generate_unified_analysis(transcription["segments"])
-                
-                # Extract all data from unified analysis
-                narrative_summary = analysis_result.get("narrative_summary", "")
-                speaker_points = analysis_result.get("speaker_points", [])
-                enhanced_action_items = analysis_result.get("enhanced_action_items", [])
-                key_decisions = analysis_result.get("key_decisions", [])
-                
-                # Update result with clean separated data (NO REDUNDANCY)
-                final_result["summary"] = narrative_summary  # Clean narrative summary only
-                final_result["clean_summary"] = narrative_summary  # Same as summary now
-                final_result["speaker_points"] = speaker_points  # Structured speaker data
-                final_result["enhanced_action_items"] = enhanced_action_items  # Rich structured action items
-                final_result["action_items"] = [item.get("title", "Unknown task") for item in enhanced_action_items]  # Legacy compatibility
-                final_result["key_decisions"] = key_decisions  # Structured decisions
-                final_result["point_of_view"] = []  # Deprecated, data moved to speaker_points
-                final_result["tags"] = ["conversation", "transcription", "ai-analysis"]
-                
-                # Save updated result with summary - ensure clean JSON output
-                try:
-                    # Validate that all data is JSON serializable before saving
-                    print("🔍 Validating JSON serializability...")
-                    test_json = json.dumps(final_result, ensure_ascii=False, indent=2)
-                    print("✅ JSON validation passed")
-                    
-                    # Write atomically to prevent corruption
-                    temp_file = result_file + '.tmp'
-                    with open(temp_file, 'w', encoding='utf-8') as f:
-                        f.write(test_json)
-                    
-                    # Atomic rename to prevent corruption during write
-                    os.rename(temp_file, result_file)
-                    
-                    print(f"✅ Result file saved successfully: {result_file}")
-                    
-                except Exception as save_error:
-                    print(f"❌ Error saving result file: {save_error}")
-                    print(f"❌ Error details: {type(save_error).__name__}: {str(save_error)}")
-                    
-                    # Clean up temp file if it exists
-                    temp_file = result_file + '.tmp'
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
-                    
-                    # Try saving without summary field as last resort
-                    try:
-                        safe_result = {k: v for k, v in final_result.items() if k != 'summary'}
-                        safe_result['summary'] = "Summary generation failed during save - please regenerate"
-                        
-                        safe_json = json.dumps(safe_result, ensure_ascii=False, indent=2)
-                        with open(result_file, 'w', encoding='utf-8') as f:
-                            f.write(safe_json)
-                        
-                        print(f"⚠️ Saved with fallback summary: {result_file}")
-                        
-                    except Exception as final_error:
-                        print(f"❌ Even safe save failed: {final_error}")
-                        raise final_error
-                    
-                    with open(result_file, 'w', encoding='utf-8') as f:
-                        json.dump(safe_result, f, ensure_ascii=False, indent=2)
-                
-                print(f"✅ Unified analysis generated with {len(enhanced_action_items)} enhanced action items, {len(key_decisions)} key decisions, and {len(speaker_points)} speaker groups")
-                
-            except Exception as e:
-                print(f"⚠️ Summary generation failed (transcript still available): {e}")
-                # Continue without summary - transcript is still usable
+        progress.update_stage("finalization", 50, "Initial results saved")
         
-        processing_jobs[job_id] = {
-            "status": "completed", 
-            "progress": 100,
-            "message": "Processing completed successfully!",
-            "result_available": True,
+        # Generate comprehensive summary automatically after transcription
+        print(f"🧠 Generating comprehensive summary automatically...")
+        
+        # Stage 6: AI Analysis 
+        progress.update_stage("ai_analysis", 10, "Preparing AI analysis...")
+        
+        try:
+            # Generate unified analysis using new no-redundancy approach
+            progress.update_stage("ai_analysis", 30, "Generating unified analysis...")
+            analysis_result = await generate_unified_analysis(transcription["segments"], progress)
+            
+            progress.update_stage("ai_analysis", 80, "Processing AI analysis results...")
+            
+            # Extract all data from unified analysis
+            narrative_summary = analysis_result.get("narrative_summary", "")
+            speaker_points = analysis_result.get("speaker_points", [])
+            enhanced_action_items = analysis_result.get("enhanced_action_items", [])
+            key_decisions = analysis_result.get("key_decisions", [])
+            
+            # Update result with clean separated data (NO REDUNDANCY)
+            final_result["summary"] = narrative_summary  # Clean narrative summary only
+            final_result["clean_summary"] = narrative_summary  # Same as summary now
+            final_result["speaker_points"] = speaker_points  # Structured speaker data
+            final_result["enhanced_action_items"] = enhanced_action_items  # Rich structured action items
+            final_result["action_items"] = [item.get("title", "Unknown task") for item in enhanced_action_items]  # Legacy compatibility
+            final_result["key_decisions"] = key_decisions  # Enhanced structured decisions and insights
+            final_result["point_of_view"] = []  # Deprecated, data moved to speaker_points
+            final_result["tags"] = ["conversation", "transcription", "ai-analysis"]
+            # Remove next_steps as it's redundant with enhanced_action_items
+            
+            progress.update_stage("ai_analysis", 100, f"AI analysis completed: {len(enhanced_action_items)} action items, {len(key_decisions)} decisions")
+            
+            # Stage 7: Finalization
+            progress.update_stage("finalization", 70, "Saving final results...")
+            
+            # Save updated result with summary - ensure clean JSON output
+            try:
+                # Validate that all data is JSON serializable before saving
+                print("🔍 Validating JSON serializability...")
+                test_json = json.dumps(final_result, ensure_ascii=False, indent=2)
+                print("✅ JSON validation passed")
+                
+                # Write atomically to prevent corruption
+                temp_file = result_file + '.tmp'
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    f.write(test_json)
+                
+                # Atomic rename to prevent corruption during write
+                os.rename(temp_file, result_file)
+                
+                print(f"✅ Result file saved successfully: {result_file}")
+                progress.update_stage("finalization", 100, "Results saved successfully")
+                
+            except Exception as save_error:
+                print(f"❌ Error saving result file: {save_error}")
+                print(f"❌ Error details: {type(save_error).__name__}: {str(save_error)}")
+                
+                # Clean up temp file if it exists
+                temp_file = result_file + '.tmp'
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                
+                # Try saving without summary field as last resort
+                try:
+                    safe_result = {k: v for k, v in final_result.items() if k != 'summary'}
+                    safe_result['summary'] = "Summary generation failed during save - please regenerate"
+                    
+                    safe_json = json.dumps(safe_result, ensure_ascii=False, indent=2)
+                    with open(result_file, 'w', encoding='utf-8') as f:
+                        f.write(safe_json)
+                    
+                    print(f"⚠️ Saved with fallback summary: {result_file}")
+                    progress.update_stage("finalization", 100, "Results saved with fallback")
+                    
+                except Exception as final_error:
+                    print(f"❌ Even safe save failed: {final_error}")
+                    raise final_error
+            
+            print(f"✅ Unified analysis generated with {len(enhanced_action_items)} enhanced action items, {len(key_decisions)} key decisions, and {len(speaker_points)} speaker groups")
+            
+        except Exception as e:
+            print(f"⚠️ Summary generation failed (transcript still available): {e}")
+            progress.update_stage("ai_analysis", 100, f"Analysis failed: {e}")
+            # Continue without summary - transcript is still usable
+        
+        # Complete processing
+        progress.complete({
             "word_count": final_result["word_count"],
-            "duration": final_result["duration"]
-        }
+            "duration": final_result["duration"],
+            "speakers_count": len(unique_speakers),
+            "segments_count": len(transcription["segments"])
+        })
         
         print(f"✅ FAST Processing completed: {filename} ({final_result['word_count']} words, {final_result['duration']:.1f}s)")
         
@@ -769,12 +967,7 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
         print(f"❌ Processing failed: {error_msg}")
         print(f"❌ Traceback: {traceback.format_exc()}")
         
-        processing_jobs[job_id] = {
-            "status": "error", 
-            "progress": 0,
-            "error": error_msg,
-            "message": f"Processing failed: {error_msg}"
-        }
+        progress.error(error_msg)
 
 async def preprocess_audio_librosa(file_path: str) -> str:
     """Preprocess audio file using librosa"""
@@ -1902,7 +2095,7 @@ def clean_summary_text(summary: str, action_items: list, key_decisions: list) ->
     
     return cleaned_summary
 
-async def generate_unified_analysis(transcript_segments: list) -> dict:
+async def generate_unified_analysis(transcript_segments: list, progress: 'ProgressTracker' = None) -> dict:
     """
     Generate all analysis data in one AI call without redundancy
     Returns: dict with narrative_summary, speaker_points, enhanced_action_items, key_decisions
@@ -1911,33 +2104,11 @@ async def generate_unified_analysis(transcript_segments: list) -> dict:
     
     print("\n🧠 Generating unified analysis (no redundancy)...")
     
+    if progress:
+        progress.update_stage("ai_analysis", 15, "Preparing transcript for AI analysis...")
+    
     if not transcript_segments:
-        return {
-            "narrative_summary": "❌ No transcript available for analysis.",
-            "speaker_points": [],
-            "enhanced_action_items": [
-                {
-                    "title": "Check Transcript Quality",
-                    "description": "Review transcript generation process and reprocess if needed",
-                    "priority": "High",
-                    "category": "Immediate",
-                    "timeframe": "1-3 days",
-                    "assigned_to": "Team",
-                    "tags": ["technical", "quality-check"],
-                    "notion_ready": {
-                        "title": "Check Transcript Quality",
-                        "properties": {
-                            "Priority": "High",
-                            "Category": "Immediate",
-                            "Due Date": "3 days from now",
-                            "Assigned": "Team",
-                            "Status": "Not Started"
-                        }
-                    }
-                }
-            ],
-            "key_decisions": ["Audio successfully processed with AI technology"]
-        }
+        raise Exception("No transcript available for analysis")
     
     # Format transcript from segments with speaker context
     transcript_lines = []
@@ -1949,24 +2120,80 @@ async def generate_unified_analysis(transcript_segments: list) -> dict:
     
     formatted_transcript = "\n".join(transcript_lines)
     
+    if progress:
+        progress.update_stage("ai_analysis", 25, f"Formatted transcript: {len(transcript_lines)} segments")
+    
     try:
         from prompts import get_unified_analysis_prompt
+        
+        if progress:
+            progress.update_stage("ai_analysis", 35, "Generating AI analysis prompt...")
+        
         prompt = get_unified_analysis_prompt(formatted_transcript)
         
+        if progress:
+            progress.update_stage("ai_analysis", 45, "Calling AI API for comprehensive analysis...")
+        
         # Use our multi-provider API system
-        response_text = call_api(prompt, providers=api_providers, max_tokens=2000)
+        response_text = call_api(prompt, providers=api_providers, max_tokens=8000)
+        
+        if progress:
+            progress.update_stage("ai_analysis", 70, "AI analysis completed, parsing structured response...")
         
         # Parse JSON response
         try:
-            # Clean and parse JSON response
+            # Clean and parse JSON response with comprehensive cleaning
             if "```json" in response_text:
                 start = response_text.find("```json") + 7
                 end = response_text.find("```", start)
                 json_str = response_text[start:end].strip() if end > start else response_text[start:].strip()
+            elif "```" in response_text and "{" in response_text:
+                # Handle cases where it might be wrapped in code blocks without "json"
+                lines = response_text.split('\n')
+                json_lines = []
+                in_json = False
+                for line in lines:
+                    if line.strip().startswith('{') or in_json:
+                        in_json = True
+                        json_lines.append(line)
+                        if line.strip().endswith('}') and line.strip().count('{') <= line.strip().count('}'):
+                            break
+                json_str = '\n'.join(json_lines)
             else:
                 start = response_text.find('{')
                 end = response_text.rfind('}') + 1
                 json_str = response_text[start:end] if start >= 0 and end > start else response_text
+            
+            if progress:
+                progress.update_stage("ai_analysis", 80, "Parsing AI response...")
+            
+            # TEMPORARY DEBUG - Log raw response when 0 items generated
+            print(f"🔍 DEBUG: Raw AI response (first 800 chars):")
+            print(f"{response_text[:800]}...")
+            print(f"🔍 DEBUG: Extracted JSON (first 500 chars):")
+            print(f"{json_str[:500]}...")
+            
+            # Comprehensive JSON cleaning
+            import re
+            
+            # Remove control characters except newlines, tabs, and carriage returns
+            json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', json_str)
+            
+            # Fix common JSON issues
+            json_str = json_str.replace('\n\n', '\\n').replace('\r', ' ').strip()
+            
+            # Fix potential unescaped quotes in strings
+            # This is a basic fix - more sophisticated parsing might be needed
+            lines = json_str.split('\n')
+            fixed_lines = []
+            for line in lines:
+                # If it's a string value line (contains ": "...), escape internal quotes
+                if '": "' in line and not line.strip().endswith('",') and not line.strip().endswith('"'):
+                    # Add missing comma or quote closure if needed
+                    if not line.strip().endswith(',') and not line.strip().endswith('"'):
+                        line = line.rstrip() + '",'
+                fixed_lines.append(line)
+            json_str = '\n'.join(fixed_lines)
             
             result = json.loads(json_str)
             
@@ -1980,6 +2207,9 @@ async def generate_unified_analysis(transcript_segments: list) -> dict:
                         result[field] = []
                     else:
                         result[field] = []
+            
+            if progress:
+                progress.update_stage("ai_analysis", 95, "Validating analysis results...")
             
             print(f"✅ Unified analysis generated successfully!")
             print(f"   - Narrative summary: {len(result.get('narrative_summary', ''))} chars")
@@ -1996,32 +2226,8 @@ async def generate_unified_analysis(transcript_segments: list) -> dict:
             
     except Exception as e:
         print(f"❌ Unified analysis error: {e}")
-        return {
-            "narrative_summary": f"❌ Analysis generation failed: {str(e)}",
-            "speaker_points": [],
-            "enhanced_action_items": [
-                {
-                    "title": "Retry Analysis",
-                    "description": "Manual review of transcript or retry analysis with different parameters",
-                    "priority": "Medium",
-                    "category": "Immediate",
-                    "timeframe": "1-3 days",
-                    "assigned_to": "Team",
-                    "tags": ["technical", "retry"],
-                    "notion_ready": {
-                        "title": "Retry Analysis",
-                        "properties": {
-                            "Priority": "Medium",
-                            "Category": "Immediate", 
-                            "Due Date": "3 days from now",
-                            "Assigned": "Team",
-                            "Status": "Not Started"
-                        }
-                    }
-                }
-            ],
-            "key_decisions": ["Audio successfully processed with AI technology"]
-        }
+        # NO STATIC FALLBACK - Re-raise exception to be handled by caller
+        raise Exception(f"Failed to generate unified analysis: {str(e)}")
 
 
 def process_summary_sections(summary: str) -> tuple:
@@ -2126,6 +2332,9 @@ async def extract_structured_data_from_summary(transcript_segments: list) -> tup
                     json_str = response_text
             
             # Clean the JSON string of any problematic characters
+            import re
+            # Remove control characters except newlines, tabs, and carriage returns
+            json_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', json_str)
             json_str = json_str.replace('\n\n', ' ').replace('\r', ' ').strip()
             
             # Try to parse JSON
@@ -2249,8 +2458,6 @@ Here is a meeting/conversation transcript with multiple speakers. Create a COMPR
 
 Please create a summary with the following COMPLETE format:
 
-### Meeting Summary
-
 #### Main Topics Discussed
 1. **[Topic 1]**: [Detailed explanation of first topic]
 2. **[Topic 2]**: [Detailed explanation of second topic]  
@@ -2341,18 +2548,22 @@ async def reprocess_summary(job_id: str):
         
         print(f"🔄 Reprocessing summary for job: {job_id}")
         
-        # Generate new comprehensive summary using enhanced format
-        summary_result = await generate_comprehensive_summary(existing_result["transcript"])
+        # Generate new unified analysis using enhanced format
+        summary_result = await generate_unified_analysis(existing_result["transcript"])
         
-        # Extract structured data from transcript segments - now returns only 3 fields
-        action_items, key_decisions, point_of_view = await extract_structured_data_from_summary(existing_result["transcript"])
+        # Extract data from unified analysis result
+        enhanced_action_items = summary_result.get("enhanced_action_items", [])
+        key_decisions = summary_result.get("key_decisions", [])
+        speaker_points = summary_result.get("speaker_points", [])
         
-        # Update result with new summary and all structured data (NO speaker_points)
+        # Update result with new summary and all structured data from unified analysis
         existing_result.update({
-            "summary": summary_result,  # Using new enhanced format
-            "action_items": action_items,
-            "key_decisions": key_decisions,
-            "point_of_view": point_of_view,  # Contains "Poin-Poin Penting dari Setiap Pembicara"
+            "summary": summary_result.get("narrative_summary", ""),  # Clean narrative summary
+            "enhanced_action_items": enhanced_action_items,  # Rich structured action items  
+            "action_items": [item.get("title", "Unknown task") for item in enhanced_action_items],  # Legacy compatibility
+            "key_decisions": key_decisions,  # Enhanced structured decisions and insights
+            "speaker_points": speaker_points,  # Structured speaker data
+            "point_of_view": [],  # Deprecated, moved to speaker_points
             "tags": ["conversation", "transcription", "ai-analysis"],
             "meeting_type": "conversation",
             "sentiment": "neutral",
@@ -2388,7 +2599,7 @@ async def reprocess_summary(job_id: str):
             raise HTTPException(status_code=500, detail=f"Failed to save reprocessed result: {str(save_error)}")
         
         print(f"✅ Summary reprocessed successfully for job: {job_id}")
-        print(f"📊 Extracted {len(action_items)} action items, {len(key_decisions)} key decisions, and {len(point_of_view)} point of view")
+        print(f"📊 Extracted {len(enhanced_action_items)} action items, {len(key_decisions)} key decisions, and {len(speaker_points)} speaker groups")
         
         return existing_result  # Return the full updated result
         
