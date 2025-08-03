@@ -132,11 +132,12 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
   ],
   "key_decisions": [
     {{
-      "title": "[Specific insight/concept/framework title from actual conversation - NOT generic]",
-      "description": "[Deep explanation of WHY this insight matters, HOW it works, specific context from the conversation, and practical implications. Make this educational and valuable.]",
-      "category": "Framework|Concept|Insight|Strategy|Tool|Best Practice|Learning|Methodology|Principle",
+      "title": "[Specific insight/concept/framework/learning from actual conversation - NOT generic]",
+      "description": "[Deep explanation of the insight, WHY it matters, HOW it works, specific context from the conversation, and practical implications. Include quotes or specific examples mentioned. Make this educational and valuable.]",
+      "category": "Framework|Concept|Insight|Strategy|Tool|Best Practice|Learning|Methodology|Principle|Approach",
       "impact": "High|Medium|Low",
-      "actionable": true|false
+      "actionable": true|false,
+      "source": "[Speaker name or context where this insight came from]"
     }}
   ],
   "enhanced_action_items": [
@@ -163,10 +164,14 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
 }}
 
 🎯 CRITICAL RULES FOR KEY TAKEAWAYS (key_decisions):
+- Extract VALUABLE INSIGHTS, LEARNINGS, and CONCEPTS from the conversation
+- For meetings: Extract actual decisions made, conclusions reached, agreements established
+- For interviews/podcasts: Extract key insights, frameworks, concepts, strategies, principles shared
+- For educational content: Extract main learnings, methodologies, best practices discussed
 - ONLY extract insights that were ACTUALLY DISCUSSED in the conversation
 - NO generic examples - every insight must be content-specific
-- Focus on: concepts mentioned, frameworks explained, strategies discussed, tools shared, principles revealed
-- Think: "What unique insight can I learn from THIS specific conversation?"
+- Focus on: concepts mentioned, frameworks explained, strategies discussed, tools shared, principles revealed, key learnings
+- Think: "What unique insight/learning can I extract from THIS specific conversation?"
 - Title: Use exact terminology/phrases from the conversation when possible
 - Description: Explain WHY this insight is valuable with specific context from the discussion
 - Make each takeaway feel like a "golden nugget" worth remembering and referencing
@@ -174,8 +179,10 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
   * If discussing stress: "The Battery Analogy for Mental Energy" (if actually mentioned)
   * If discussing leadership: "[Specific leadership principle mentioned by name]"
   * If discussing business: "[Specific strategy or framework discussed]"
+  * If sharing expertise: "[Specific methodology or approach explained]"
 - AVOID: generic insights that could apply to any conversation
 - FOCUS: unique wisdom, specific methodologies, actual quotes/concepts shared
+- ALWAYS extract at least 3-5 key insights if the content has valuable information
 
 ⚡ CRITICAL RULES FOR NEXT STEPS (enhanced_action_items):
 - ONLY create actions that are DIRECTLY RELEVANT to the content discussed
