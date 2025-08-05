@@ -597,10 +597,13 @@ async def get_audio_file(job_id: str):
     """Serve processed audio file for playback"""
     try:
         uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+        print(f"🔍 Looking for audio file: {job_id}")
+        print(f"📁 Uploads directory: {uploads_dir}")
         
         # Look for processed audio file first
         processed_file = os.path.join(uploads_dir, f"{job_id}_processed.wav")
         if os.path.exists(processed_file):
+            print(f"✅ Found processed file: {processed_file}")
             return FileResponse(
                 processed_file,
                 media_type="audio/wav",
@@ -608,19 +611,86 @@ async def get_audio_file(job_id: str):
             )
         
         # Fall back to original file
-        for ext in ['.wav', '.mp3', '.m4a', '.mp4', '.mkv']:
+        for ext in ['.wav', '.mp3', '.m4a', '.mp4', '.webm', '.mkv', '.flac', '.ogg', '.mov']:
             original_file = os.path.join(uploads_dir, f"{job_id}{ext}")
+            print(f"🔍 Checking: {original_file}")
             if os.path.exists(original_file):
+                print(f"✅ Found original file: {original_file}")
+                media_type = f"audio/{ext[1:]}" if ext != '.webm' else "audio/webm"
                 return FileResponse(
                     original_file,
-                    media_type=f"audio/{ext[1:]}",
+                    media_type=media_type,
                     headers={"Content-Disposition": f"inline; filename={job_id}{ext}"}
                 )
         
-        raise HTTPException(status_code=404, detail="Audio file not found")
+        # List all files in uploads directory for debugging
+        available_files = os.listdir(uploads_dir) if os.path.exists(uploads_dir) else []
+        print(f"📂 Available files in uploads: {available_files}")
+        
+        raise HTTPException(status_code=404, detail=f"Audio file not found for job_id: {job_id}. Available files: {available_files}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in get_audio_file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.post("/api/process-existing/{job_id}")
+async def process_existing_file(job_id: str, language: str = "auto", engine: str = "faster-whisper"):
+    """Process an existing uploaded file that hasn't been transcribed yet"""
+    try:
+        uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+        
+        # Find the existing file
+        file_path = None
+        filename = None
+        for ext in ['.wav', '.mp3', '.m4a', '.mp4', '.webm', '.mkv', '.flac', '.ogg', '.mov']:
+            potential_file = os.path.join(uploads_dir, f"{job_id}{ext}")
+            if os.path.exists(potential_file):
+                file_path = potential_file
+                filename = f"{job_id}{ext}"
+                break
+        
+        if not file_path:
+            raise HTTPException(status_code=404, detail=f"No audio file found for job_id: {job_id}")
+        
+        # Check if result already exists
+        results_dir = os.path.join(os.path.dirname(__file__), "results")
+        result_file = os.path.join(results_dir, f"{job_id}_result.json")
+        if os.path.exists(result_file):
+            return JSONResponse({
+                "status": "already_processed",
+                "message": "File already has results available",
+                "job_id": job_id
+            })
+        
+        # Initialize processing job
+        processing_jobs[job_id] = {
+            "status": "starting", 
+            "progress": 0, 
+            "message": "Processing existing file...",
+            "language": language,
+            "engine": engine
+        }
+        
+        print(f"🔄 Processing existing file: {file_path}")
+        print(f"🌐 Language: {language}, Engine: {engine}")
+        
+        # Start processing
+        asyncio.create_task(process_audio_librosa(job_id, file_path, filename, language, engine))
+        
+        return JSONResponse({
+            "job_id": job_id,
+            "status": "processing_started",
+            "message": f"Started processing existing file: {filename}",
+            "language": language,
+            "engine": engine,
+            "file_path": file_path
+        })
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Process existing file error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process existing file: {str(e)}")
 
 async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progress: 'ProgressTracker' = None, language: str = "auto") -> Dict[Any, Any]:
     """
