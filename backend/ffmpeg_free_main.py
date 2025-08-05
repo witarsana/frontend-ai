@@ -390,16 +390,45 @@ async def analyze_format_recommendation(file: UploadFile = File(...)):
     
     return recommendations
 
+@app.get("/api/speed-options")
+async def get_speed_options():
+    """Get available speed options with their configurations"""
+    try:
+        from whisper_config import get_speed_info
+        speed_info = get_speed_info()
+        
+        return JSONResponse({
+            "success": True,
+            "speed_options": speed_info,
+            "default": "medium",
+            "description": {
+                "fast": "Fastest transcription with good accuracy (base model)",
+                "medium": "Balanced speed and accuracy (small model)", 
+                "slow": "Best accuracy with slower processing (large-v3 model)"
+            }
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
 @app.post("/api/upload-and-process")
 async def upload_and_process(
     file: UploadFile = File(...),
     language: str = Form("auto"),
-    engine: str = Form("faster-whisper")
+    engine: str = Form("faster-whisper"),
+    speed: str = Form("medium")  # New speed parameter: fast, medium, slow
 ):
-    """Upload and process with librosa instead of FFmpeg"""
+    """Upload and process with librosa instead of FFmpeg - Now with speed options"""
     try:
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file uploaded")
+        
+        # Validate speed parameter
+        valid_speeds = ["fast", "medium", "slow"]
+        if speed not in valid_speeds:
+            raise HTTPException(status_code=400, detail=f"Invalid speed. Must be one of: {valid_speeds}")
         
         content = await file.read()
         if len(content) > 150 * 1024 * 1024:  # 150MB limit
@@ -445,10 +474,10 @@ async def upload_and_process(
             f.write(content)
         
         print(f"📁 File saved: {file_path} ({len(content)/1024:.1f} KB)")
-        print(f"🌐 Language: {language}, Engine: {engine}")
+        print(f"🌐 Language: {language}, Engine: {engine}, Speed: {speed}")
         
-        # Start processing with language and engine parameters
-        asyncio.create_task(process_audio_librosa(job_id, file_path, file.filename, language, engine))
+        # Start processing with language, engine, and speed parameters
+        asyncio.create_task(process_audio_librosa(job_id, file_path, file.filename, language, engine, speed))
         
         return JSONResponse({
             "job_id": job_id,
@@ -1096,10 +1125,10 @@ async def process_existing_file(job_id: str, language: str = "auto", engine: str
         }
         
         print(f"🔄 Processing existing file: {file_path}")
-        print(f"🌐 Language: {language}, Engine: {engine}")
+        print(f"🌐 Language: {language}, Engine: {engine}, Speed: medium (default)")
         
-        # Start processing
-        asyncio.create_task(process_audio_librosa(job_id, file_path, filename, language, engine))
+        # Start processing with default medium speed
+        asyncio.create_task(process_audio_librosa(job_id, file_path, filename, language, engine, "medium"))
         
         return JSONResponse({
             "job_id": job_id,
@@ -1107,6 +1136,7 @@ async def process_existing_file(job_id: str, language: str = "auto", engine: str
             "message": f"Started processing existing file: {filename}",
             "language": language,
             "engine": engine,
+            "speed": "medium",
             "file_path": file_path
         })
         
@@ -1114,34 +1144,51 @@ async def process_existing_file(job_id: str, language: str = "auto", engine: str
         print(f"❌ Process existing file error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process existing file: {str(e)}")
 
-async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = None, progress: 'ProgressTracker' = None, language: str = "auto") -> Dict[Any, Any]:
+async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = None, progress: 'ProgressTracker' = None, language: str = "auto", speed: str = "medium") -> Dict[Any, Any]:
     """
-    OPTIMIZED Transcription using ONLY Faster-Whisper Large V3 
-    Performance improvements: 2-3x faster, reduced memory usage, simplified processing
+    OPTIMIZED Transcription using Faster-Whisper with speed options
+    Performance improvements: Variable speed based on model selection, optimized settings
+    Speed options: fast (base model), medium (small model), slow (large-v3 model)
     """
     import time  # Fix missing import
     start_time = time.time()
     try:
-        print(f"🚀 OPTIMIZED Large V3 transcribing: {os.path.basename(file_path)} (Language: {language})")
+        # Import speed config
+        from whisper_config import get_speed_config
+        speed_config = get_speed_config(speed)
         
-        # Ensure Faster-Whisper Large V3 model is loaded (minimal overhead)
+        model_name = speed_config['model_config']['model']
+        optimization_settings = speed_config['optimization_config']
+        
+        print(f"🚀 {speed.upper()} transcription: {os.path.basename(file_path)} (Language: {language})")
+        print(f"   Model: {model_name}")
+        print(f"   Settings: {optimization_settings['description']}")
+        
+        # Load appropriate model based on speed
         global whisper_model
-        if whisper_model is None:
+        current_model_name = getattr(whisper_model, 'model_size_or_path', None) if whisper_model else None
+        
+        # Load new model if different from current or if not loaded
+        if whisper_model is None or current_model_name != model_name:
             if progress:
-                progress.update_stage("transcription", 5, "Loading Large V3 (optimized)...")
-            print("🔄 Loading Large V3 (no chat system overhead)...")
-            load_models()  # Load without unnecessary initialization
+                progress.update_stage("transcription", 5, f"Loading {model_name} model for {speed} mode...")
+            print(f"🔄 Loading {model_name} model for {speed} transcription...")
             
-            if whisper_model is None:
-                raise Exception("Failed to load Large V3 model")
-            print("✅ Large V3 loaded (optimized)")
+            # Load model with speed-specific configuration
+            device_config = speed_config['model_config']
+            whisper_model = WhisperModel(
+                model_name, 
+                device=device_config['device'],
+                compute_type=device_config['compute_type']
+            )
+            print(f"✅ {model_name} model loaded for {speed} mode")
         
         if progress:
-            progress.update_stage("transcription", 15, f"Starting optimized transcription...")
+            progress.update_stage("transcription", 15, f"Starting {speed} transcription...")
         
-        # OPTIMIZED transcription without excessive overhead
+        # OPTIMIZED transcription with speed-specific settings
         async def _optimized_transcribe():
-            print(f"📝 Optimized Large V3 processing: {os.path.basename(file_path)}")
+            print(f"📝 {speed.upper()} processing: {os.path.basename(file_path)}")
             
             if progress:
                 progress.update_stage("transcription", 20, "Large V3 processing (optimized)...")
@@ -1173,18 +1220,14 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
                 def _transcribe_optimized():
                     print(f"🎵 Starting optimized Large V3 transcription")
                     
-                    # OPTIMIZED settings for speed
-                    transcribe_options = {
-                        "word_timestamps": True,
-                        "beam_size": 3,  # Reduced from 5 for speed
-                        "best_of": 3,    # Reduced from 5 for speed
-                        "temperature": 0.0,
-                        "compression_ratio_threshold": 2.4,
-                        "log_prob_threshold": -1.0,
-                        "no_speech_threshold": 0.6,
-                        "condition_on_previous_text": False,  # Disabled for speed
-                        # Removed punctuation processing for speed
-                    }
+                    # Use speed-specific optimization settings
+                    transcribe_options = optimization_settings.copy()
+                    
+                    # Remove non-whisper parameters
+                    if "description" in transcribe_options:
+                        del transcribe_options["description"]
+                    if "vad_filter" in transcribe_options:
+                        del transcribe_options["vad_filter"]
                     
                     if language != "auto" and language:
                         transcribe_options["language"] = language
@@ -1192,7 +1235,9 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
                     else:
                         print("🌐 Using auto-detect")
                     
-                    # Faster-Whisper transcription with optimizations
+                    print(f"⚙️  {speed.upper()} settings: beam_size={transcribe_options['beam_size']}, best_of={transcribe_options['best_of']}")
+                    
+                    # Faster-Whisper transcription with speed-specific optimizations
                     segments, info = whisper_model.transcribe(file_path, **transcribe_options)
                     
                     # OPTIMIZED segment processing with batch handling
@@ -1506,16 +1551,24 @@ class ProgressTracker:
         }
         print(f"❌ Processing failed after {elapsed:.1f}s: {error_message}")
 
-async def process_audio_librosa(job_id: str, file_path: str, filename: str, language: str = "auto", engine: str = "faster-whisper"):
-    """Process audio using fast Whisper approach with enhanced progress tracking"""
+async def process_audio_librosa(job_id: str, file_path: str, filename: str, language: str = "auto", engine: str = "faster-whisper", speed: str = "medium"):
+    """Process audio using fast Whisper approach with enhanced progress tracking and speed options"""
     progress = ProgressTracker(job_id)
     
     try:
-        print(f"⚡ Starting FAST processing: {filename}")
-        print(f"🌐 Language: {language}, Engine: {engine}")
+        print(f"⚡ Starting processing: {filename}")
+        print(f"🌐 Language: {language}, Engine: {engine}, Speed: {speed}")
+        
+        # Import speed config
+        from whisper_config import get_speed_config
+        speed_config = get_speed_config(speed)
+        
+        print(f"🚀 Using {speed} mode:")
+        print(f"   Model: {speed_config['model_config']['model']}")
+        print(f"   Expected: {speed_config['model_config']['expected_speed']}")
         
         # Stage 1: Initialization
-        progress.update_stage("initialization", 50, f"Initializing processing for {filename} (Language: {language})")
+        progress.update_stage("initialization", 50, f"Initializing {speed} processing for {filename} (Language: {language})")
         
         # Get file info for better progress estimation
         file_size = os.path.getsize(file_path) / (1024 * 1024)  # MB
@@ -1586,8 +1639,8 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str, lang
         # Stage 4: Transcription (this is the longest stage) - use optimized file
         progress.update_stage("transcription", 0, f"Starting transcription with {engine} (Language: {language})...")
         
-        # Transcription using Faster-Whisper Large V3 with optimized file
-        transcription = await transcribe_with_faster_whisper_large_v3(optimized_file_path, job_id, progress, language)
+        # Transcription using Faster-Whisper with speed optimization
+        transcription = await transcribe_with_faster_whisper_large_v3(optimized_file_path, job_id, progress, language, speed)
         
         if not transcription or not transcription.get("segments"):
             raise Exception("Transcription failed or returned empty result")

@@ -5,13 +5,14 @@ import { EngineModal } from "./EngineModal";
 interface UploadSectionProps {
   onFileSelect: (
     file: File,
-    options?: { language?: string; engine?: string }
+    options?: { language?: string; engine?: string; speed?: string }
   ) => void;
 }
 
 interface UploadOptions {
   language: string;
   engine: string;
+  speed: string;
 }
 
 const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
@@ -23,6 +24,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
   const [uploadOptions, setUploadOptions] = useState<UploadOptions>({
     language: "auto",
     engine: "faster-whisper",
+    speed: "medium", // Default speed
   });
   const [isEngineModalOpen, setIsEngineModalOpen] = useState<boolean>(false);
 
@@ -407,6 +409,57 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
                     ⚙️
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* Speed Selection */}
+            <div>
+              <label
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#333",
+                  marginBottom: "8px",
+                  display: "block",
+                }}
+              >
+                🚀 Processing Speed
+              </label>
+              <div>
+                <select
+                  value={uploadOptions.speed}
+                  onChange={(e) =>
+                    setUploadOptions({
+                      ...uploadOptions,
+                      speed: e.target.value,
+                    })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #ddd6fe",
+                    borderRadius: "8px",
+                    backgroundColor: "#f8faff",
+                    fontSize: "14px",
+                    color: "#7c3aed",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    outline: "none",
+                    transition: "all 0.2s ease",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "#c4b5fd";
+                    e.currentTarget.style.backgroundColor = "#ede9fe";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#ddd6fe";
+                    e.currentTarget.style.backgroundColor = "#f8faff";
+                  }}
+                >
+                  <option value="fast">⚡ Fast (Base Model) - 3-4x faster</option>
+                  <option value="medium">⚖️ Medium (Small Model) - 2x faster</option>
+                  <option value="slow">🎯 Slow (Large-v3 Model) - Best accuracy</option>
+                </select>
               </div>
             </div>
 

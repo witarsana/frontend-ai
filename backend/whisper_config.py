@@ -10,6 +10,37 @@
 # - large-v2: Improved accuracy (~6GB VRAM)
 # - large-v3: Latest, best accuracy (~6GB VRAM) - RECOMMENDED
 
+# Speed-based Model Selection Strategy:
+SPEED_CONFIGS = {
+    "fast": {
+        "model": "base",
+        "device": "cpu",
+        "compute_type": "int8",
+        "description": "Fast transcription with good accuracy",
+        "memory_usage": "~1.5GB RAM",
+        "expected_speed": "3-4x faster than large-v3",
+        "use_case": "Quick transcription, lower accuracy acceptable"
+    },
+    "medium": {
+        "model": "small",
+        "device": "cpu", 
+        "compute_type": "int8",
+        "description": "Balanced speed and accuracy",
+        "memory_usage": "~2GB RAM",
+        "expected_speed": "2x faster than large-v3",
+        "use_case": "Good balance of speed and accuracy"
+    },
+    "slow": {
+        "model": "large-v3",
+        "device": "cpu",
+        "compute_type": "int8", 
+        "description": "Best accuracy, slower processing",
+        "memory_usage": "~3GB RAM",
+        "expected_speed": "Baseline (highest accuracy)",
+        "use_case": "Maximum accuracy for important content"
+    }
+}
+
 # Model Selection Strategy:
 WHISPER_MODEL_CONFIG = {
     "production": {
@@ -114,7 +145,47 @@ LARGE_V3_FEATURES = {
     "technical_terms": "Better recognition of technical vocabulary"
 }
 
-# Performance Optimization Settings - OPTIMIZED FOR SPEED
+# Performance Optimization Settings - SPEED BASED
+SPEED_OPTIMIZATION_SETTINGS = {
+    "fast": {
+        "beam_size": 1,        # Greedy search for maximum speed
+        "best_of": 1,          # No multiple candidates
+        "temperature": 0.0,    # Deterministic
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
+        "no_speech_threshold": 0.6,
+        "condition_on_previous_text": False,  # Faster processing
+        "word_timestamps": False,  # Skip word-level timestamps for speed
+        "vad_filter": True,    # Quick voice activity detection
+        "description": "Maximum speed settings"
+    },
+    "medium": {
+        "beam_size": 3,        # Some search for better accuracy
+        "best_of": 2,          # Limited candidates
+        "temperature": 0.0,    # Deterministic
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
+        "no_speech_threshold": 0.6,
+        "condition_on_previous_text": False,
+        "word_timestamps": True,   # Include word timestamps
+        "vad_filter": True,
+        "description": "Balanced speed and accuracy"
+    },
+    "slow": {
+        "beam_size": 5,        # Full beam search for accuracy
+        "best_of": 5,          # Multiple candidates for best result
+        "temperature": 0.0,    # Deterministic
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
+        "no_speech_threshold": 0.6,
+        "condition_on_previous_text": True,   # Use context for accuracy
+        "word_timestamps": True,   # Full word-level timestamps
+        "vad_filter": False,   # No filtering for maximum accuracy
+        "description": "Maximum accuracy settings"
+    }
+}
+
+# Performance Optimization Settings - OPTIMIZED FOR SPEED (Legacy - kept for compatibility)
 OPTIMIZATION_SETTINGS = {
     "batch_size": 16,      # Keep for throughput
     "beam_size": 3,        # Reduced from 5 for 40% speed improvement
@@ -152,3 +223,36 @@ MODEL_DOWNLOAD_INFO = {
         "cache_location": "~/.cache/huggingface/transformers/"
     }
 }
+
+def get_speed_config(speed: str = "medium"):
+    """Get whisper configuration based on speed preference"""
+    if speed not in SPEED_CONFIGS:
+        print(f"⚠️  Unknown speed '{speed}', using 'medium'")
+        speed = "medium"
+    
+    model_config = SPEED_CONFIGS[speed].copy()
+    optimization_config = SPEED_OPTIMIZATION_SETTINGS[speed].copy()
+    
+    print(f"🚀 Speed Mode: {speed.upper()}")
+    print(f"   Model: {model_config['model']}")
+    print(f"   Description: {model_config['description']}")
+    print(f"   Expected Speed: {model_config['expected_speed']}")
+    print(f"   Memory Usage: {model_config['memory_usage']}")
+    
+    return {
+        "model_config": model_config,
+        "optimization_config": optimization_config
+    }
+
+def get_speed_info():
+    """Get information about all available speed options"""
+    info = {}
+    for speed, config in SPEED_CONFIGS.items():
+        info[speed] = {
+            "model": config["model"],
+            "description": config["description"],
+            "expected_speed": config["expected_speed"],
+            "memory_usage": config["memory_usage"],
+            "use_case": config["use_case"]
+        }
+    return info

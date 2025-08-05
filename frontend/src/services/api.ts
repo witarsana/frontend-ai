@@ -8,6 +8,7 @@ export const API_CONFIG = {
     CONFIG: "/api/config",
     ENGINES: "/api/engines",
     SET_ENGINE: "/api/config/engine",
+    SPEED_OPTIONS: "/api/speed-options",
     COMPLETED_JOBS: "/api/jobs/completed",
     REGENERATE_SUMMARY: "/api/regenerate-summary",
     CHAT: "/api/chat",
@@ -177,6 +178,29 @@ export interface EngineChangeResponse {
   message: string;
 }
 
+export interface SpeedOption {
+  model: string;
+  description: string;
+  expected_speed: string;
+  memory_usage: string;
+  use_case: string;
+}
+
+export interface SpeedOptionsResponse {
+  success: boolean;
+  speed_options: {
+    fast: SpeedOption;
+    medium: SpeedOption;
+    slow: SpeedOption;
+  };
+  default: string;
+  description: {
+    fast: string;
+    medium: string;
+    slow: string;
+  };
+}
+
 // API service class
 export class AITranscriptionAPI {
   private baseUrl: string;
@@ -188,7 +212,7 @@ export class AITranscriptionAPI {
   // Upload and start processing
   async uploadAndProcess(
     file: File,
-    options?: { engine?: TranscriptionEngine; language?: string }
+    options?: { engine?: TranscriptionEngine; language?: string; speed?: string }
   ): Promise<APIUploadResponse> {
     const formData = new FormData();
     formData.append("file", file);
@@ -201,6 +225,11 @@ export class AITranscriptionAPI {
     // Add language preference if provided
     if (options?.language) {
       formData.append("language", options.language);
+    }
+
+    // Add speed preference if provided (default: medium)
+    if (options?.speed) {
+      formData.append("speed", options.speed);
     }
 
     const response = await fetch(
@@ -325,6 +354,19 @@ export class AITranscriptionAPI {
     } catch {
       return false;
     }
+  }
+
+  // Get available speed options
+  async getSpeedOptions(): Promise<SpeedOptionsResponse> {
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.SPEED_OPTIONS}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Get speed options failed: ${response.statusText}`);
+    }
+
+    return response.json();
   }
 
   // Regenerate summary for existing job
