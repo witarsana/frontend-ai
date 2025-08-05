@@ -222,7 +222,7 @@ const App: React.FC = () => {
 
   const handleFileSelect = async (
     file: File,
-    options?: { language?: string; engine?: string }
+    options?: { language?: string; engine?: string; speed?: string; speakerMethod?: string }
   ) => {
     console.log("File selected:", file.name, "Size:", file.size);
     console.log("Upload options:", options);
@@ -242,6 +242,8 @@ const App: React.FC = () => {
         const uploadResponse = await aiAPI.uploadAndProcess(file, {
           engine: options?.engine as TranscriptionEngine,
           language: options?.language,
+          speed: options?.speed,
+          speakerMethod: options?.speakerMethod,
         });
         
         console.log("Upload response:", uploadResponse);
@@ -327,6 +329,10 @@ const App: React.FC = () => {
       participants: result.speakers || [],
       duration: result.duration || null,
       fullResult: result,
+      // Add experimental speaker data if available
+      experimentalSpeakerData: result.experimental_speaker_data || null,
+      audioInfo: result.audio_info || null,
+      detectedSpeakers: result.detected_speakers || null,
     };
 
     setSessionTranscriptions((prev) => [newTranscription, ...prev]);

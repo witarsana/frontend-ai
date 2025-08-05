@@ -22,7 +22,7 @@ export const EngineModal: React.FC<EngineModalProps> = ({
   onEngineChange,
   onLanguageChange,
   currentLanguage = "auto",
-  currentEngine = "faster-whisper",
+  // currentEngine = "faster-whisper",
 }) => {
   const [engines, setEngines] = useState<EnginesResponse | null>(null);
   const [loading, setLoading] = useState(false);

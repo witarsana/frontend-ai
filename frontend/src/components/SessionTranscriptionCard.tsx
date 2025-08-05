@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import ChatInterface from "./ChatInterface";
 import NotionService, { ActionItemDetail } from "../services/notionApi";
+import ExperimentalDataCard from "./ExperimentalDataCard";
+import AnalyticsTab from "./AnalyticsTab";
 
 interface Segment {
   id?: number;
@@ -51,6 +53,9 @@ interface Transcription {
   fullResult?: FullResult;
   audioUrl?: string; // URL to the audio file for playback
   filename?: string; // Original filename
+  experimentalSpeakerData?: any; // Experimental speaker detection data
+  audioInfo?: any; // Audio processing info
+  detectedSpeakers?: number; // Detected speakers count
 }
 
 interface SessionTranscriptionCardProps {
@@ -65,7 +70,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
   transcription,
   onBack
 }) => {
-  const [activeTab, setActiveTab] = useState<"segments" | "summary" | "chat">("summary");
+  const [activeTab, setActiveTab] = useState<"segments" | "summary" | "chat" | "analytics">("summary");
   
   // Pagination and search states for segments
   const [searchTerm, setSearchTerm] = useState("");
@@ -525,172 +530,213 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
   return (
     <>
       <style>{`
-        /* Hide scrollbar for segments container */
-        .segments-container::-webkit-scrollbar {
-          display: none;
+        /* Futuristic Clean Scrollbar */
+        .clean-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(59, 130, 246, 0.2) transparent;
+        }
+        .clean-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .clean-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .clean-scrollbar::-webkit-scrollbar-thumb {
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(139, 92, 246, 0.2));
+          border-radius: 6px;
+        }
+        .clean-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(139, 92, 246, 0.3));
         }
         
-        /* Main segments scroll - single scrollbar INSIDE content */
+        /* Futuristic segments scroll */
         .segments-main-scroll {
-          scrollbar-width: thin; /* Firefox */
-          scrollbar-color: #cbd5e1 #f8fafc; /* Firefox */
+          scrollbar-width: thin;
+          scrollbar-color: rgba(59, 130, 246, 0.2) transparent;
         }
         .segments-main-scroll::-webkit-scrollbar { 
-          width: 12px; /* Slightly wider to be more visible inside content */
-        }
-        .segments-main-scroll::-webkit-scrollbar-track { 
-          background: #f8fafc;
-          border-radius: 6px;
-          margin: 4px 0; /* Add some margin from top/bottom */
-        }
-        .segments-main-scroll::-webkit-scrollbar-thumb { 
-          background: #cbd5e1; 
-          border-radius: 6px;
-          border: 2px solid #f8fafc; /* Create space around thumb */
-        }
-        .segments-main-scroll::-webkit-scrollbar-thumb:hover { 
-          background: #94a3b8; 
-        }
-        .segments-main-scroll::-webkit-scrollbar-corner {
-          background: #f8fafc;
-        }
-        
-        /* Summary tab scroll - INSIDE content */
-        .summary-tab-scroll {
-          scrollbar-width: thin; /* Firefox */
-          scrollbar-color: #cbd5e1 #f8fafc; /* Firefox */
-        }
-        .summary-tab-scroll::-webkit-scrollbar { 
-          width: 12px; 
-        }
-        .summary-tab-scroll::-webkit-scrollbar-track { 
-          background: #f8fafc; 
-          border-radius: 6px;
-          margin: 4px 0;
-        }
-        .summary-tab-scroll::-webkit-scrollbar-thumb { 
-          background: #cbd5e1; 
-          border-radius: 6px;
-          border: 2px solid #f8fafc;
-        }
-        .summary-tab-scroll::-webkit-scrollbar-thumb:hover { 
-          background: #94a3b8; 
-        }
-        
-        /* Custom scrollbar for AI Chat container */
-        .ai-chat-container::-webkit-scrollbar {
           width: 8px;
         }
+        .segments-main-scroll::-webkit-scrollbar-track { 
+          background: rgba(248, 250, 252, 0.5);
+          border-radius: 4px;
+        }
+        .segments-main-scroll::-webkit-scrollbar-thumb { 
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(139, 92, 246, 0.2)); 
+          border-radius: 4px;
+        }
+        .segments-main-scroll::-webkit-scrollbar-thumb:hover { 
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(139, 92, 246, 0.3)); 
+        }
+        
+        /* Futuristic summary scroll */
+        .summary-tab-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(59, 130, 246, 0.2) transparent;
+        }
+        .summary-tab-scroll::-webkit-scrollbar { 
+          width: 8px; 
+        }
+        .summary-tab-scroll::-webkit-scrollbar-track { 
+          background: rgba(248, 250, 252, 0.5); 
+          border-radius: 4px;
+        }
+        .summary-tab-scroll::-webkit-scrollbar-thumb { 
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(139, 92, 246, 0.2)); 
+          border-radius: 4px;
+        }
+        .summary-tab-scroll::-webkit-scrollbar-thumb:hover { 
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(139, 92, 246, 0.3)); 
+        }
+        
+        /* Futuristic AI Chat scrollbar */
+        .ai-chat-container::-webkit-scrollbar {
+          width: 6px;
+        }
         .ai-chat-container::-webkit-scrollbar-track {
-          background: #f1f5f9;
+          background: rgba(248, 250, 252, 0.5);
           border-radius: 3px;
         }
         .ai-chat-container::-webkit-scrollbar-thumb {
-          background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(139, 92, 246, 0.3));
           border-radius: 3px;
         }
         .ai-chat-container::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(135deg, #2563eb, #1e40af);
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.6), rgba(139, 92, 246, 0.4));
         }
         
-        /* Ensure outer containers don't scroll */
+        /* Futuristic Container Styles */
         .main-card-container {
-          overflow: hidden !important; /* Paksa hidden untuk container utama */
+          overflow: hidden;
         }
         
-        /* Hide any other scrollbars that might interfere */
         .tab-content-container {
-          scrollbar-width: none !important;
-          overflow: hidden !important; /* Paksa hidden untuk tab content */
-        }
-        .tab-content-container::-webkit-scrollbar {
-          display: none !important;
-          width: 0 !important;
-          height: 0 !important;
+          overflow: auto;
+          background: rgba(255, 255, 255, 0.7);
+          backdrop-filter: blur(12px);
         }
         
-        /* Ensure main container never scrolls */
+        /* Global futuristic styles */
         body, html {
-          overflow: hidden !important; /* Paksa hidden untuk mencegah scroll di browser */
           margin: 0;
           padding: 0;
         }
         
-        /* Ensure root div also fits */
         #root {
           height: 100vh;
           width: 100vw;
-          overflow: hidden !important; /* Paksa hidden untuk mencegah scroll di root */
           margin: 0;
           padding: 0;
+          background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        }
+        
+        /* Futuristic Focus States */
+        .clean-button:focus {
+          outline: 2px solid rgba(59, 130, 246, 0.5);
+          outline-offset: 2px;
+          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+        
+        /* Futuristic Input States */
+        .clean-input:focus {
+          border-color: rgba(59, 130, 246, 0.5);
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1), 0 0 20px rgba(59, 130, 246, 0.05);
+        }
+        
+        /* Subtle animations */
+        @keyframes futuristicGlow {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
+        }
+        
+        .futuristic-element {
+          animation: futuristicGlow 3s ease-in-out infinite;
         }
       `}</style>
       
       <div
         className="main-card-container"
         style={{
-          backgroundColor: "white",
+          backgroundColor: "rgba(255, 255, 255, 0.98)",
           borderRadius: "16px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
-          border: "1px solid #e5e7eb",
-          margin: "8px", // Tambah margin untuk tidak full screen
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.05)",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+          backdropFilter: "blur(24px)",
+          margin: "0",
+          padding: "0",
           overflow: "hidden",
-          height: "calc(100vh - 16px)", // Kurangi height untuk margin
-          width: "calc(100vw - 16px)", // Kurangi width untuk margin
-          maxWidth: "100%", // Pastikan tidak overflow
           display: "flex",
           flexDirection: "column",
-          position: "fixed", // Fixed position untuk kontrol penuh
-          top: "8px",
-          left: "8px"
+          position: "relative",
+          height: "calc(100vh - 80px)",
+          transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+          background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.8) 100%)"
         }}
       >
-      {/* Compact Header with Back Button */}
+      {/* Futuristic Header with Glassmorphism */}
       <div
         style={{
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          color: "white",
+          background: "linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%)",
+          backdropFilter: "blur(16px)",
+          borderBottom: "1px solid rgba(59, 130, 246, 0.1)",
           padding: "16px 20px",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center"
+          alignItems: "center",
+          position: "relative",
+          flexShrink: 0
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {/* Enhanced Back Button */}
+        {/* Subtle animated gradient overlay */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "linear-gradient(90deg, rgba(59, 130, 246, 0.03) 0%, rgba(139, 92, 246, 0.02) 50%, rgba(59, 130, 246, 0.03) 100%)",
+            backgroundSize: "200% 100%",
+            animation: "subtleShimmer 8s ease-in-out infinite",
+            pointerEvents: "none"
+          }}
+        />
+        
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", position: "relative", zIndex: 1 }}>
+          {/* Futuristic Back Button */}
           {onBack && (
             <button
               onClick={onBack}
               style={{
-                background: "rgba(255,255,255,0.15)",
-                border: "2px solid rgba(255,255,255,0.3)",
+                background: "rgba(59, 130, 246, 0.08)",
+                border: "1px solid rgba(59, 130, 246, 0.2)",
                 borderRadius: "12px",
-                color: "white",
+                color: "#3b82f6",
                 padding: "10px 16px",
                 cursor: "pointer",
                 fontSize: "14px",
-                fontWeight: "600",
+                fontWeight: "500",
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                transition: "all 0.3s ease",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                backdropFilter: "blur(8px)"
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(255,255,255,0.25)";
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.5)";
+                e.currentTarget.style.background = "rgba(59, 130, 246, 0.12)";
+                e.currentTarget.style.borderColor = "rgba(59, 130, 246, 0.3)";
                 e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.15)";
+                e.currentTarget.style.boxShadow = "0 4px 16px rgba(59, 130, 246, 0.15)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(255,255,255,0.15)";
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)";
+                e.currentTarget.style.background = "rgba(59, 130, 246, 0.08)";
+                e.currentTarget.style.borderColor = "rgba(59, 130, 246, 0.2)";
                 e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
+                e.currentTarget.style.boxShadow = "none";
               }}
             >
               <span style={{ fontSize: "16px" }}>←</span>
-              <span>Back to History</span>
+              <span>Back</span>
             </button>
           )}
           
@@ -699,16 +745,22 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
               style={{
                 margin: "0",
                 fontSize: "20px",
-                fontWeight: "700",
+                fontWeight: "600",
+                color: "#1e293b",
+                background: "linear-gradient(135deg, #1e293b 0%, #3b82f6 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text"
               }}
             >
-              📝 Session Transcription
+              Session Transcription
             </h3>
             <p
               style={{
                 margin: "4px 0 0 0",
                 fontSize: "13px",
-                opacity: 0.9,
+                color: "#64748b",
+                fontWeight: "400"
               }}
             >
               Uploaded at {transcription.uploadTime.toLocaleTimeString()}
@@ -718,15 +770,18 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
           </div>
         </div>
         
-        {/* Status Badge */}
-        <div style={{
-          background: "rgba(255,255,255,0.1)",
-          padding: "6px 12px",
-          borderRadius: "12px",
-          border: "1px solid rgba(255,255,255,0.2)"
-        }}>
+        {/* Futuristic Status Badge */}
+        <div style={{ position: "relative", zIndex: 1 }}>
           {getStatusBadge()}
         </div>
+        
+        {/* Add keyframes for animation */}
+        <style>{`
+          @keyframes subtleShimmer {
+            0%, 100% { transform: translateX(-100%); }
+            50% { transform: translateX(100%); }
+          }
+        `}</style>
       </div>
 
       {/* Content Area with Tabs */}
@@ -739,72 +794,108 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
           overflow: "hidden", // Paksa hidden untuk content area
           minHeight: 0 // Izinkan shrinking
         }}>
-          {/* Enhanced Tab Navigation */}
+          {/* Futuristic Tab Navigation */}
           <div
             style={{
               display: "flex",
-              backgroundColor: "#f8fafc",
+              background: "rgba(248, 250, 252, 0.6)",
+              backdropFilter: "blur(16px)",
               margin: "0",
-              borderBottom: "1px solid #e5e7eb",
+              borderBottom: "1px solid rgba(59, 130, 246, 0.08)",
               flexShrink: 0,
-              width: "100%", // Pastikan lebar penuh
-              overflowX: "auto", // Izinkan scroll horizontal jika perlu
-              minHeight: "60px" // Berikan tinggi minimum yang cukup
+              width: "100%",
+              overflowX: "auto",
+              minHeight: "56px",
+              position: "relative"
             }}
           >
-            {(["segments", "summary", "chat"] as const).map((tab) => (
+            {/* Enhanced Animated Tab Indicator */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: `${(["segments", "summary", "chat", "analytics"] as const).indexOf(activeTab) * 25}%`,
+                width: "25%",
+                height: "3px",
+                background: "linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899)",
+                transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                borderRadius: "3px 3px 0 0",
+                boxShadow: "0 -2px 8px rgba(59, 130, 246, 0.3)"
+              }}
+            />
+            
+            {(["segments", "summary", "chat", "analytics"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 style={{
-                  flex: "1 1 33.33%", // Bagi rata 3 tab dengan lebar yang sama
-                  minWidth: "120px", // Lebar minimum untuk memastikan text terlihat
-                  padding: "12px 16px", // Kurangi padding untuk efisiensi ruang
+                  flex: "1",
+                  minWidth: "120px",
+                  padding: "16px 20px",
                   border: "none",
-                  background: activeTab === tab ? "white" : "transparent",
+                  background: activeTab === tab 
+                    ? "rgba(255, 255, 255, 0.95)" 
+                    : "transparent",
                   cursor: "pointer",
-                  fontSize: "13px", // Sedikit kecilkan font untuk muat semua
-                  fontWeight: "600",
-                  color: activeTab === tab ? "#3b82f6" : "#6b7280",
-                  borderBottom: activeTab === tab ? "3px solid #3b82f6" : "3px solid transparent",
-                  transition: "all 0.2s ease",
+                  fontSize: "14px",
+                  fontWeight: activeTab === tab ? "600" : "500",
+                  color: activeTab === tab ? "#3b82f6" : "#64748b",
+                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "4px", // Kurangi gap untuk menghemat ruang
-                  whiteSpace: "nowrap" // Cegah text wrap
+                  gap: "8px",
+                  whiteSpace: "nowrap",
+                  position: "relative",
+                  backdropFilter: activeTab === tab ? "blur(16px)" : "none",
+                  borderRadius: activeTab === tab ? "12px 12px 0 0" : "0",
+                  boxShadow: activeTab === tab 
+                    ? "0 -4px 16px rgba(59, 130, 246, 0.15), 0 -2px 8px rgba(59, 130, 246, 0.1)" 
+                    : "none",
+                  transform: activeTab === tab ? "translateY(-2px)" : "translateY(0)",
+                  zIndex: activeTab === tab ? 10 : 1
                 }}
                 onMouseEnter={(e) => {
                   if (activeTab !== tab) {
-                    e.currentTarget.style.backgroundColor = "#f1f5f9";
+                    e.currentTarget.style.background = "rgba(59, 130, 246, 0.05)";
+                    e.currentTarget.style.color = "#475569";
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(59, 130, 246, 0.08)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (activeTab !== tab) {
-                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "#64748b";
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "none";
                   }
                 }}
               >
                 {tab === "segments" 
-                  ? <>💬 <span>Segments</span></> 
+                  ? <><span style={{ fontSize: "16px" }}>💬</span><span>Segments</span></> 
                   : tab === "summary" 
-                  ? <>📄 <span>Summary</span></> 
-                  : <>🤖 <span>AI Chat</span></>}
+                  ? <><span style={{ fontSize: "16px" }}>📄</span><span>Summary</span></> 
+                  : tab === "chat"
+                  ? <><span style={{ fontSize: "16px" }}>🤖</span><span>AI Chat</span></>
+                  : <><span style={{ fontSize: "16px" }}>📊</span><span>Analytics</span></>}
               </button>
             ))}
           </div>
 
-          {/* Tab Content with Better Spacing */}
+          {/* Futuristic Tab Content */}
           <div
             className="tab-content-container"
             style={{
-              backgroundColor: "#ffffff",
+              background: "rgba(255, 255, 255, 0.85)",
+              backdropFilter: "blur(16px)",
               padding: "0",
               flex: 1,
-              overflow: "hidden", // Paksa hidden untuk mencegah scroll di tab content
+              overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              minHeight: 0 // Izinkan shrinking
+              minHeight: 0,
+              position: "relative"
             }}
           >
             {activeTab === "segments" && (
@@ -816,6 +907,22 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                 flex: 1,
                 minHeight: 0 // Izinkan shrinking
               }}>
+                {/* Experimental Data Section */}
+                {(transcription.experimentalSpeakerData || transcription.audioInfo?.experimental_speaker_detection) && (
+                  <div style={{
+                    padding: "12px 16px",
+                    backgroundColor: "#fafafa",
+                    borderBottom: "1px solid #e5e7eb",
+                    flexShrink: 0
+                  }}>
+                    <ExperimentalDataCard
+                      experimentalData={transcription.experimentalSpeakerData}
+                      audioInfo={transcription.audioInfo}
+                      detectedSpeakers={transcription.detectedSpeakers || null}
+                    />
+                  </div>
+                )}
+
                 {transcription.segments && transcription.segments.length > 0 ? (
                   <>
                     {/* Header with Search and Items Per Page - FIXED POSITION */}
@@ -823,11 +930,11 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "16px 20px",
+                      padding: "12px 16px",
                       backgroundColor: "#ffffff",
                       borderBottom: "1px solid #e5e7eb",
                       flexShrink: 0, // Don't allow this to shrink
-                      gap: "16px",
+                      gap: "12px",
                       boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1354,8 +1461,8 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                       overflowY: "auto",
                       backgroundColor: "white",
                       margin: "0", // Remove any margin
-                      paddingRight: "16px", // Add padding to keep content away from scrollbar
-                      paddingLeft: "8px",
+                      paddingRight: "12px", // Add padding to keep content away from scrollbar
+                      paddingLeft: "6px",
                       marginRight: "0",
                       boxSizing: "border-box" // Include padding in width calculation
                     }}
@@ -1370,7 +1477,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                               key={globalIndex}
                               id={`segment-${globalIndex}`}
                               style={{
-                                padding: "16px 20px",
+                                padding: "12px 16px",
                                 borderBottom: index < paginatedSegments.length - 1 ? "1px solid #f3f4f6" : "none",
                                 backgroundColor: isCurrentlyPlaying ? "#f0f9ff" : "transparent",
                                 borderLeft: isCurrentlyPlaying ? "4px solid #3b82f6" : "4px solid transparent",
@@ -1536,9 +1643,9 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
               <div style={{
                 height: "100%",
                 overflow: "auto",
-                padding: "20px",
-                paddingRight: "16px", // Add padding to keep content away from scrollbar
-                paddingLeft: "8px",
+                padding: "16px",
+                paddingRight: "12px", // Add padding to keep content away from scrollbar
+                paddingLeft: "6px",
                 boxSizing: "border-box", // Include padding in width calculation
                 flex: 1,
                 minHeight: 0 // Allow flex child to shrink below content size
@@ -1546,7 +1653,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
               className="summary-tab-scroll">
                 {/* Narrative Summary Section */}
                 {cleanSummary ? (
-                  <div style={{ marginBottom: "24px" }}>
+                  <div style={{ marginBottom: "16px" }}>
                     <h4
                       style={{
                         margin: "0 0 12px 0",
@@ -2067,29 +2174,106 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
 
             {activeTab === "chat" && (
               <div className="ai-chat-container" style={{ 
-                height: "100%", 
+                height: "100%",
                 overflow: "hidden",
-                padding: "16px",
+                padding: "0",
                 display: "flex",
                 flexDirection: "column",
                 flex: 1,
-                minHeight: 0, // Allow flex child to shrink below content size
-                backgroundColor: "#f8fafc"
+                minHeight: 0,
+                background: "rgba(255, 255, 255, 0.95)",
+                backdropFilter: "blur(16px)"
               }}>
-                {/* Debug header */}
+                {/* Integrated Chat Header */}
                 <div style={{
-                  padding: "16px",
-                  backgroundColor: "#e0e7ff",
-                  borderRadius: "8px",
-                  marginBottom: "16px",
-                  border: "2px solid #3b82f6"
+                  padding: "12px 20px",
+                  background: "linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%)",
+                  borderBottom: "1px solid rgba(59, 130, 246, 0.1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  minHeight: "50px"
                 }}>
-                  <h3 style={{ margin: "0 0 8px 0", color: "#1e40af" }}>🤖 AI Chat Interface</h3>
-                  <p style={{ margin: "0", fontSize: "14px", color: "#3730a3" }}>
-                    Session ID: {transcription.id}
-                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "10px",
+                      background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "16px",
+                      boxShadow: "0 3px 12px rgba(59, 130, 246, 0.2)"
+                    }}>
+                      🤖
+                    </div>
+                    <div>
+                      <h3 style={{ 
+                        margin: "0", 
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        background: "linear-gradient(135deg, #1e293b 0%, #3b82f6 100%)",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        backgroundClip: "text"
+                      }}>
+                        AI Assistant
+                      </h3>
+                      <p style={{ 
+                        margin: "2px 0 0 0", 
+                        fontSize: "12px", 
+                        color: "#64748b",
+                        fontWeight: "400"
+                      }}>
+                        Ready to analyze your transcript
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Controls */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{
+                      padding: "4px 8px",
+                      background: "rgba(59, 130, 246, 0.1)",
+                      borderRadius: "6px",
+                      fontSize: "10px",
+                      color: "#3b82f6",
+                      fontWeight: "600"
+                    }}>
+                      🤖 AI Mode
+                    </div>
+                    <div style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      backgroundColor: "#10b981",
+                      opacity: 0.8
+                    }}></div>
+                  </div>
                 </div>
-                <ChatInterface sessionId={transcription.id} />
+                
+                <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                  <ChatInterface sessionId={transcription.id} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "analytics" && (
+              <div style={{
+                height: "100%",
+                overflow: "auto",
+                padding: "20px",
+                paddingRight: "16px",
+                paddingLeft: "8px",
+                boxSizing: "border-box",
+                flex: 1,
+                minHeight: 0
+              }}
+              className="summary-tab-scroll">
+                <AnalyticsTab 
+                  transcription={transcription}
+                />
               </div>
             )}
 

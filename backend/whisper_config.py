@@ -38,6 +38,60 @@ SPEED_CONFIGS = {
         "memory_usage": "~3GB RAM",
         "expected_speed": "Baseline (highest accuracy)",
         "use_case": "Maximum accuracy for important content"
+    },
+    "experimental": {
+        "model": "large-v3",
+        "device": "cpu",
+        "compute_type": "int8",
+        "description": "Advanced speaker detection and diarization",
+        "memory_usage": "~4GB RAM + speaker detection models",
+        "expected_speed": "2-3x slower than large-v3 (includes speaker analysis)",
+        "use_case": "Advanced speaker detection, meeting transcription",
+        "features": ["speaker_diarization", "speaker_counting", "speaker_segments"],
+        "speaker_methods": {
+            "pyannote": {
+                "name": "pyannote.audio",
+                "description": "State-of-the-art neural speaker diarization",
+                "accuracy": "very_high",
+                "requirements": ["pyannote.audio", "huggingface_token"],
+                "memory": "~2GB extra",
+                "speed": "slow"
+            },
+            "speechbrain": {
+                "name": "SpeechBrain",
+                "description": "Modern speaker recognition toolkit",
+                "accuracy": "high", 
+                "requirements": ["speechbrain"],
+                "memory": "~1.5GB extra",
+                "speed": "medium"
+            },
+            "resemblyzer": {
+                "name": "Resemblyzer",
+                "description": "Lightweight speaker embeddings",
+                "accuracy": "medium",
+                "requirements": ["resemblyzer"],
+                "memory": "~500MB extra", 
+                "speed": "fast"
+            },
+            "webrtc": {
+                "name": "WebRTC VAD",
+                "description": "Voice Activity Detection based",
+                "accuracy": "medium",
+                "requirements": ["webrtcvad", "librosa"],
+                "memory": "~100MB extra",
+                "speed": "very_fast"
+            },
+            "energy": {
+                "name": "Energy-based",
+                "description": "Simple energy pattern analysis (fallback)",
+                "accuracy": "low",
+                "requirements": ["librosa"],
+                "memory": "minimal",
+                "speed": "very_fast"
+            }
+        },
+        "default_method": "pyannote",
+        "models_required": ["pyannote/speaker-diarization", "pyannote/segmentation"]
     }
 }
 
@@ -182,6 +236,21 @@ SPEED_OPTIMIZATION_SETTINGS = {
         "word_timestamps": True,   # Full word-level timestamps
         "vad_filter": False,   # No filtering for maximum accuracy
         "description": "Maximum accuracy settings"
+    },
+    "experimental": {
+        "beam_size": 5,        # Full beam search for accuracy
+        "best_of": 5,          # Multiple candidates for best result
+        "temperature": 0.0,    # Deterministic
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
+        "no_speech_threshold": 0.6,
+        "condition_on_previous_text": True,   # Use context for accuracy
+        "word_timestamps": True,   # Full word-level timestamps
+        "vad_filter": False,   # No filtering for maximum accuracy
+        "speaker_diarization": True,   # Enable speaker detection
+        "speaker_embedding": True,     # Extract speaker embeddings
+        "segment_speakers": True,      # Assign speakers to segments
+        "description": "Maximum accuracy + speaker analysis"
     }
 }
 

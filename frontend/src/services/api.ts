@@ -113,7 +113,35 @@ export interface APIResultResponse {
     duration: number;
     samples: number;
     channels: number;
+    method?: string;
+    model?: string;
+    speed_mode?: string;
+    experimental_speaker_detection?: {
+      method: string;
+      confidence: string;
+      speaker_count: number;
+      speakers: string[];
+      segments_count: number;
+    };
   };
+  experimental_speaker_data?: {
+    method: string;
+    speaker_count: number;
+    confidence: string;
+    speakers: string[];
+    segments: any[];
+    analysis?: {
+      duration_minutes?: number;
+      voice_frames?: number;
+      silence_frames?: number;
+      voice_activity_ratio?: number;
+      speaker_transitions?: number;
+      change_points?: number;
+      change_frequency_per_minute?: number;
+      threshold_used?: number;
+    };
+  };
+  detected_speakers?: number;
   processed_at: string;
 }
 
@@ -212,7 +240,7 @@ export class AITranscriptionAPI {
   // Upload and start processing
   async uploadAndProcess(
     file: File,
-    options?: { engine?: TranscriptionEngine; language?: string; speed?: string }
+    options?: { engine?: TranscriptionEngine; language?: string; speed?: string; speakerMethod?: string }
   ): Promise<APIUploadResponse> {
     const formData = new FormData();
     formData.append("file", file);
@@ -230,6 +258,11 @@ export class AITranscriptionAPI {
     // Add speed preference if provided (default: medium)
     if (options?.speed) {
       formData.append("speed", options.speed);
+    }
+
+    // Add speaker method preference if provided (for experimental mode)
+    if (options?.speakerMethod) {
+      formData.append("speaker_method", options.speakerMethod);
     }
 
     const response = await fetch(

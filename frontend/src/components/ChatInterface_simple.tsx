@@ -24,7 +24,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
   const [selectedModel, setSelectedModel] = useState<ChatModel>('faiss');
   const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
   const [messageIdCounter, setMessageIdCounter] = useState(0);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,16 +74,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
       setSelectedModel(savedModel);
     }
     
-    // Load fallback suggestions focused on transcript analysis
+    // Load fallback suggestions without API calls
     const fallbackSuggestions = [
-      "Show me conversation segments with speakers",
-      "Analyze discussion patterns and insights", 
-      "What were the main topics discussed?",
-      "Who said what about each topic?",
-      "Summarize key decisions and action items",
-      "Identify communication dynamics",
-      "Extract important quotes from speakers",
-      "Timeline of conversation topics"
+      "Who were the main speakers?",
+      "What were the key decisions?",
+      "Summarize the meeting",
+      "What topics were discussed?",
+      "What action items were mentioned?",
+      "Any important deadlines discussed?"
     ];
     setSuggestions(fallbackSuggestions);
   }, [sessionId]);
@@ -109,31 +106,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
     sessionStorage.setItem(MODEL_KEY, selectedModel);
   }, [selectedModel, MODEL_KEY]);
 
-  // Auto-load latest transcript when component mounts and check connection
-  useEffect(() => {
-    const loadLatestTranscript = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/api/chat/load/job_20250806_024210_3815', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log('✅ Auto-loaded transcript:', result.job_id);
-          setConnectionStatus('connected');
-        } else {
-          setConnectionStatus('disconnected');
-        }
-      } catch (error) {
-        console.log('⚠️ Could not auto-load transcript:', error);
-        setConnectionStatus('disconnected');
-      }
-    };
-
-    loadLatestTranscript();
-  }, []);
-
   const sendMessage = async (messageText?: string) => {
     const textToSend = messageText || inputMessage.trim();
     if (!textToSend || isLoading) return;
@@ -152,38 +124,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
     setShouldAutoScroll(true);
 
     try {
-      console.log('🚀 Sending message to backend:', textToSend);
-      console.log('📋 Session ID:', sessionId);
-      console.log('🤖 Selected model:', selectedModel);
-      
-      // Use enhanced endpoint for both with model preference
-      const endpoint = 'http://localhost:8000/api/chat/enhanced';
-      const payload = {
-        query: textToSend,
-        session_id: sessionId,
-        model_preference: selectedModel,
-        use_smart_routing: false
-      };
-      
-      console.log('📡 Using endpoint:', endpoint);
-      console.log('📦 Payload:', payload);
-      
-      const response = await fetch(endpoint, {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          question: textToSend,
+          session_id: sessionId,
+          model: selectedModel,
+          chat_history: messages.map(msg => ({
+            role: msg.isUser ? 'user' : 'assistant',
+            content: msg.message
+          }))
+        }),
       });
 
-      console.log('📡 Response status:', response.status);
-      
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Backend response:', result);
-        
-        setConnectionStatus('connected');
-        
         const aiMessage: ChatMessage = {
           id: generateUniqueId(),
           message: result.answer || result.response || "I received your message but couldn't generate a proper response.",
@@ -191,24 +149,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
           timestamp: new Date(),
           sources: result.sources,
           confidence: result.confidence,
-          model_used: result.model_used || selectedModel
+          model_used: result.model_used || 'unknown'
         };
 
         setMessages(prev => [...prev, aiMessage]);
         setShouldAutoScroll(true);
       } else {
-        setConnectionStatus('disconnected');
-        const errorText = await response.text();
-        console.error('❌ Backend error:', response.status, errorText);
-        throw new Error(`Backend error: ${response.status} - ${errorText}`);
+        throw new Error('Failed to get AI response');
       }
     } catch (error) {
       console.error('❌ Error sending message:', error);
-      setConnectionStatus('disconnected');
       
       const errorMessage: ChatMessage = {
         id: generateUniqueId(),
-        message: `😔 Connection error: ${error instanceof Error ? error.message : 'Unknown error'}\n\n💡 **Backend Status:**\n• Make sure backend server is running on port 8000\n• Check if FAISS and Mistral models are loaded\n• Try refreshing and trying again`,
+        message: "😔 Sorry, I'm having trouble connecting right now. This could be a temporary issue.\n\n💡 **What you can try:**\n• Check your internet connection\n• Refresh the page\n• Try again in a moment",
         isUser: false,
         timestamp: new Date(),
         confidence: 0.0,
@@ -256,89 +210,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
         border: '1px solid #e5e7eb'
       }}
     >
-      {/* Chat Header */}
-      <div style={{
-        padding: '16px',
-        borderBottom: '1px solid #e5e7eb',
-        backgroundColor: '#ffffff',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        <h2 style={{
-          fontSize: '18px',
-          fontWeight: '600',
-          color: '#374151',
-          margin: 0
-        }}>
-          AI Chat Assistant
-        </h2>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          <span style={{ fontSize: '14px', color: '#6b7280' }}>Model:</span>
-          <select 
-            value={selectedModel} 
-            onChange={(e) => setSelectedModel(e.target.value as ChatModel)}
-            style={{
-              padding: '4px 8px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              backgroundColor: '#ffffff',
-              color: '#374151'
-            }}
-          >
-            <option value="faiss">🔋 FAISS (Fast Search)</option>
-            <option value="mistral">🧠 Mistral (Advanced Analysis)</option>
-          </select>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              backgroundColor: connectionStatus === 'connected' ? '#10b981' : connectionStatus === 'disconnected' ? '#ef4444' : '#f59e0b',
-              borderRadius: '50%'
-            }}></div>
-            <span style={{ 
-              fontSize: '12px', 
-              color: connectionStatus === 'connected' ? '#10b981' : connectionStatus === 'disconnected' ? '#ef4444' : '#f59e0b'
-            }}>
-              {connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'disconnected' ? 'Offline' : 'Checking...'}
-            </span>
-          </div>
-          
-          <button
-            onClick={clearAllMessages}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#dc2626';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#ef4444';
-            }}
-          >
-            🗑️ Clear
-          </button>
-        </div>
-      </div>
-
       {/* Messages Area */}
       <div style={{
         flex: 1,
@@ -394,7 +265,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
               maxWidth: '280px',
               lineHeight: '1.4'
             }}>
-              Analyze conversation segments, speakers, and meeting content:
+              Ask me about your voice notes:
             </p>
             
             {/* Simple suggestions */}
@@ -438,7 +309,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
           </div>
         )}
 
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <div
             key={message.id}
             style={{
@@ -564,7 +435,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me about conversation segments, speakers, decisions..."
+              placeholder="Ask me about your voice notes..."
               disabled={isLoading}
               style={{
                 width: '100%',

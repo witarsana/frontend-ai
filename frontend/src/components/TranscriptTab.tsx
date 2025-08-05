@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { TranscriptItem } from "../types";
 import TranscriptItemComponent from "./TranscriptItem";
+import ExperimentalDataCard from "./ExperimentalDataCard";
 
 interface TranscriptTabProps {
   transcript: TranscriptItem[];
@@ -11,6 +12,9 @@ interface TranscriptTabProps {
   onFilterChange: (filter: string) => void;
   onSeekToTime: (seconds: number) => void;
   currentTime?: number; // Current audio time
+  experimentalSpeakerData?: any; // Experimental speaker detection data
+  audioInfo?: any; // Audio processing info
+  detectedSpeakers?: number; // Detected speakers count
 }
 
 const TranscriptTab: React.FC<TranscriptTabProps> = ({
@@ -22,6 +26,9 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
   onFilterChange,
   onSeekToTime,
   currentTime = 0,
+  experimentalSpeakerData,
+  audioInfo,
+  detectedSpeakers,
 }) => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -111,6 +118,15 @@ const TranscriptTab: React.FC<TranscriptTabProps> = ({
 
   return (
     <div className="tab-content">
+      {/* Experimental Data Section */}
+      {(experimentalSpeakerData || audioInfo?.experimental_speaker_detection) && (
+        <ExperimentalDataCard
+          experimentalData={experimentalSpeakerData}
+          audioInfo={audioInfo}
+          detectedSpeakers={detectedSpeakers || null}
+        />
+      )}
+
       {/* Statistics Section */}
       <div
         className="transcript-stats"

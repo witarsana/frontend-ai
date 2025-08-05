@@ -11,7 +11,10 @@ from faster_whisper import WhisperModel
 # REMOVED: import whisper  # Old simple whisper library removed - now using Faster-Whisper Large V3 only
 
 # Import Whisper configuration
-from whisper_config import get_whisper_config, OPTIMIZATION_SETTINGS, LARGE_V3_FEATURES
+from whisper_config import get_whisper_config, OPTIMIZATION_SETTINGS, LARGE_V3_FEATURES, get_speed_config
+
+# Import speaker detection for experimental mode
+from speaker_detection import analyze_speakers, format_speaker_segments
 
 # Using ONLY Faster-Whisper Large V3 for all transcription
 print("� USING FASTER-WHISPER LARGE V3 ONLY - No legacy models")
@@ -404,8 +407,29 @@ async def get_speed_options():
             "description": {
                 "fast": "Fastest transcription with good accuracy (base model)",
                 "medium": "Balanced speed and accuracy (small model)", 
-                "slow": "Best accuracy with slower processing (large-v3 model)"
+                "slow": "Best accuracy with slower processing (large-v3 model)",
+                "experimental": "Advanced speaker detection with multiple methods"
             }
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.get("/api/experimental-methods")
+async def get_experimental_methods():
+    """Get available experimental speaker detection methods"""
+    try:
+        from whisper_config import SPEED_CONFIGS
+        experimental_config = SPEED_CONFIGS.get("experimental", {})
+        speaker_methods = experimental_config.get("speaker_methods", {})
+        
+        return JSONResponse({
+            "success": True,
+            "experimental_methods": speaker_methods,
+            "default_method": experimental_config.get("default_method", "pyannote"),
+            "description": "Advanced speaker detection methods for experimental mode"
         })
     except Exception as e:
         return JSONResponse({
@@ -418,17 +442,32 @@ async def upload_and_process(
     file: UploadFile = File(...),
     language: str = Form("auto"),
     engine: str = Form("faster-whisper"),
-    speed: str = Form("medium")  # New speed parameter: fast, medium, slow
+    speed: str = Form("medium"),  # Speed parameter: fast, medium, slow, experimental
+    speaker_method: str = Form("pyannote")  # For experimental mode: pyannote, speechbrain, resemblyzer, webrtc, energy
 ):
-    """Upload and process with librosa instead of FFmpeg - Now with speed options"""
+    """Upload and process with librosa instead of FFmpeg - Now with speed options and speaker detection methods"""
     try:
+        # DEBUG: Log received parameters
+        print(f"🔍 DEBUG - Received parameters:")
+        print(f"   - File: {file.filename}")
+        print(f"   - Language: {language}")
+        print(f"   - Engine: {engine}")
+        print(f"   - Speed: {speed}")
+        print(f"   - Speaker method: {speaker_method}")
+        
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file uploaded")
         
         # Validate speed parameter
-        valid_speeds = ["fast", "medium", "slow"]
+        valid_speeds = ["fast", "medium", "slow", "experimental"]
         if speed not in valid_speeds:
             raise HTTPException(status_code=400, detail=f"Invalid speed. Must be one of: {valid_speeds}")
+        
+        # Validate speaker_method parameter for experimental mode
+        if speed == "experimental":
+            valid_methods = ["pyannote", "speechbrain", "resemblyzer", "webrtc", "energy"]
+            if speaker_method not in valid_methods:
+                raise HTTPException(status_code=400, detail=f"Invalid speaker method for experimental mode. Must be one of: {valid_methods}")
         
         content = await file.read()
         if len(content) > 150 * 1024 * 1024:  # 150MB limit
@@ -477,7 +516,7 @@ async def upload_and_process(
         print(f"🌐 Language: {language}, Engine: {engine}, Speed: {speed}")
         
         # Start processing with language, engine, and speed parameters
-        asyncio.create_task(process_audio_librosa(job_id, file_path, file.filename, language, engine, speed))
+        asyncio.create_task(process_audio_librosa(job_id, file_path, file.filename, language, engine, speed, speaker_method))
         
         return JSONResponse({
             "job_id": job_id,
@@ -1144,7 +1183,7 @@ async def process_existing_file(job_id: str, language: str = "auto", engine: str
         print(f"❌ Process existing file error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process existing file: {str(e)}")
 
-async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = None, progress: 'ProgressTracker' = None, language: str = "auto", speed: str = "medium") -> Dict[Any, Any]:
+async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = None, progress: 'ProgressTracker' = None, language: str = "auto", speed: str = "medium", speaker_method: str = "pyannote") -> Dict[Any, Any]:
     """
     OPTIMIZED Transcription using Faster-Whisper with speed options
     Performance improvements: Variable speed based on model selection, optimized settings
@@ -1228,6 +1267,13 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
                         del transcribe_options["description"]
                     if "vad_filter" in transcribe_options:
                         del transcribe_options["vad_filter"]
+                    # Remove experimental speaker detection parameters (not supported by whisper)
+                    if "speaker_diarization" in transcribe_options:
+                        del transcribe_options["speaker_diarization"]
+                    if "speaker_embedding" in transcribe_options:
+                        del transcribe_options["speaker_embedding"]
+                    if "segment_speakers" in transcribe_options:
+                        del transcribe_options["segment_speakers"]
                     
                     if language != "auto" and language:
                         transcribe_options["language"] = language
@@ -1397,13 +1443,80 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
         print(f"   - Speaker changes: {speaker_changes_detected}")
         print(f"   - Total segments: {total_segments}")
         
+        # EXPERIMENTAL: Advanced speaker detection with selected method
+        experimental_speaker_data = None
+        if speed == "experimental":
+            print(f"🧪 EXPERIMENTAL MODE TRIGGERED!")
+            print(f"   - Selected method: {speaker_method}")
+            print(f"   - Audio file: {file_path}")
+            print(f"🧪 EXPERIMENTAL MODE: Running {speaker_method} speaker detection...")
+            if progress:
+                progress.update_stage("transcription", 85, f"Running {speaker_method} speaker detection...")
+            
+            try:
+                # Run selected speaker detection method
+                experimental_speaker_data = analyze_speakers(file_path, method=speaker_method)
+                
+                if experimental_speaker_data:
+                    experimental_count = experimental_speaker_data.get("speaker_count", 0)
+                    experimental_method = experimental_speaker_data.get("method", "unknown")
+                    experimental_confidence = experimental_speaker_data.get("confidence", "unknown")
+                    
+                    print(f"🧪 {speaker_method.upper()} detection: {experimental_count} speakers ({experimental_method}, confidence: {experimental_confidence})")
+                    
+                    # Enhanced segment processing with pyannote data
+                    segments_with_speakers = format_speaker_segments(
+                        experimental_speaker_data, 
+                        segments_with_speakers
+                    )
+                    
+                    # Update speaker count if experimental is more confident
+                    if experimental_confidence in ["high", "medium"] and experimental_count > 0:
+                        speaker_count = experimental_count
+                        print(f"🔄 Updated speaker count to {speaker_count} based on experimental detection")
+                    
+                    if progress:
+                        progress.update_stage("transcription", 95, f"Experimental detection completed: {experimental_count} speakers")
+                else:
+                    print("⚠️ Experimental speaker detection returned no data")
+                    
+            except Exception as exp_error:
+                print(f"⚠️ Experimental speaker detection failed: {exp_error}")
+                print("   Continuing with standard speaker detection...")
+                if progress:
+                    progress.update_stage("transcription", 95, "Experimental detection failed, using standard method")
+        
         if progress:
             progress.update_stage("transcription", 100, f"Large V3 analysis completed: {speaker_count} speakers, {speaker_changes_detected} changes")
         
         # Get audio duration
         duration = whisper_result.get("duration", 0)
         
-        # Prepare result with Large V3 specific info
+        # Prepare result with Large V3 specific info and experimental data
+        audio_info = {
+            "method": "faster_whisper_large_v3",
+            "model": "large-v3",
+            "model_version": "faster-whisper",
+            "sample_rate": 16000,
+            "channels": 1,
+            "processing_time": "optimized",
+            "total_segments": total_segments,
+            "speaker_detection": "enhanced_pattern_analysis",
+            "features_used": list(LARGE_V3_FEATURES.keys()),
+            "optimization_settings": optimization_settings,
+            "speed_mode": speed
+        }
+        
+        # Add experimental data if available
+        if experimental_speaker_data:
+            audio_info["experimental_speaker_detection"] = {
+                "method": experimental_speaker_data.get("method", "unknown"),
+                "confidence": experimental_speaker_data.get("confidence", "unknown"),
+                "speaker_count": experimental_speaker_data.get("speaker_count", 0),
+                "speakers": experimental_speaker_data.get("speakers", []),
+                "segments_count": len(experimental_speaker_data.get("segments", []))
+            }
+        
         result = {
             "segments": segments_with_speakers,
             "text": whisper_result["text"],
@@ -1412,18 +1525,8 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
             "duration": duration,
             "speaker_stats": speaker_stats,
             "detected_speakers": speaker_count,
-            "audio_info": {
-                "method": "faster_whisper_large_v3",
-                "model": "large-v3",
-                "model_version": "faster-whisper",
-                "sample_rate": 16000,
-                "channels": 1,
-                "processing_time": "optimized",
-                "total_segments": total_segments,
-                "speaker_detection": "enhanced_pattern_analysis",
-                "features_used": list(LARGE_V3_FEATURES.keys()),
-                "optimization_settings": OPTIMIZATION_SETTINGS
-            }
+            "experimental_speaker_data": experimental_speaker_data,  # Include full experimental data
+            "audio_info": audio_info
         }
         
         print(f"✅ Large V3 transcription complete: {len(segments_with_speakers)} segments, {duration:.1f}s, {speaker_count} speakers")
@@ -1551,8 +1654,8 @@ class ProgressTracker:
         }
         print(f"❌ Processing failed after {elapsed:.1f}s: {error_message}")
 
-async def process_audio_librosa(job_id: str, file_path: str, filename: str, language: str = "auto", engine: str = "faster-whisper", speed: str = "medium"):
-    """Process audio using fast Whisper approach with enhanced progress tracking and speed options"""
+async def process_audio_librosa(job_id: str, file_path: str, filename: str, language: str = "auto", engine: str = "faster-whisper", speed: str = "medium", speaker_method: str = "pyannote"):
+    """Process audio using fast Whisper approach with enhanced progress tracking, speed options, and speaker detection methods"""
     progress = ProgressTracker(job_id)
     
     try:
@@ -1640,7 +1743,7 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str, lang
         progress.update_stage("transcription", 0, f"Starting transcription with {engine} (Language: {language})...")
         
         # Transcription using Faster-Whisper with speed optimization
-        transcription = await transcribe_with_faster_whisper_large_v3(optimized_file_path, job_id, progress, language, speed)
+        transcription = await transcribe_with_faster_whisper_large_v3(optimized_file_path, job_id, progress, language, speed, speaker_method)
         
         if not transcription or not transcription.get("segments"):
             raise Exception("Transcription failed or returned empty result")
@@ -3748,6 +3851,108 @@ async def enhanced_chat_query(request: dict):
     except Exception as e:
         print(f"❌ Enhanced chat error: {e}")
         raise HTTPException(status_code=500, detail=f"Enhanced chat error: {str(e)}")
+
+@app.post("/api/chat/faiss")
+async def faiss_offline_chat(request: dict):
+    """Pure FAISS offline chat without any API calls"""
+    try:
+        query = request.get("query", "")
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+        
+        session_id = request.get("session_id", "default")
+        
+        print(f"🔋 Pure FAISS offline chat - Query: {query}")
+        
+        # Use multi_chat_system with FAISS preference
+        if multi_chat_system:
+            result = multi_chat_system.smart_query(
+                query=query,
+                session_id=session_id,
+                model_preference="faiss",
+                use_smart_routing=False
+            )
+            
+            # Ensure it's truly offline
+            if result.get("model_used") != "faiss_offline":
+                return {
+                    "response": "FAISS offline system is not available. Please check if transcript data is loaded.",
+                    "model_used": "faiss_unavailable",
+                    "confidence": 0.0,
+                    "sources": [],
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            return result
+        else:
+            return {
+                "response": "Multi-model chat system is not available.",
+                "model_used": "system_unavailable",
+                "confidence": 0.0,
+                "sources": [],
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        print(f"❌ Pure FAISS offline chat error: {e}")
+        return {
+            "response": f"Sorry, FAISS offline system encountered an error: {str(e)}",
+            "model_used": "faiss_error",
+            "confidence": 0.0,
+            "sources": [],
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/api/chat/mistral")
+async def mistral_standalone_chat(request: dict):
+    """Pure Mistral chat without transcript context"""
+    try:
+        query = request.get("query", "")
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+        
+        session_id = request.get("session_id", "default")
+        
+        print(f"🧠 Pure Mistral chat - Query: {query}")
+        
+        # Use the API providers directly for pure Mistral chat
+        if api_providers:
+            # Simple system prompt for general conversation
+            system_prompt = """You are a helpful AI assistant. Provide clear, accurate, and helpful responses to user questions. Be concise but informative."""
+            
+            full_prompt = f"{system_prompt}\n\nUser: {query}\n\nAssistant:"
+            
+            response = call_api(
+                full_prompt,
+                providers=api_providers,
+                max_tokens=800
+            )
+            
+            return {
+                "response": response,
+                "model_used": "mistral-pure",
+                "confidence": 0.9,
+                "sources": [{"type": "ai_model", "content": "Mistral AI Direct"}],
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "response": "Mistral API is not available. Please check your API configuration.",
+                "model_used": "mistral-unavailable",
+                "confidence": 0.0,
+                "sources": [],
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        print(f"❌ Pure Mistral chat error: {e}")
+        return {
+            "response": f"Sorry, I encountered an error: {str(e)}",
+            "model_used": "mistral-error",
+            "confidence": 0.0,
+            "sources": [],
+            "timestamp": datetime.now().isoformat()
+        }
 
 if __name__ == "__main__":
     import uvicorn

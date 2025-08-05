@@ -18,6 +18,8 @@ python-multipart==0.0.6
 # File Processing
 ffmpeg-python==0.2.0
 pydub==0.25.1
+librosa==0.10.1  # For audio analysis and speaker detection
+soundfile==0.12.1  # For audio I/O operations
 
 # Utilities
 python-dotenv==1.0.0
