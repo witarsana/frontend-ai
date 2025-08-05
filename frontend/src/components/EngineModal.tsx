@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   EngineAPI,
   EnginesResponse,
@@ -10,18 +11,58 @@ interface EngineModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEngineChange?: (engine: string) => void;
+  onLanguageChange?: (language: string) => void;
+  currentLanguage?: string;
+  currentEngine?: string;
 }
 
 export const EngineModal: React.FC<EngineModalProps> = ({
   isOpen,
   onClose,
   onEngineChange,
+  onLanguageChange,
+  currentLanguage = "auto",
+  currentEngine = "faster-whisper",
 }) => {
   const [engines, setEngines] = useState<EnginesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState(currentLanguage);
 
   const engineAPI = new EngineAPI();
+
+  // Language options for transcription
+  const languageOptions = [
+    { code: "auto", name: "🌐 Auto Detect", flag: "🌐" },
+    { code: "id", name: "Indonesian", flag: "🇮🇩" },
+    { code: "en", name: "English", flag: "🇺🇸" },
+    { code: "zh", name: "Chinese", flag: "🇨🇳" },
+    { code: "ja", name: "Japanese", flag: "🇯🇵" },
+    { code: "ko", name: "Korean", flag: "🇰🇷" },
+    { code: "es", name: "Spanish", flag: "🇪🇸" },
+    { code: "fr", name: "French", flag: "🇫🇷" },
+    { code: "de", name: "German", flag: "🇩🇪" },
+    { code: "pt", name: "Portuguese", flag: "🇵🇹" },
+    { code: "ru", name: "Russian", flag: "🇷🇺" },
+    { code: "ar", name: "Arabic", flag: "🇸🇦" },
+    { code: "hi", name: "Hindi", flag: "🇮🇳" },
+    { code: "th", name: "Thai", flag: "🇹🇭" },
+    { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
+  ];
+
+  const handleLanguageChange = (language: string) => {
+    setSelectedLanguage(language);
+    if (onLanguageChange) {
+      onLanguageChange(language);
+    }
+  };
+
+  const handleApplySettings = () => {
+    if (onLanguageChange && selectedLanguage !== currentLanguage) {
+      onLanguageChange(selectedLanguage);
+    }
+    onClose();
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -71,7 +112,7 @@ export const EngineModal: React.FC<EngineModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div className="engine-modal-backdrop" onClick={handleBackdropClick}>
       <div className="engine-modal">
         <div className="engine-modal-header">
@@ -257,6 +298,82 @@ export const EngineModal: React.FC<EngineModalProps> = ({
                 </div>
               </div>
 
+              {/* Language Selection */}
+              <div className="language-section" style={{ margin: '24px 0' }}>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '600', 
+                  marginBottom: '12px', 
+                  color: '#374151',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  🌐 Select Language for Transcription
+                </h3>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#6b7280', 
+                  marginBottom: '16px' 
+                }}>
+                  Choose the primary language of your audio for better accuracy:
+                </p>
+                
+                <div className="language-grid" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '8px',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  padding: '12px'
+                }}>
+                  {languageOptions.map((lang) => (
+                    <div
+                      key={lang.code}
+                      className={`language-option ${
+                        selectedLanguage === lang.code ? 'selected' : ''
+                      }`}
+                      onClick={() => handleLanguageChange(lang.code)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        border: selectedLanguage === lang.code 
+                          ? '2px solid #3b82f6' 
+                          : '1px solid #e5e7eb',
+                        backgroundColor: selectedLanguage === lang.code 
+                          ? '#eff6ff' 
+                          : 'white',
+                        transition: 'all 0.2s ease',
+                        fontSize: '14px',
+                        fontWeight: selectedLanguage === lang.code ? '600' : '400',
+                        color: selectedLanguage === lang.code ? '#1d4ed8' : '#374151',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                      {selectedLanguage === lang.code && <span style={{ marginLeft: 'auto' }}>✓</span>}
+                    </div>
+                  ))}
+                </div>
+                
+                <div style={{ 
+                  marginTop: '12px', 
+                  padding: '8px 12px', 
+                  backgroundColor: '#f3f4f6', 
+                  borderRadius: '6px', 
+                  fontSize: '12px', 
+                  color: '#6b7280' 
+                }}>
+                  💡 <strong>Tip:</strong> Auto Detect works well for most languages, but selecting a specific language can improve accuracy by 10-15%.
+                </div>
+              </div>
+
               <div className="recommendations">
                 <h4>💡 Recommendations:</h4>
                 <div className="recommendation-grid">
@@ -299,6 +416,49 @@ export const EngineModal: React.FC<EngineModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Action Buttons */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '12px',
+                marginTop: '24px',
+                paddingTop: '16px',
+                borderTop: '1px solid #e5e7eb'
+              }}>
+                <button
+                  onClick={onClose}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApplySettings}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  ✅ Apply Settings
+                </button>
+              </div>
             </>
           ) : (
             <div className="error-state">
@@ -316,7 +476,8 @@ export const EngineModal: React.FC<EngineModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

@@ -29,6 +29,28 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
   const [isEngineModalOpen, setIsEngineModalOpen] = useState<boolean>(false);
   const [audioURL, setAudioURL] = useState<string | null>(null);
 
+  // Language display mapping
+  const getLanguageDisplay = (langCode: string) => {
+    const languageMap: { [key: string]: string } = {
+      auto: "Auto Detect",
+      id: "🇮🇩 Indonesian",
+      en: "🇺🇸 English",
+      zh: "🇨🇳 Chinese",
+      ja: "🇯🇵 Japanese",
+      ko: "🇰🇷 Korean",
+      es: "🇪🇸 Spanish",
+      fr: "🇫🇷 French",
+      de: "🇩🇪 German",
+      pt: "🇵🇹 Portuguese",
+      ru: "🇷🇺 Russian",
+      ar: "🇸🇦 Arabic",
+      hi: "🇮🇳 Hindi",
+      th: "🇹🇭 Thai",
+      vi: "🇻🇳 Vietnamese",
+    };
+    return languageMap[langCode] || langCode;
+  };
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -196,12 +218,29 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
 
   return (
     <div className="recording-section">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '32px'
+      }}>
+        <h2 style={{
+          fontSize: '28px',
+          fontWeight: '800',
+          background: 'linear-gradient(135deg, #1e293b, #475569)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          marginBottom: '8px',
+          letterSpacing: '-0.025em'
+        }}>
           🎙️ Rekam Audio Langsung
         </h2>
-        <p className="text-gray-600">
-          Rekam audio langsung dari mikrofon dan transkripsi otomatis
+        <p style={{
+          color: '#64748b',
+          fontSize: '16px',
+          fontWeight: '500',
+          lineHeight: '1.6'
+        }}>
+          Rekam audio langsung dari mikrofon dan dapatkan transkripsi otomatis dengan AI
         </p>
       </div>
 
@@ -287,17 +326,8 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
 
               <button
                 onClick={cancelRecording}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#dc2626',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className="control-button danger"
+                title="Batal Rekaman"
               >
                 ❌ Batal
               </button>
@@ -378,21 +408,8 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
               <button
                 onClick={handleStartTranscription}
                 disabled={isProcessing}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: isProcessing ? '#9ca3af' : '#059669',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: isProcessing ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
-                }}
+                className={`control-button primary ${isProcessing ? 'disabled' : ''}`}
+                title="Mulai Transkripsi"
               >
                 {isProcessing ? '⏳ Processing...' : '🚀 Mulai Transkripsi'}
               </button>
@@ -417,7 +434,7 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
               <div style={{ fontSize: '14px', color: '#374151' }}>
                 <span style={{ fontWeight: '600' }}>🌐 Bahasa:</span>{" "}
                 <span style={{ color: '#7c3aed', fontWeight: '500' }}>
-                  {recordingOptions.language === "auto" ? "Auto Detect" : recordingOptions.language}
+                  {getLanguageDisplay(recordingOptions.language)}
                 </span>
               </div>
               <div style={{ fontSize: '14px', color: '#374151' }}>
@@ -429,17 +446,8 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
             </div>
             <button
               onClick={() => setIsEngineModalOpen(true)}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '12px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease'
-              }}
+              className="control-button secondary"
+              title="Ubah Pengaturan"
             >
               🔧 Ubah Pengaturan
             </button>
@@ -454,8 +462,12 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
           onClose={() => setIsEngineModalOpen(false)}
           onEngineChange={(engine: string) => {
             setRecordingOptions(prev => ({ ...prev, engine }));
-            setIsEngineModalOpen(false);
           }}
+          onLanguageChange={(language: string) => {
+            setRecordingOptions(prev => ({ ...prev, language }));
+          }}
+          currentLanguage={recordingOptions.language}
+          currentEngine={recordingOptions.engine}
         />
       )}
     </div>

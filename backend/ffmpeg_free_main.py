@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -307,7 +307,11 @@ async def root():
     }
 
 @app.post("/api/upload-and-process")
-async def upload_and_process(file: UploadFile = File(...)):
+async def upload_and_process(
+    file: UploadFile = File(...),
+    language: str = Form("auto"),
+    engine: str = Form("faster-whisper")
+):
     """Upload and process with librosa instead of FFmpeg"""
     try:
         if not file.filename:
@@ -325,7 +329,13 @@ async def upload_and_process(file: UploadFile = File(...)):
         
         # Generate job ID
         job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:20]}"
-        processing_jobs[job_id] = {"status": "starting", "progress": 0, "message": "Initializing..."}
+        processing_jobs[job_id] = {
+            "status": "starting", 
+            "progress": 0, 
+            "message": "Initializing...",
+            "language": language,
+            "engine": engine
+        }
         
         # Save file
         uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
@@ -336,15 +346,18 @@ async def upload_and_process(file: UploadFile = File(...)):
             f.write(content)
         
         print(f"📁 File saved: {file_path} ({len(content)/1024:.1f} KB)")
+        print(f"🌐 Language: {language}, Engine: {engine}")
         
-        # Start processing
-        asyncio.create_task(process_audio_librosa(job_id, file_path, file.filename))
+        # Start processing with language and engine parameters
+        asyncio.create_task(process_audio_librosa(job_id, file_path, file.filename, language, engine))
         
         return JSONResponse({
             "job_id": job_id,
             "status": "processing_started",
-            "message": f"File uploaded ({len(content)/1024:.1f} KB). Using librosa processing.",
-            "file_size_kb": len(content)/1024
+            "message": f"File uploaded ({len(content)/1024:.1f} KB). Using {engine} with language: {language}",
+            "file_size_kb": len(content)/1024,
+            "language": language,
+            "engine": engine
         })
         
     except Exception as e:
@@ -609,13 +622,13 @@ async def get_audio_file(job_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progress: 'ProgressTracker' = None) -> Dict[Any, Any]:
+async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progress: 'ProgressTracker' = None, language: str = "auto") -> Dict[Any, Any]:
     """
     Fast transcription using simple Whisper approach from mainSample.py
     No complex preprocessing, no heavy diarization
     """
     try:
-        print(f"⚡ Fast transcribing: {os.path.basename(file_path)}")
+        print(f"⚡ Fast transcribing: {os.path.basename(file_path)} (Language: {language})")
         
         # Ensure simple whisper model is loaded
         global simple_whisper_model
@@ -628,11 +641,11 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progr
         
         # Update progress for transcription start
         if progress:
-            progress.update_stage("transcription", 10, "Starting Whisper transcription...")
+            progress.update_stage("transcription", 10, f"Starting Whisper transcription (Language: {language})...")
         
         # Direct transcription with progress simulation
         async def _transcribe_with_progress():
-            print(f"📝 Transcribing {os.path.basename(file_path)}...")
+            print(f"📝 Transcribing {os.path.basename(file_path)} with language: {language}")
             if progress:
                 progress.update_stage("transcription", 20, "Whisper processing audio...")
             
@@ -657,7 +670,15 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progr
             try:
                 # Run transcription in executor to avoid blocking
                 def _transcribe_sync():
-                    return simple_whisper_model.transcribe(file_path, word_timestamps=True)
+                    # Set language parameter for Whisper
+                    transcribe_options = {"word_timestamps": True}
+                    if language != "auto" and language:
+                        transcribe_options["language"] = language
+                        print(f"🌐 Using specified language: {language}")
+                    else:
+                        print("🌐 Using auto-detect language")
+                    
+                    return simple_whisper_model.transcribe(file_path, **transcribe_options)
                 
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(None, _transcribe_sync)
@@ -928,15 +949,16 @@ class ProgressTracker:
         }
         print(f"❌ Processing failed after {elapsed:.1f}s: {error_message}")
 
-async def process_audio_librosa(job_id: str, file_path: str, filename: str):
+async def process_audio_librosa(job_id: str, file_path: str, filename: str, language: str = "auto", engine: str = "faster-whisper"):
     """Process audio using fast Whisper approach with enhanced progress tracking"""
     progress = ProgressTracker(job_id)
     
     try:
         print(f"⚡ Starting FAST processing: {filename}")
+        print(f"🌐 Language: {language}, Engine: {engine}")
         
         # Stage 1: Initialization
-        progress.update_stage("initialization", 50, f"Initializing processing for {filename}")
+        progress.update_stage("initialization", 50, f"Initializing processing for {filename} (Language: {language})")
         
         # Get file info for better progress estimation
         file_size = os.path.getsize(file_path) / (1024 * 1024)  # MB
@@ -958,10 +980,10 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str):
             progress.update_stage("audio_analysis", 100, "Audio format validated")
         
         # Stage 4: Transcription (this is the longest stage)
-        progress.update_stage("transcription", 0, "Starting transcription with Whisper...")
+        progress.update_stage("transcription", 0, f"Starting transcription with {engine} (Language: {language})...")
         
-        # Fast transcription using simple Whisper approach
-        transcription = await fast_transcribe_with_whisper(file_path, job_id, progress)
+        # Fast transcription using simple Whisper approach with language parameter
+        transcription = await fast_transcribe_with_whisper(file_path, job_id, progress, language)
         
         if not transcription or not transcription.get("segments"):
             raise Exception("Transcription failed or returned empty result")
