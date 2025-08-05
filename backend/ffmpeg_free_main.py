@@ -581,6 +581,7 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progr
         # Smart speaker assignment based on conversation flow
         current_speaker = 1
         last_speaker_change = 0
+        speaker_changes_detected = 0
         speaker_stats = {i+1: {"total_time": 0, "segment_count": 0, "avg_length": 0} for i in range(speaker_count)}
         
         for i, segment in enumerate(whisper_result["segments"]):
@@ -598,9 +599,11 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progr
             )
             
             if should_change_speaker and i > 0:
+                # Cycle to next speaker
                 current_speaker = (current_speaker % speaker_count) + 1
                 last_speaker_change = i
-                print(f"🔄 Speaker change detected at {segment['start']:.1f}s → Speaker {current_speaker}")
+                speaker_changes_detected += 1
+                print(f"🔄 Speaker change detected at {segment['start']:.1f}s → Speaker {current_speaker} (total changes: {speaker_changes_detected})")
             
             # Track speaker statistics
             speaker_stats[current_speaker]["total_time"] += segment_duration
@@ -631,8 +634,31 @@ async def fast_transcribe_with_whisper(file_path: str, job_id: str = None, progr
                 speaker_stats[speaker_id]["avg_length"] /= speaker_stats[speaker_id]["segment_count"]
                 print(f"👤 Speaker {speaker_id}: {speaker_stats[speaker_id]['segment_count']} segments, {speaker_stats[speaker_id]['total_time']:.1f}s total, {speaker_stats[speaker_id]['avg_length']:.0f} avg chars")
         
+        # DEBUGGING: Show final speaker change statistics
+        print(f"🔍 SPEAKER ANALYSIS RESULTS:")
+        print(f"   - Detected speakers: {speaker_count}")
+        print(f"   - Speaker changes made: {speaker_changes_detected}")
+        print(f"   - Total segments: {total_segments}")
+        
+        # FALLBACK: If no speaker changes detected but we expect multiple speakers, force some changes
+        if speaker_changes_detected == 0 and speaker_count > 1 and total_segments > 10:
+            print("⚠️  No speaker changes detected, applying fallback pattern...")
+            # Simple fallback: alternate speakers every ~10 segments
+            fallback_speaker = 1
+            segments_per_speaker = max(5, total_segments // (speaker_count * 2))
+            
+            for i, segment_data in enumerate(segments_with_speakers):
+                if i > 0 and i % segments_per_speaker == 0:
+                    fallback_speaker = (fallback_speaker % speaker_count) + 1
+                
+                segment_data["speaker"] = f"speaker-{fallback_speaker:02d}"
+                segment_data["speaker_name"] = f"Speaker {fallback_speaker}"
+                segment_data["assigned_speaker"] = fallback_speaker
+            
+            print(f"✅ Fallback applied: {speaker_count} speakers distributed across {total_segments} segments")
+        
         if progress:
-            progress.update_stage("transcription", 100, f"Smart speaker analysis completed: {speaker_count} speakers detected")
+            progress.update_stage("transcription", 100, f"Smart speaker analysis completed: {speaker_count} speakers detected, {speaker_changes_detected} changes made")
         
         # Get audio duration
         duration = whisper_result.get("segments", [])[-1]["end"] if whisper_result.get("segments") else 0
@@ -1403,20 +1429,22 @@ def analyze_smart_speaker_patterns(segments: List) -> int:
     else:
         normalized_variance = 0
     
-    # Smart speaker count estimation
-    if pause_ratio > 0.4 and response_ratio > 0.2:
+    # Smart speaker count estimation - MORE AGGRESSIVE
+    if pause_ratio > 0.3 and response_ratio > 0.15:
         estimated_speakers = 3  # Active discussion with multiple participants
-    elif pause_ratio > 0.25 and (response_ratio > 0.15 or question_ratio > 0.1):
+    elif pause_ratio > 0.2 and (response_ratio > 0.1 or question_ratio > 0.08):
         estimated_speakers = 2  # Clear conversation between two people
-    elif pause_ratio > 0.15 and normalized_variance > 0.3:
+    elif pause_ratio > 0.1 and normalized_variance > 0.25:
         estimated_speakers = 2  # Different speaking patterns detected
+    elif total_segments > 20 and pause_ratio > 0.05:  # NEW: Even small patterns in longer content
+        estimated_speakers = 2  # Likely conversation
     else:
         estimated_speakers = 1  # Likely monologue or presentation
     
     # Cap at reasonable maximum for performance
     estimated_speakers = min(estimated_speakers, 4)
     
-    print(f"📈 Smart Analysis: pause_ratio={pause_ratio:.2f}, response_ratio={response_ratio:.2f}, text_variance={normalized_variance:.2f} → {estimated_speakers} speakers")
+    print(f"📈 Smart Analysis: segments={total_segments}, pause_ratio={pause_ratio:.2f}, response_ratio={response_ratio:.2f}, text_variance={normalized_variance:.2f} → {estimated_speakers} speakers")
     return estimated_speakers
 
 def detect_speaker_change(current_text: str, prev_text: str, time_gap: float, segments_since_change: int, total_speakers: int) -> bool:
@@ -1424,49 +1452,55 @@ def detect_speaker_change(current_text: str, prev_text: str, time_gap: float, se
     Detect if current segment should have a different speaker
     Based on conversation flow, timing, and content analysis
     """
-    # Don't change too frequently (minimum 3 segments per speaker)
-    if segments_since_change < 3:
+    # Only enforce if we have more than 1 speaker detected
+    if total_speakers <= 1:
+        return False
+    
+    # Don't change too frequently (minimum 2 segments per speaker - reduced from 3)
+    if segments_since_change < 2:
         return False
     
     # Strong indicators for speaker change
     change_probability = 0.0
     
-    # Factor 1: Time gap (long pause suggests speaker change)
-    if time_gap > 3.0:
-        change_probability += 0.6
-    elif time_gap > 1.5:
-        change_probability += 0.3
-    elif time_gap > 0.8:
-        change_probability += 0.1
+    # Factor 1: Time gap (long pause suggests speaker change) - LOWERED THRESHOLDS
+    if time_gap > 2.0:  # Reduced from 3.0
+        change_probability += 0.7
+    elif time_gap > 1.0:  # Reduced from 1.5
+        change_probability += 0.4
+    elif time_gap > 0.5:  # Reduced from 0.8
+        change_probability += 0.2
     
     # Factor 2: Response patterns
     current_lower = current_text.lower()
     prev_lower = prev_text.lower()
     
-    # Short responses often indicate speaker change
-    if len(current_text) < 30 and len(prev_text) > 50:
-        change_probability += 0.4
+    # Short responses often indicate speaker change - LOWERED THRESHOLD
+    if len(current_text) < 40 and len(prev_text) > 40:  # More sensitive
+        change_probability += 0.5
     
     # Response words suggest different speaker
-    response_words = ["ya", "iya", "oh", "mm", "hmm", "betul", "benar", "tidak", "nggak", "ok", "oke", "baik"]
+    response_words = ["ya", "iya", "oh", "mm", "hmm", "betul", "benar", "tidak", "nggak", "ok", "oke", "baik", "yes", "no", "right", "okay"]
     if any(word in current_lower for word in response_words):
-        change_probability += 0.3
-    
-    # Question-answer pattern
-    question_indicators = ["apa", "kenapa", "bagaimana", "kapan", "dimana", "siapa", "apakah", "?"]
-    if any(indicator in prev_lower for indicator in question_indicators):
         change_probability += 0.4
     
-    # Factor 3: Prevent too long segments for one speaker
-    if segments_since_change > 15:  # More than 15 segments for one speaker is unusual in conversation
-        change_probability += 0.2
+    # Question-answer pattern
+    question_indicators = ["apa", "kenapa", "bagaimana", "kapan", "dimana", "siapa", "apakah", "?", "what", "why", "how", "when", "where", "who"]
+    if any(indicator in prev_lower for indicator in question_indicators):
+        change_probability += 0.5
     
-    # Factor 4: Natural conversation flow (alternate speakers)
-    if segments_since_change > 8 and total_speakers > 1:
+    # Factor 3: Prevent too long segments for one speaker - LOWERED THRESHOLD
+    if segments_since_change > 10:  # Reduced from 15
+        change_probability += 0.3
+    elif segments_since_change > 6:  # Additional tier
         change_probability += 0.1
     
-    # Decision threshold
-    should_change = change_probability > 0.5
+    # Factor 4: Natural conversation flow (alternate speakers) - MORE AGGRESSIVE
+    if segments_since_change > 5 and total_speakers > 1:
+        change_probability += 0.2
+    
+    # Decision threshold - LOWERED from 0.5 to 0.4
+    should_change = change_probability > 0.4
     
     if should_change:
         print(f"🔄 Speaker change triggered: gap={time_gap:.1f}s, prob={change_probability:.2f}, segments_since={segments_since_change}")
