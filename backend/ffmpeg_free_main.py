@@ -10,6 +10,9 @@ import json
 from faster_whisper import WhisperModel
 import whisper  # Simple whisper for fast transcription
 
+# Import Whisper configuration
+from whisper_config import get_whisper_config, OPTIMIZATION_SETTINGS, LARGE_V3_FEATURES
+
 # DEBUGGING: Only use Faster-Whisper for transcription
 print("🔧 DEBUG MODE: Only using Faster-Whisper engine")
 
@@ -146,11 +149,39 @@ def load_models():
         # DEBUGGING: Skip Deepgram and Mistral initialization
         print("🔧 DEBUG MODE: Skipping Deepgram and Mistral initialization")
         
-        # Load Faster-Whisper (always load since it's the only engine)
+        # Load Faster-Whisper with configurable model
         if whisper_model is None:
-            print("Loading Faster-Whisper model (small - High Performance)...")
-            whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
-            print("✅ Faster-Whisper model loaded!")
+            # Get optimal configuration based on environment
+            whisper_config = get_whisper_config()
+            model_name = whisper_config["model"]
+            device = whisper_config["device"]
+            compute_type = whisper_config["compute_type"]
+            
+            print(f"🚀 Loading Faster-Whisper model: {model_name}")
+            print(f"   Device: {device}")
+            print(f"   Compute Type: {compute_type}")
+            print(f"   Description: {whisper_config.get('description', 'N/A')}")
+            print(f"   Memory Usage: {whisper_config.get('memory_usage', 'N/A')}")
+            
+            if model_name == "large-v3":
+                print("✨ Using Whisper Large V3 - Latest model with enhanced features:")
+                for feature, description in LARGE_V3_FEATURES.items():
+                    print(f"   • {feature}: {description}")
+            
+            whisper_model = WhisperModel(
+                model_name, 
+                device=device, 
+                compute_type=compute_type,
+                # Apply optimization settings for better performance
+                download_root=None,  # Use default cache
+                local_files_only=False  # Allow model download if needed
+            )
+            print(f"✅ Faster-Whisper {model_name} model loaded successfully!")
+            
+            # Show optimization settings being used
+            print("🔧 Optimization settings:")
+            for key, value in OPTIMIZATION_SETTINGS.items():
+                print(f"   • {key}: {value}")
         
         # DEBUGGING: Skip Mistral client initialization
         print("🔧 DEBUG MODE: Skipping Mistral client initialization")
@@ -239,19 +270,39 @@ def load_models():
 
 @app.get("/")
 async def root():
+    """Enhanced root endpoint with Whisper Large V3 information"""
     active_engine = TRANSCRIPTION_ENGINE
     if TRANSCRIPTION_ENGINE == "deepgram" and not deepgram_client:
         active_engine = "faster-whisper (fallback)"
     
+    # Get current Whisper configuration
+    current_config = get_whisper_config()
+    
     return {
-        "message": "AI Meeting Transcription - Dual Engine Support", 
+        "message": "AI Meeting Transcription - Whisper Large V3 Enhanced", 
         "status": "running",
         "transcription_engine": active_engine,
-        "features": ["Faster-Whisper (Local)", "Deepgram (Cloud)", "Mistral AI", "Speaker Diarization"],
+        "whisper_model": {
+            "name": current_config["model"],
+            "device": current_config["device"], 
+            "compute_type": current_config["compute_type"],
+            "description": current_config.get("description", "N/A"),
+            "memory_usage": current_config.get("memory_usage", "N/A"),
+            "loaded": whisper_model is not None
+        },
+        "features": [
+            "Faster-Whisper Large V3 (Latest)", 
+            "Enhanced Multilingual Support", 
+            "Improved Accuracy & Noise Robustness",
+            "Word-level Timestamps",
+            "Speaker Diarization", 
+            "Mistral AI Analysis"
+        ],
         "engines_available": {
             "faster_whisper": whisper_model is not None,
             "deepgram": deepgram_client is not None
         },
+        "large_v3_features": LARGE_V3_FEATURES if current_config["model"] == "large-v3" else {},
         "timestamp": datetime.now().isoformat()
     }
 
@@ -267,7 +318,7 @@ async def upload_and_process(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="File too large. Maximum 150MB.")
         
         # Check file format
-        allowed_extensions = ['.wav', '.mp3', '.m4a', '.flac', '.ogg']
+        allowed_extensions = ['.wav', '.mp3', '.m4a', '.flac', '.ogg', '.webm', '.mp4', '.mov']
         file_ext = os.path.splitext(file.filename)[1].lower()
         if file_ext not in allowed_extensions:
             raise HTTPException(status_code=400, detail=f"Unsupported format: {file_ext}")
@@ -361,20 +412,89 @@ async def set_transcription_engine(engine: str):
         TRANSCRIPTION_ENGINE = old_engine
         raise HTTPException(status_code=500, detail=f"Failed to switch engine: {str(e)}")
 
+@app.get("/api/whisper/config")
+async def get_whisper_config_info():
+    """Get current Whisper model configuration and available options"""
+    from whisper_config import get_whisper_config, WHISPER_MODEL_CONFIG, get_optimal_device_config
+    
+    current_config = get_whisper_config()
+    optimal_device = get_optimal_device_config()
+    
+    return {
+        "current_model": current_config,
+        "available_models": WHISPER_MODEL_CONFIG,
+        "optimal_device": optimal_device,
+        "model_loaded": whisper_model is not None,
+        "simple_model_loaded": simple_whisper_model is not None,
+        "features": LARGE_V3_FEATURES if current_config["model"] == "large-v3" else {},
+        "optimization_settings": OPTIMIZATION_SETTINGS
+    }
+
+@app.post("/api/whisper/reload-model")
+async def reload_whisper_model(model_mode: str = "production"):
+    """Reload Whisper model with different configuration"""
+    global whisper_model
+    
+    try:
+        # Validate model mode
+        from whisper_config import WHISPER_MODEL_CONFIG
+        if model_mode not in WHISPER_MODEL_CONFIG:
+            raise HTTPException(status_code=400, detail=f"Invalid model mode. Available: {list(WHISPER_MODEL_CONFIG.keys())}")
+        
+        # Clear current model
+        old_model = None
+        if whisper_model:
+            old_model = whisper_model
+            whisper_model = None
+        
+        # Set environment variable for new mode
+        import os
+        os.environ["WHISPER_MODEL_MODE"] = model_mode
+        
+        # Reload models
+        load_models()
+        
+        current_config = get_whisper_config(model_mode)
+        
+        return {
+            "status": "success",
+            "message": f"Model reloaded successfully to {current_config['model']}",
+            "previous_model": "unknown" if not old_model else "previous_model",
+            "current_config": current_config,
+            "model_loaded": whisper_model is not None
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reload model: {str(e)}")
+
 @app.get("/api/engines")
 async def get_available_engines():
-    """Get information about available transcription engines"""
+    """Get information about available transcription engines with Whisper Large V3 info"""
+    current_config = get_whisper_config()
+    
     return {
         "engines": {
             "faster-whisper": {
-                "name": "Faster-Whisper",
+                "name": "Faster-Whisper Large V3",
                 "type": "local",
                 "cost": "free",
-                "speed": "fast",
-                "accuracy": "high",
-                "languages": "multilingual",
-                "features": ["offline", "privacy", "no_api_limits"],
-                "available": whisper_model is not None
+                "speed": "fast" if current_config["model"] in ["tiny", "base", "small"] else "medium",
+                "accuracy": "very_high" if current_config["model"] == "large-v3" else "high",
+                "languages": "multilingual (100+ languages)",
+                "features": [
+                    "offline", 
+                    "privacy", 
+                    "no_api_limits",
+                    "word_timestamps",
+                    "voice_activity_detection",
+                    "large_v3_enhanced_accuracy"
+                ],
+                "available": whisper_model is not None,
+                "current_model": current_config["model"],
+                "device": current_config["device"],
+                "compute_type": current_config["compute_type"],
+                "memory_usage": current_config.get("memory_usage", "N/A"),
+                "large_v3_features": LARGE_V3_FEATURES if current_config["model"] == "large-v3" else {}
             },
             "deepgram": {
                 "name": "Deepgram Nova-2",
@@ -394,12 +514,12 @@ async def get_available_engines():
         "current_engine": TRANSCRIPTION_ENGINE,
         "recommendations": {
             "for_privacy": "faster-whisper",
-            "for_accuracy": "deepgram",
+            "for_accuracy": "faster-whisper (large-v3)",
             "for_cost": "faster-whisper",
-            "for_speed": "deepgram",
+            "for_speed": "faster-whisper (small/base)" if current_config["model"] in ["small", "base"] else "faster-whisper",
             "for_large_files": "faster-whisper",
-            "for_files_over_45min": "faster-whisper",
-            "for_files_over_80mb": "faster-whisper",
+            "for_multilingual": "faster-whisper (large-v3)",
+            "for_technical_terms": "faster-whisper (large-v3)",
             "auto_fallback": "Files >45 min or >80MB automatically use Faster-Whisper"
         }
     }
@@ -1616,20 +1736,31 @@ def _transcribe_librosa_sync(audio_path: str, job_id: str = None) -> Dict[Any, A
         # Transcribe with faster-whisper (returns generator of segments)
         print(f"🎙️ Starting Whisper transcription for {duration/60:.1f} minutes of audio...")
         
+        # Get optimization settings for faster-whisper
+        opt_settings = OPTIMIZATION_SETTINGS.copy()
+        
         # Update progress with time estimate
         estimated_minutes = max(1, int(duration / 60 * 0.3))  # Rough estimate: 30% of audio length
         if job_id:
             processing_jobs[job_id]["progress"] = 50
-            processing_jobs[job_id]["message"] = f"Transcribing {duration/60:.1f} min audio (~{estimated_minutes} min processing)..."
+            processing_jobs[job_id]["message"] = f"Transcribing {duration/60:.1f} min audio with Large V3 (~{estimated_minutes} min processing)..."
         
         segments, info = whisper_model.transcribe(
             audio_data,
             language=None,  # Auto-detect
             task="transcribe",
-            temperature=0.0,
-            condition_on_previous_text=False,
+            temperature=opt_settings["temperature"],
+            beam_size=opt_settings["beam_size"],
+            best_of=opt_settings["best_of"],
+            condition_on_previous_text=opt_settings["condition_on_previous_text"],
+            compression_ratio_threshold=opt_settings["compression_ratio_threshold"],
+            log_prob_threshold=opt_settings["log_prob_threshold"],
+            no_speech_threshold=opt_settings["no_speech_threshold"],
+            prepend_punctuations=opt_settings["prepend_punctuations"],
+            append_punctuations=opt_settings["append_punctuations"],
             vad_filter=True,  # Voice activity detection for better quality
-            vad_parameters=dict(min_silence_duration_ms=500)
+            vad_parameters=dict(min_silence_duration_ms=500),
+            word_timestamps=True  # Enable word-level timestamps for Large V3
         )
         
         # Convert generator to list with progress tracking

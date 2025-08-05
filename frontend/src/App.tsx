@@ -3,6 +3,7 @@ import { aiAPI, EngineAPI, TranscriptionEngine } from "./services/api";
 import newLogoTranskribo from "./assets/new-logo-transkribo.png";
 
 import UploadSection from "./components/UploadSection";
+import RecordingSection from "./components/RecordingSection";
 import SessionTranscriptionCard from "./components/SessionTranscriptionCard";
 import HistoryViewer from "./components/HistoryViewer";
 import ProcessingPage from "./components/ProcessingPage";
@@ -10,7 +11,7 @@ import ProcessingPage from "./components/ProcessingPage";
 const App: React.FC = () => {
   const [apiConnected, setApiConnected] = useState<boolean>(false);
   const [sessionTranscriptions, setSessionTranscriptions] = useState<any[]>([]);
-  const [viewMode, setViewMode] = useState<'upload' | 'history' | 'processing'>('upload');
+  const [viewMode, setViewMode] = useState<'upload' | 'recording' | 'history' | 'processing'>('upload');
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
 
@@ -263,6 +264,22 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRecordingComplete = async (
+    audioBlob: Blob,
+    options?: { language?: string; engine?: string }
+  ) => {
+    // Convert blob to File object
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `recording_${timestamp}.webm`;
+    const file = new File([audioBlob], filename, { type: 'audio/webm' });
+    
+    console.log("Recording completed:", filename, "Size:", file.size);
+    console.log("Recording options:", options);
+
+    // Use the same flow as file upload
+    await handleFileSelect(file, options);
+  };
+
   const simulateProcessing = async (file: File) => {
     // Add file to session transcriptions immediately with processing status
     const newTranscription = {
@@ -463,7 +480,23 @@ const App: React.FC = () => {
                 transition: 'all 0.2s ease'
               }}
             >
-              📤 New Upload
+              📤 Upload File
+            </button>
+            <button
+              onClick={() => setViewMode('recording')}
+              style={{
+                padding: '8px 16px',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                backgroundColor: viewMode === 'recording' ? '#007acc' : 'transparent',
+                color: viewMode === 'recording' ? 'white' : '#666',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              🎙️ Record Audio
             </button>
             <button
               onClick={() => setViewMode('history')}
@@ -780,48 +813,69 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Upload Section */}
-            <div style={{
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              padding: '24px',
-              marginBottom: '24px',
-              border: '1px solid #e5e7eb'
-            }}>
-              <h3 style={{
-                margin: '0 0 16px 0',
-                color: '#2c3e50',
-                fontSize: '18px',
-                fontWeight: '600'
-              }}>
-                📤 Upload New File
-              </h3>
-              
+            {/* Upload or Recording Section */}
+            {viewMode === 'upload' ? (
               <div style={{
-                textAlign: 'center',
-                padding: '20px'
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '24px',
+                marginBottom: '24px',
+                border: '1px solid #e5e7eb'
               }}>
-                <p style={{
-                  color: '#6b7280',
-                  fontSize: '16px',
-                  margin: '0 0 20px 0'
+                <h3 style={{
+                  margin: '0 0 16px 0',
+                  color: '#2c3e50',
+                  fontSize: '18px',
+                  fontWeight: '600'
                 }}>
-                  Drag & drop your audio/video file or use the upload button on the left panel
-                </p>
+                  📤 Upload New File
+                </h3>
                 
                 <div style={{
-                  display: 'inline-block',
-                  padding: '12px 24px',
-                  backgroundColor: '#f3e8ff',
-                  borderRadius: '8px',
-                  color: '#7c3aed',
-                  fontSize: '14px',
-                  fontWeight: '500'
+                  textAlign: 'center',
+                  padding: '20px'
                 }}>
-                  💡 Supports MP3, WAV, MP4, MOV and more - up to 1GB
+                  <p style={{
+                    color: '#6b7280',
+                    fontSize: '16px',
+                    margin: '0 0 20px 0'
+                  }}>
+                    Drag & drop your audio/video file or use the upload button on the left panel
+                  </p>
+                  
+                  <div style={{
+                    display: 'inline-block',
+                    padding: '12px 24px',
+                    backgroundColor: '#f3e8ff',
+                    borderRadius: '8px',
+                    color: '#7c3aed',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}>
+                    💡 Supports MP3, WAV, MP4, MOV and more - up to 1GB
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : viewMode === 'recording' ? (
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '24px',
+                marginBottom: '24px',
+                border: '1px solid #e5e7eb'
+              }}>
+                <h3 style={{
+                  margin: '0 0 16px 0',
+                  color: '#2c3e50',
+                  fontSize: '18px',
+                  fontWeight: '600'
+                }}>
+                  🎙️ Record Audio
+                </h3>
+                
+                <RecordingSection onRecordingComplete={handleRecordingComplete} />
+              </div>
+            ) : null}
 
             {/* Session Results */}
             {sessionTranscriptions.length > 0 && (
