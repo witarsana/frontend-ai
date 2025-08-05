@@ -69,6 +69,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
   
   // Pagination and search states for segments
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSpeaker, setSelectedSpeaker] = useState<string>("all"); // Filter by speaker
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10); // Show 10 segments per page by default
   
@@ -90,6 +91,24 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
   // Use backend-provided clean data directly
   const cleanSummary = transcription.fullResult?.clean_summary || transcription.summary || '';
   const speakerPoints = transcription.fullResult?.speaker_points || [];
+
+  // Get unique speakers from segments
+  const getUniqueSpeakers = (): string[] => {
+    if (!transcription.segments) return [];
+    
+    const speakers = new Set<string>();
+    transcription.segments.forEach(segment => {
+      if (segment.speaker) {
+        speakers.add(segment.speaker);
+      } else if (segment.speaker_name) {
+        speakers.add(segment.speaker_name);
+      }
+    });
+    
+    return Array.from(speakers).sort();
+  };
+
+  const uniqueSpeakers = getUniqueSpeakers();
 
   // Auto-detect current segment based on audio time
   const getCurrentSegmentIndex = (): number | null => {
@@ -320,11 +339,18 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
     };
   }, [transcription.audioUrl, audioRef]);
 
-  // Filter segments based on search term
-  const filteredSegments = transcription.segments?.filter(segment => 
-    segment.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (segment.speaker && segment.speaker.toLowerCase().includes(searchTerm.toLowerCase()))
-  ) || [];
+  // Filter segments based on search term and selected speaker
+  const filteredSegments = transcription.segments?.filter(segment => {
+    const matchesSearch = segment.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (segment.speaker && segment.speaker.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesSpeaker = selectedSpeaker === "all" || 
+      segment.speaker === selectedSpeaker ||
+      segment.speaker_name === selectedSpeaker ||
+      (segment.speaker && segment.speaker.includes(selectedSpeaker));
+    
+    return matchesSearch && matchesSpeaker;
+  }) || [];
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredSegments.length / itemsPerPage);
@@ -332,10 +358,10 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
   const endIndex = startIndex + itemsPerPage;
   const paginatedSegments = filteredSegments.slice(startIndex, endIndex);
 
-  // Reset pagination when search term changes
+  // Reset pagination when search term or speaker filter changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, selectedSpeaker]);
 
   // Reset pagination when items per page changes
   React.useEffect(() => {
@@ -907,6 +933,50 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                           </select>
                         </div>
 
+                        {/* Speaker Filter */}
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px"
+                        }}>
+                          <span style={{
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            whiteSpace: "nowrap"
+                          }}>
+                            Speaker:
+                          </span>
+                          <select
+                            value={selectedSpeaker}
+                            onChange={(e) => setSelectedSpeaker(e.target.value)}
+                            style={{
+                              padding: "4px 8px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              backgroundColor: "#ffffff",
+                              color: "#374151",
+                              cursor: "pointer",
+                              outline: "none",
+                              minWidth: "120px"
+                            }}
+                          >
+                            <option value="all">All Speakers</option>
+                            {uniqueSpeakers.map((speaker) => {
+                              // Count segments for this speaker
+                              const segmentCount = transcription.segments?.filter(
+                                seg => seg.speaker === speaker || seg.speaker_name === speaker
+                              ).length || 0;
+                              
+                              return (
+                                <option key={speaker} value={speaker}>
+                                  {speaker} ({segmentCount})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
                         {/* Search Input */}
                         <div style={{
                           position: "relative",
@@ -965,11 +1035,23 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                       {/* Left side - Results Info */}
                       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
                         <span>
-                          {searchTerm 
-                            ? `Found ${filteredSegments.length} of ${transcription.segments.length} segments`
+                          {searchTerm || selectedSpeaker !== "all"
+                            ? `Found ${filteredSegments.length} of ${transcription.segments?.length || 0} segments`
                             : `Total: ${filteredSegments.length} segments`
                           }
                         </span>
+                        {selectedSpeaker !== "all" && (
+                          <span style={{ 
+                            color: "#7c3aed", 
+                            fontWeight: "500",
+                            backgroundColor: "#f3f4f6",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            fontSize: "11px"
+                          }}>
+                            📢 {selectedSpeaker}
+                          </span>
+                        )}
                         <span style={{ color: "#3b82f6", fontWeight: "500" }}>
                           Showing {Math.min(itemsPerPage, filteredSegments.length - startIndex)} of {filteredSegments.length}
                         </span>
@@ -1155,7 +1237,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                         </div>
                       )}
 
-                      {/* Right side - Search clear or Quick jump */}
+                      {/* Right side - Filter controls or Quick jump */}
                       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                         {searchTerm && (
                           <button
@@ -1174,6 +1256,53 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                             onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = "transparent"}
                           >
                             Clear search
+                          </button>
+                        )}
+                        {selectedSpeaker !== "all" && (
+                          <button
+                            onClick={() => setSelectedSpeaker("all")}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#7c3aed",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                              transition: "background-color 0.2s"
+                            }}
+                            onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = "#f3f4f6"}
+                            onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = "transparent"}
+                          >
+                            Clear speaker filter
+                          </button>
+                        )}
+                        {(searchTerm || selectedSpeaker !== "all") && (
+                          <button
+                            onClick={() => {
+                              setSearchTerm("");
+                              setSelectedSpeaker("all");
+                            }}
+                            style={{
+                              background: "none",
+                              border: "1px solid #dc2626",
+                              color: "#dc2626",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                              transition: "all 0.2s"
+                            }}
+                            onMouseEnter={(e) => {
+                              (e.target as HTMLElement).style.backgroundColor = "#dc2626";
+                              (e.target as HTMLElement).style.color = "white";
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.target as HTMLElement).style.backgroundColor = "transparent";
+                              (e.target as HTMLElement).style.color = "#dc2626";
+                            }}
+                          >
+                            Clear all filters
                           </button>
                         )}
                         {totalPages > 1 && (
