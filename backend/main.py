@@ -663,6 +663,9 @@ async def get_audio_file(job_id: str):
 from pydantic import BaseModel
 from typing import Optional, List
 
+# Chat session storage
+chat_sessions = {}
+
 class ChatRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
@@ -679,23 +682,270 @@ class ChatResponse(BaseModel):
 @app.get("/api/chat/load/{job_id}")
 async def load_chat_data(job_id: str):
     """Load transcript data for specific job into chat system"""
-    return {
-        "status": "success", 
-        "message": f"Chat system loaded for job {job_id}",
-        "job_id": job_id,
-        "chat_available": True
-    }
+    try:
+        # Check if result file exists
+        results_dir = os.path.join(os.path.dirname(__file__), "results")
+        result_file = os.path.join(results_dir, f"{job_id}_result.json")
+        
+        if os.path.exists(result_file):
+            # Load and store transcript data in session
+            with open(result_file, 'r', encoding='utf-8') as f:
+                transcript_data = json.load(f)
+            
+            # Store in global chat sessions for easy access
+            chat_sessions[job_id] = {
+                "transcript_data": transcript_data,
+                "loaded_at": datetime.now().isoformat(),
+                "conversation_history": []
+            }
+            
+            print(f"📚 Chat data loaded for job {job_id}: {transcript_data.get('filename', 'Unknown')}")
+            
+            return {
+                "status": "success", 
+                "message": f"Chat system loaded for job {job_id}",
+                "job_id": job_id,
+                "chat_available": True,
+                "data_loaded": True,
+                "transcript_info": {
+                    "filename": transcript_data.get("filename", "Unknown"),
+                    "duration": transcript_data.get("duration", 0),
+                    "word_count": transcript_data.get("word_count", 0),
+                    "speakers": len(transcript_data.get("speakers", [])),
+                    "segments": len(transcript_data.get("transcript", []))
+                }
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"No data found for job {job_id}",
+                "job_id": job_id,
+                "chat_available": False,
+                "data_loaded": False
+            }
+    except Exception as e:
+        print(f"❌ Chat load error: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to load data: {str(e)}",
+            "job_id": job_id,
+            "chat_available": False,
+            "data_loaded": False
+        }
 
 @app.post("/api/chat/enhanced")
 async def chat_enhanced(request: ChatRequest):
-    """Enhanced chat with AI system"""
-    return ChatResponse(
-        response="Chat system is available. I can help you analyze your transcriptions and answer questions about them.",
-        sources=[],
-        session_id=request.session_id or "default",
-        timestamp=datetime.now().isoformat(),
-        confidence=1.0
-    )
+    """Enhanced chat with AI system that can answer questions about transcripts"""
+    try:
+        transcript_data = None
+        session_id = request.session_id or "default"
+        
+        # Try to get transcript data from multiple sources
+        if request.file_id:
+            # First priority: file_id parameter
+            if request.file_id in chat_sessions:
+                transcript_data = chat_sessions[request.file_id]["transcript_data"]
+                print(f"💬 Using loaded transcript data for {request.file_id}")
+            else:
+                # Try to load from file
+                results_dir = os.path.join(os.path.dirname(__file__), "results")
+                result_file = os.path.join(results_dir, f"{request.file_id}_result.json")
+                if os.path.exists(result_file):
+                    with open(result_file, 'r', encoding='utf-8') as f:
+                        transcript_data = json.load(f)
+                    print(f"💬 Loaded transcript data from file for {request.file_id}")
+        
+        # If no specific file_id, try to find most recent loaded session
+        if not transcript_data and chat_sessions:
+            # Use the most recently loaded transcript
+            most_recent_job = max(chat_sessions.keys(), key=lambda k: chat_sessions[k]["loaded_at"])
+            transcript_data = chat_sessions[most_recent_job]["transcript_data"]
+            request.file_id = most_recent_job
+            print(f"💬 Using most recent transcript: {most_recent_job}")
+        
+        if transcript_data:
+            # Generate AI response based on query and transcript
+            response_text = await generate_chat_response(request.query, transcript_data, session_id)
+            
+            # Store conversation in session history
+            if request.file_id in chat_sessions:
+                chat_sessions[request.file_id]["conversation_history"].append({
+                    "query": request.query,
+                    "response": response_text,
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            return ChatResponse(
+                response=response_text,
+                sources=[{
+                    "type": "transcript", 
+                    "job_id": request.file_id,
+                    "filename": transcript_data.get("filename", "Unknown")
+                }],
+                session_id=session_id,
+                timestamp=datetime.now().isoformat(),
+                confidence=0.9
+            )
+        else:
+            # No transcript data available - generic response
+            response_text = await generate_generic_chat_response(request.query)
+            
+            return ChatResponse(
+                response=f"No transcript is currently loaded. {response_text}\n\nTo chat about a specific transcript, please load it first using the 'Load Chat Data' button on a transcript result.",
+                sources=[],
+                session_id=session_id,
+                timestamp=datetime.now().isoformat(),
+                confidence=0.6
+            )
+        
+    except Exception as e:
+        print(f"❌ Chat error: {e}")
+        return ChatResponse(
+            response="I apologize, but I'm having trouble processing your request right now. Please try again or make sure a transcript is loaded first.",
+            sources=[],
+            session_id=request.session_id or "default",
+            timestamp=datetime.now().isoformat(),
+            confidence=0.3
+        )
+
+async def generate_chat_response(query: str, transcript_data: dict, session_id: str = "default") -> str:
+    """Generate AI response based on query and transcript data with full context"""
+    try:
+        # Extract comprehensive information from transcript
+        transcript_segments = transcript_data.get("transcript", [])
+        summary = transcript_data.get("summary", "")
+        key_decisions = transcript_data.get("key_decisions", [])
+        enhanced_action_items = transcript_data.get("enhanced_action_items", [])
+        speakers = transcript_data.get("speakers", [])
+        filename = transcript_data.get("filename", "Unknown")
+        duration = transcript_data.get("duration", 0)
+        word_count = transcript_data.get("word_count", 0)
+        
+        # Format full transcript for AI context (not just first 20 segments)
+        transcript_text = ""
+        for i, segment in enumerate(transcript_segments):
+            if i >= 50:  # Limit to first 50 segments for context window
+                transcript_text += f"\n... (transcript continues with {len(transcript_segments) - 50} more segments)"
+                break
+            speaker = segment.get("speaker_name", "Speaker")
+            text = segment.get("text", "")
+            start_time = segment.get("start", 0)
+            timestamp = f"{int(start_time//60):02d}:{int(start_time%60):02d}"
+            transcript_text += f"[{timestamp}] {speaker}: {text}\n"
+        
+        # Format action items
+        action_items_text = ""
+        for item in enhanced_action_items[:10]:
+            if isinstance(item, dict):
+                title = item.get("title", "Action item")
+                description = item.get("description", "")
+                action_items_text += f"• {title}: {description}\n"
+            else:
+                action_items_text += f"• {item}\n"
+        
+        # Create comprehensive context-aware prompt
+        prompt = f"""You are an AI assistant analyzing a meeting transcript. Here's the complete context:
+
+MEETING INFORMATION:
+- File: {filename}
+- Duration: {duration/60:.1f} minutes
+- Word Count: {word_count} words
+- Speakers: {', '.join(speakers)}
+
+MEETING SUMMARY:
+{summary}
+
+KEY DECISIONS:
+{chr(10).join([f"• {decision}" for decision in key_decisions[:10]])}
+
+ACTION ITEMS:
+{action_items_text}
+
+FULL TRANSCRIPT:
+{transcript_text}
+
+USER QUESTION: {query}
+
+Please provide a helpful, detailed, and accurate answer based on the transcript content. Use specific quotes and timestamps when relevant. If you need to reference speakers, use their names. If the information isn't available in the transcript, please say so clearly."""
+
+        # Use our AI system
+        api_providers = initialize_providers()
+        if api_providers:
+            response = call_api(prompt, providers=api_providers, max_tokens=1200)
+            return response.strip()
+        else:
+            # Fallback response with available information
+            return f"""I can see the transcript data for "{filename}" ({duration/60:.1f} minutes, {word_count} words) with {len(speakers)} speakers: {', '.join(speakers)}.
+
+However, I'm currently unable to process AI analysis. Here's what I can tell you from the available data:
+
+**Summary**: {summary[:300]}...
+
+**Key Decisions**: {chr(10).join([f"• {decision}" for decision in key_decisions[:3]])}
+
+You can ask me to search for specific information in the transcript or review the full data."""
+            
+    except Exception as e:
+        print(f"❌ Chat response generation error: {e}")
+        return f"""I found the transcript for "{transcript_data.get('filename', 'Unknown')}" but I'm having trouble analyzing it right now. 
+
+The transcript contains:
+• {len(transcript_data.get('transcript', []))} segments
+• {len(transcript_data.get('speakers', []))} speakers
+• {transcript_data.get('word_count', 0)} words
+
+You can review the summary and segments directly, or try asking a more specific question."""
+
+async def generate_generic_chat_response(query: str) -> str:
+    """Generate generic AI response without specific transcript context"""
+    try:
+        prompt = f"""You are an AI assistant specialized in meeting transcription and analysis. Please respond to this question: {query}
+
+Provide helpful information about transcription, meeting analysis, or general questions. Be concise and helpful."""
+
+        api_providers = initialize_providers()
+        if api_providers:
+            response = call_api(prompt, providers=api_providers, max_tokens=400)
+            return response.strip()
+        else:
+            return "I'm an AI assistant that can help you with transcription analysis. However, AI services are currently limited. I can help you understand how to use the transcription features and analyze your meeting data."
+            
+    except Exception as e:
+        print(f"❌ Generic chat response error: {e}")
+        return "I'm here to help with your transcription analysis needs. Feel free to ask about specific transcripts, summaries, or how to use the system features."
+
+@app.get("/api/chat/sessions")
+async def get_chat_sessions():
+    """Get information about loaded chat sessions"""
+    return {
+        "sessions": {
+            job_id: {
+                "filename": session["transcript_data"].get("filename", "Unknown"),
+                "loaded_at": session["loaded_at"],
+                "conversation_count": len(session["conversation_history"]),
+                "transcript_info": {
+                    "duration": session["transcript_data"].get("duration", 0),
+                    "word_count": session["transcript_data"].get("word_count", 0),
+                    "speakers": len(session["transcript_data"].get("speakers", []))
+                }
+            }
+            for job_id, session in chat_sessions.items()
+        },
+        "total_sessions": len(chat_sessions)
+    }
+
+@app.get("/api/chat/history/{job_id}")
+async def get_chat_history(job_id: str):
+    """Get conversation history for a specific job"""
+    if job_id in chat_sessions:
+        return {
+            "job_id": job_id,
+            "filename": chat_sessions[job_id]["transcript_data"].get("filename", "Unknown"),
+            "conversation_history": chat_sessions[job_id]["conversation_history"],
+            "loaded_at": chat_sessions[job_id]["loaded_at"]
+        }
+    else:
+        raise HTTPException(status_code=404, detail="Chat session not found")
 
 if __name__ == "__main__":
     import uvicorn
