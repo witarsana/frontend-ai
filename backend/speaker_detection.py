@@ -872,20 +872,59 @@ def analyze_speakers(audio_file: str, method: str = "auto") -> Dict:
 
 def format_speaker_segments(speaker_data: Dict, transcription_segments: List[Dict]) -> List[Dict]:
     """
-    Combine speaker detection with transcription segments
+    Combine speaker detection with transcription segments and normalize speaker formats
     
     Args:
         speaker_data: Speaker detection results
         transcription_segments: Whisper transcription segments
         
     Returns:
-        Combined segments with speaker labels
+        Combined segments with normalized speaker labels
     """
     
+    def normalize_speaker_format(speaker_label: str) -> Tuple[str, str, int]:
+        """
+        Normalize different speaker formats to consistent format
+        
+        Returns:
+            Tuple of (speaker_id, speaker_name, assigned_speaker_num)
+        """
+        if not speaker_label:
+            return "speaker-01", "Speaker 1", 1
+            
+        # Handle PyAnnote format: SPEAKER_00, SPEAKER_01 -> speaker-01, Speaker 1
+        if speaker_label.startswith("SPEAKER_"):
+            try:
+                num = int(speaker_label.split("_")[1]) + 1  # Convert 0-based to 1-based
+                return f"speaker-{num:02d}", f"Speaker {num}", num
+            except (IndexError, ValueError):
+                return "speaker-01", "Speaker 1", 1
+        
+        # Handle Speaker_1, Speaker_2 format -> speaker-01, Speaker 1  
+        if speaker_label.startswith("Speaker_"):
+            try:
+                num = int(speaker_label.split("_")[1])
+                return f"speaker-{num:02d}", f"Speaker {num}", num
+            except (IndexError, ValueError):
+                return "speaker-01", "Speaker 1", 1
+        
+        # Handle speaker-01, speaker-02 format (already normalized)
+        if speaker_label.startswith("speaker-"):
+            try:
+                num = int(speaker_label.split("-")[1])
+                return speaker_label, f"Speaker {num}", num
+            except (IndexError, ValueError):
+                return "speaker-01", "Speaker 1", 1
+        
+        # Handle unknown format - assign as Speaker 1
+        return "speaker-01", "Speaker 1", 1
+    
     if not speaker_data.get("segments"):
-        # No speaker data, assign default speaker
+        # No speaker data, assign default speaker with normalized format
         for segment in transcription_segments:
-            segment["speaker"] = "Speaker_1"
+            segment["speaker"] = "speaker-01"
+            segment["speaker_name"] = "Speaker 1"
+            segment["assigned_speaker"] = 1
         return transcription_segments
     
     # Match transcription segments with speaker segments
@@ -897,7 +936,7 @@ def format_speaker_segments(speaker_data: Dict, transcription_segments: List[Dic
         trans_end = trans_seg.get("end", trans_start + 1)
         
         # Find overlapping speaker segment
-        assigned_speaker = "Speaker_Unknown"
+        assigned_speaker_raw = "speaker-01"  # Default fallback
         max_overlap = 0
         
         for spk_seg in speaker_segments:
@@ -911,12 +950,17 @@ def format_speaker_segments(speaker_data: Dict, transcription_segments: List[Dic
             
             if overlap > max_overlap:
                 max_overlap = overlap
-                assigned_speaker = spk_seg["speaker"]
+                assigned_speaker_raw = spk_seg["speaker"]
         
-        # Add speaker to transcription segment
+        # Normalize speaker format
+        speaker_id, speaker_name, assigned_num = normalize_speaker_format(assigned_speaker_raw)
+        
+        # Add normalized speaker info to transcription segment
         enhanced_segment = trans_seg.copy()
-        enhanced_segment["speaker"] = assigned_speaker
-        enhanced_segment["speaker_confidence"] = "high" if max_overlap > 0 else "low"
+        enhanced_segment["speaker"] = speaker_id
+        enhanced_segment["speaker_name"] = speaker_name
+        enhanced_segment["assigned_speaker"] = assigned_num
+        enhanced_segment["confidence"] = 0.9 if max_overlap > 0 else 0.5
         enhanced_segments.append(enhanced_segment)
     
     return enhanced_segments

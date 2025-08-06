@@ -61,11 +61,17 @@ interface Transcription {
 interface SessionTranscriptionCardProps {
   transcription: Transcription;
   onBack?: () => void; // Optional back button handler
+  onCopy?: () => void; // Copy transcription text
+  onDownload?: () => void; // Download transcription
+  onClear?: () => void; // Clear/delete transcription
 }
 
 const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({ 
   transcription,
-  onBack
+  onBack,
+  onCopy,
+  onDownload,
+  onClear
 }) => {
   const [activeTab, setActiveTab] = useState<"segments" | "summary" | "chat" | "analytics">("summary");
   
@@ -765,6 +771,126 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                 ` • ${Math.round(transcription.duration)}s`}
             </p>
           </div>
+        </div>
+        
+        {/* Action Buttons */}
+        <div style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          gap: "8px",
+          position: "relative",
+          zIndex: 1
+        }}>
+          {onCopy && (
+            <button
+              onClick={onCopy}
+              style={{
+                background: "rgba(34, 197, 94, 0.08)",
+                border: "1px solid rgba(34, 197, 94, 0.2)",
+                borderRadius: "10px",
+                color: "#22c55e",
+                padding: "8px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                backdropFilter: "blur(8px)"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(34, 197, 94, 0.12)";
+                e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.3)";
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = "0 4px 16px rgba(34, 197, 94, 0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(34, 197, 94, 0.08)";
+                e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.2)";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+              title="Copy transcription text"
+            >
+              <span style={{ fontSize: "14px" }}>📋</span>
+              <span>Copy</span>
+            </button>
+          )}
+          
+          {onDownload && (
+            <button
+              onClick={onDownload}
+              style={{
+                background: "rgba(168, 85, 247, 0.08)",
+                border: "1px solid rgba(168, 85, 247, 0.2)",
+                borderRadius: "10px",
+                color: "#a855f7",
+                padding: "8px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                backdropFilter: "blur(8px)"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(168, 85, 247, 0.12)";
+                e.currentTarget.style.borderColor = "rgba(168, 85, 247, 0.3)";
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = "0 4px 16px rgba(168, 85, 247, 0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(168, 85, 247, 0.08)";
+                e.currentTarget.style.borderColor = "rgba(168, 85, 247, 0.2)";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+              title="Download transcription as text file"
+            >
+              <span style={{ fontSize: "14px" }}>💾</span>
+              <span>Download</span>
+            </button>
+          )}
+          
+          {onClear && (
+            <button
+              onClick={onClear}
+              style={{
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+                borderRadius: "10px",
+                color: "#ef4444",
+                padding: "8px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                backdropFilter: "blur(8px)"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(239, 68, 68, 0.12)";
+                e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.3)";
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = "0 4px 16px rgba(239, 68, 68, 0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(239, 68, 68, 0.08)";
+                e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.2)";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+              title="Clear this transcription"
+            >
+              <span style={{ fontSize: "14px" }}>🗑️</span>
+              <span>Clear</span>
+            </button>
+          )}
         </div>
         
         {/* Futuristic Status Badge */}

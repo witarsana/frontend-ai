@@ -5,7 +5,14 @@ import { EngineModal } from "./EngineModal";
 interface UploadSectionProps {
   onFileSelect: (
     file: File,
-    options?: { language?: string; engine?: string; speed?: string; speakerMethod?: string }
+    options?: { 
+      language?: string; 
+      engine?: string; 
+      speed?: string; 
+      speakerMethod?: string;
+      enableSpeedProcessing?: boolean;
+      enableSpeakerDetection?: boolean;
+    }
   ) => void;
 }
 
@@ -14,6 +21,8 @@ interface UploadOptions {
   engine: string;
   speed: string;
   speakerMethod: string;
+  enableSpeedProcessing: boolean;
+  enableSpeakerDetection: boolean;
 }
 
 const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
@@ -27,6 +36,8 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
     engine: "faster-whisper",
     speed: "medium", // Default speed
     speakerMethod: "pyannote", // Default experimental speaker detection method
+    enableSpeedProcessing: true, // Enable speed processing by default
+    enableSpeakerDetection: true, // Enable speaker detection by default
   });
   const [isEngineModalOpen, setIsEngineModalOpen] = useState<boolean>(false);
   const [_speakerMethods, setSpeakerMethods] = useState<any>(null);
@@ -442,8 +453,192 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
               </div>
             </div>
 
-            {/* Speed Selection */}
-            <div>
+            {/* Feature Toggle Switches */}
+            <div style={{ marginBottom: "24px" }}>
+              <label
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#333",
+                  marginBottom: "12px",
+                  display: "block",
+                }}
+              >
+                ⚙️ Feature Configuration
+              </label>
+              
+              {/* Speed Processing Toggle */}
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "space-between",
+                padding: "12px 16px",
+                backgroundColor: uploadOptions.enableSpeedProcessing ? "#f0f9ff" : "#f9fafb",
+                border: `2px solid ${uploadOptions.enableSpeedProcessing ? "#0284c7" : "#e5e7eb"}`,
+                borderRadius: "8px",
+                marginBottom: "12px",
+                transition: "all 0.2s ease"
+              }}>
+                <div>
+                  <div style={{ 
+                    fontWeight: "600", 
+                    color: uploadOptions.enableSpeedProcessing ? "#0284c7" : "#6b7280",
+                    fontSize: "14px"
+                  }}>
+                    🚀 Processing Speed Optimization
+                  </div>
+                  <div style={{ 
+                    fontSize: "12px", 
+                    color: "#6b7280",
+                    marginTop: "2px"
+                  }}>
+                    Configure transcription speed and model selection
+                  </div>
+                </div>
+                <label style={{
+                  position: "relative",
+                  display: "inline-block",
+                  width: "44px",
+                  height: "24px",
+                  cursor: "pointer"
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={uploadOptions.enableSpeedProcessing}
+                    onChange={(e) => setUploadOptions({
+                      ...uploadOptions,
+                      enableSpeedProcessing: e.target.checked
+                    })}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span style={{
+                    position: "absolute",
+                    cursor: "pointer",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: uploadOptions.enableSpeedProcessing ? "#0284c7" : "#ccc",
+                    borderRadius: "24px",
+                    transition: "0.3s"
+                  }}>
+                    <div style={{
+                      position: "absolute",
+                      height: "18px",
+                      width: "18px",
+                      left: uploadOptions.enableSpeedProcessing ? "23px" : "3px",
+                      bottom: "3px",
+                      backgroundColor: "white",
+                      borderRadius: "50%",
+                      transition: "0.3s"
+                    }} />
+                  </span>
+                </label>
+              </div>
+
+              {/* Speaker Detection Toggle */}
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "space-between",
+                padding: "12px 16px",
+                backgroundColor: uploadOptions.enableSpeakerDetection ? "#f0fdf4" : "#f9fafb",
+                border: `2px solid ${uploadOptions.enableSpeakerDetection ? "#16a34a" : "#e5e7eb"}`,
+                borderRadius: "8px",
+                transition: "all 0.2s ease"
+              }}>
+                <div>
+                  <div style={{ 
+                    fontWeight: "600", 
+                    color: uploadOptions.enableSpeakerDetection ? "#16a34a" : "#6b7280",
+                    fontSize: "14px"
+                  }}>
+                    🔬 Speaker Detection & Diarization
+                  </div>
+                  <div style={{ 
+                    fontSize: "12px", 
+                    color: "#6b7280",
+                    marginTop: "2px"
+                  }}>
+                    Identify and separate different speakers in audio
+                  </div>
+                </div>
+                <label style={{
+                  position: "relative",
+                  display: "inline-block",
+                  width: "44px",
+                  height: "24px",
+                  cursor: "pointer"
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={uploadOptions.enableSpeakerDetection}
+                    onChange={(e) => setUploadOptions({
+                      ...uploadOptions,
+                      enableSpeakerDetection: e.target.checked
+                    })}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span style={{
+                    position: "absolute",
+                    cursor: "pointer",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: uploadOptions.enableSpeakerDetection ? "#16a34a" : "#ccc",
+                    borderRadius: "24px",
+                    transition: "0.3s"
+                  }}>
+                    <div style={{
+                      position: "absolute",
+                      height: "18px",
+                      width: "18px",
+                      left: uploadOptions.enableSpeakerDetection ? "23px" : "3px",
+                      bottom: "3px",
+                      backgroundColor: "white",
+                      borderRadius: "50%",
+                      transition: "0.3s"
+                    }} />
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Info message when both features are disabled */}
+            {!uploadOptions.enableSpeedProcessing && !uploadOptions.enableSpeakerDetection && (
+              <div style={{
+                padding: "12px 16px",
+                backgroundColor: "#fef3c7",
+                border: "1px solid #f59e0b",
+                borderRadius: "8px",
+                marginBottom: "20px"
+              }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  color: "#92400e",
+                  fontWeight: "600"
+                }}>
+                  ⚡ Minimal Mode Active
+                </div>
+                <div style={{
+                  fontSize: "12px",
+                  color: "#92400e",
+                  marginTop: "4px",
+                  lineHeight: "1.4"
+                }}>
+                  Using basic transcription: Medium model, single speaker, fastest processing. 
+                  Enable features above for advanced functionality.
+                </div>
+              </div>
+            )}
+
+            {/* Speed Selection - Only show if enabled */}
+            {uploadOptions.enableSpeedProcessing && (
+            <div style={{ marginBottom: "20px" }}>
               <label
                 style={{
                   fontSize: "14px",
@@ -493,8 +688,10 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
                 </select>
               </div>
             </div>
+            )}
 
-            {/* Speaker Detection Method Selection - Available for all speeds */}
+            {/* Speaker Detection Method Selection - Only show if enabled */}
+            {uploadOptions.enableSpeakerDetection && (
             <div style={{ marginTop: "20px" }}>
               <label
                 style={{
@@ -554,6 +751,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
                 💡 All speaker detection methods are now available for any speed mode
               </div>
             </div>
+            )}
 
             {/* Start Button */}
             <button

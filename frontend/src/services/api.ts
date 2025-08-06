@@ -240,7 +240,14 @@ export class AITranscriptionAPI {
   // Upload and start processing
   async uploadAndProcess(
     file: File,
-    options?: { engine?: TranscriptionEngine; language?: string; speed?: string; speakerMethod?: string }
+    options?: { 
+      engine?: TranscriptionEngine; 
+      language?: string; 
+      speed?: string; 
+      speakerMethod?: string;
+      enableSpeedProcessing?: boolean;
+      enableSpeakerDetection?: boolean;
+    }
   ): Promise<APIUploadResponse> {
     const formData = new FormData();
     formData.append("file", file);
@@ -263,6 +270,15 @@ export class AITranscriptionAPI {
     // Add speaker method preference if provided (for experimental mode)
     if (options?.speakerMethod) {
       formData.append("speaker_method", options.speakerMethod);
+    }
+
+    // Add toggle states for feature control
+    if (options?.enableSpeedProcessing !== undefined) {
+      formData.append("enable_speed_processing", options.enableSpeedProcessing.toString());
+    }
+
+    if (options?.enableSpeakerDetection !== undefined) {
+      formData.append("enable_speaker_detection", options.enableSpeakerDetection.toString());
     }
 
     const response = await fetch(

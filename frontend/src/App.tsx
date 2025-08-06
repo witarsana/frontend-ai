@@ -222,7 +222,14 @@ const App: React.FC = () => {
 
   const handleFileSelect = async (
     file: File,
-    options?: { language?: string; engine?: string; speed?: string; speakerMethod?: string }
+    options?: { 
+      language?: string; 
+      engine?: string; 
+      speed?: string; 
+      speakerMethod?: string;
+      enableSpeedProcessing?: boolean;
+      enableSpeakerDetection?: boolean;
+    }
   ) => {
     console.log("File selected:", file.name, "Size:", file.size);
     console.log("Upload options:", options);
@@ -238,12 +245,14 @@ const App: React.FC = () => {
           );
         }
 
-        // Upload and start processing with engine preference
+        // Upload and start processing with engine preference and toggle states
         const uploadResponse = await aiAPI.uploadAndProcess(file, {
           engine: options?.engine as TranscriptionEngine,
           language: options?.language,
           speed: options?.speed,
           speakerMethod: options?.speakerMethod,
+          enableSpeedProcessing: options?.enableSpeedProcessing,
+          enableSpeakerDetection: options?.enableSpeakerDetection,
         });
         
         console.log("Upload response:", uploadResponse);

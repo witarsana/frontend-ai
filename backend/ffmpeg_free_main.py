@@ -559,7 +559,9 @@ async def upload_and_process(
     language: str = Form("auto"),
     engine: str = Form("faster-whisper"),
     speed: str = Form("medium"),  # Speed parameter: fast, medium, slow, experimental
-    speaker_method: str = Form("pyannote")  # Speaker detection method (available for all speeds): pyannote, speechbrain, resemblyzer, webrtc, energy
+    speaker_method: str = Form("pyannote"),  # Speaker detection method (available for all speeds): pyannote, speechbrain, resemblyzer, webrtc, energy
+    enable_speed_processing: bool = Form(True),  # Toggle for speed processing
+    enable_speaker_detection: bool = Form(True)  # Toggle for speaker detection
 ):
     """Upload and process with librosa instead of FFmpeg - Now with speed options and speaker detection methods"""
     try:
@@ -570,6 +572,8 @@ async def upload_and_process(
         print(f"   - Engine: {engine}")
         print(f"   - Speed: {speed}")
         print(f"   - Speaker method: {speaker_method}")
+        print(f"   - Enable speed processing: {enable_speed_processing}")
+        print(f"   - Enable speaker detection: {enable_speaker_detection}")
         
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file uploaded")
@@ -630,8 +634,11 @@ async def upload_and_process(
         print(f"📁 File saved: {file_path} ({len(content)/1024:.1f} KB)")
         print(f"🌐 Language: {language}, Engine: {engine}, Speed: {speed}")
         
-        # Start processing with language, engine, and speed parameters
-        asyncio.create_task(process_audio_librosa(job_id, file_path, file.filename, language, engine, speed, speaker_method))
+        # Start processing with language, engine, speed parameters, and toggle settings
+        asyncio.create_task(process_audio_librosa(
+            job_id, file_path, file.filename, language, engine, speed, speaker_method,
+            enable_speed_processing, enable_speaker_detection
+        ))
         
         return JSONResponse({
             "job_id": job_id,
@@ -1509,124 +1516,161 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
         
         print("✅ Optimized Large V3 transcription completed!")
         
-        # Enhanced speaker detection for Large V3 results
+        # Initialize segments and speaker data
         segments_with_speakers = []
         total_segments = len(whisper_result["segments"])
         
-        if progress:
-            progress.update_stage("transcription", 75, f"Analyzing {total_segments} segments for speakers...")
-        
-        # Analyze conversation patterns to detect real speaker count
-        speaker_count = analyze_smart_speaker_patterns(whisper_result["segments"])
-        print(f"🎯 Large V3 Smart detection found {speaker_count} speakers in conversation")
-        
-        if progress:
-            progress.update_stage("transcription", 80, f"Detected {speaker_count} speakers, assigning segments...")
-        
-        # Enhanced speaker assignment for Large V3 with better accuracy
-        current_speaker = 1
-        last_speaker_change = 0
-        speaker_changes_detected = 0
-        speaker_stats = {i+1: {"total_time": 0, "segment_count": 0, "avg_length": 0} for i in range(speaker_count)}
-        
-        for i, segment in enumerate(whisper_result["segments"]):
-            segment_text = segment['text'].strip()
-            segment_duration = segment['end'] - segment['start']
-            time_since_last = segment['start'] - (whisper_result["segments"][i-1]['end'] if i > 0 else 0)
+        # Check if speaker detection is disabled
+        if speaker_method == "none":
+            print("🚫 Speaker detection DISABLED - Processing without speaker assignment")
+            if progress:
+                progress.update_stage("transcription", 75, "Processing segments without speaker detection...")
             
-            # Enhanced speaker change detection for Large V3
-            should_change_speaker = detect_speaker_change(
-                segment_text, 
-                whisper_result["segments"][i-1]['text'].strip() if i > 0 else "",
-                time_since_last,
-                i - last_speaker_change,
-                speaker_count
-            )
-            
-            if should_change_speaker and i > 0:
-                # Cycle to next speaker
-                current_speaker = (current_speaker % speaker_count) + 1
-                last_speaker_change = i
-                speaker_changes_detected += 1
-                print(f"🔄 Large V3 Speaker change detected at {segment['start']:.1f}s → Speaker {current_speaker}")
-            
-            # Track speaker statistics
-            speaker_stats[current_speaker]["total_time"] += segment_duration
-            speaker_stats[current_speaker]["segment_count"] += 1
-            speaker_stats[current_speaker]["avg_length"] += len(segment_text)
-            
-            segments_with_speakers.append({
-                "id": i,
-                "start": segment['start'],
-                "end": segment['end'],
-                "text": segment_text,
-                "speaker": f"speaker-{current_speaker:02d}",
-                "speaker_name": f"Speaker {current_speaker}",
-                "confidence": 0.9,  # Higher confidence for Large V3
-                "tags": [],
-                "assigned_speaker": current_speaker,
-                "duration": segment_duration,
-                "words": segment.get("words", [])  # Include word-level timestamps
-            })
-            
-            # Update progress periodically during segment processing
-            if progress and i % 25 == 0:
-                segment_progress = 80 + (i / total_segments) * 15  # 80% to 95%
-                progress.update_stage("transcription", segment_progress, f"Processing segments: {i+1}/{total_segments}")
-        
-        # Calculate final speaker statistics
-        for speaker_id in speaker_stats:
-            if speaker_stats[speaker_id]["segment_count"] > 0:
-                speaker_stats[speaker_id]["avg_length"] /= speaker_stats[speaker_id]["segment_count"]
-                print(f"👤 Speaker {speaker_id}: {speaker_stats[speaker_id]['segment_count']} segments, {speaker_stats[speaker_id]['total_time']:.1f}s total")
-        
-        print(f"🔍 LARGE V3 ANALYSIS RESULTS:")
-        print(f"   - Model: Faster-Whisper Large V3")
-        print(f"   - Language: {whisper_result['language']} (confidence: {whisper_result['language_probability']:.2f})")
-        print(f"   - Detected speakers: {speaker_count}")
-        print(f"   - Speaker changes: {speaker_changes_detected}")
-        print(f"   - Total segments: {total_segments}")
-        
-        # ADVANCED: Advanced speaker detection with selected method (ALWAYS RUN)
-        advanced_speaker_data = None
-        print(f"🎯 ADVANCED SPEAKER DETECTION ACTIVATED!")
-        print(f"   - Selected method: {speaker_method}")
-        print(f"   - Audio file: {file_path}")
-        print(f"🔍 Running {speaker_method} speaker detection...")
-        if progress:
-            progress.update_stage("transcription", 85, f"Running {speaker_method} speaker detection...")
-        
-        try:
-            # Run selected speaker detection method (ALWAYS, not just experimental)
-            advanced_speaker_data = analyze_speakers(file_path, method=speaker_method)
-            
-            if advanced_speaker_data:
-                advanced_count = advanced_speaker_data.get("speaker_count", 0)
-                advanced_method = advanced_speaker_data.get("method", "unknown")
-                advanced_confidence = advanced_speaker_data.get("confidence", "unknown")
+            # Process segments without speaker detection
+            for i, segment in enumerate(whisper_result["segments"]):
+                segments_with_speakers.append({
+                    "id": i,
+                    "start": segment['start'],
+                    "end": segment['end'],
+                    "text": segment['text'].strip(),
+                    "speaker": "speaker-01",  # Default single speaker
+                    "speaker_name": "Speaker",
+                    "confidence": 1.0,
+                    "tags": [],
+                    "assigned_speaker": 1,
+                    "duration": segment['end'] - segment['start'],
+                    "words": segment.get("words", [])
+                })
                 
-                print(f"🎯 {speaker_method.upper()} detection: {advanced_count} speakers ({advanced_method}, confidence: {advanced_confidence})")
+                # Update progress periodically
+                if progress and i % 50 == 0:
+                    segment_progress = 75 + (i / total_segments) * 20  # 75% to 95%
+                    progress.update_stage("transcription", segment_progress, f"Processing segments: {i+1}/{total_segments}")
+            
+            # Set default values for no speaker detection
+            speaker_count = 1
+            speaker_changes_detected = 0
+            speaker_stats = {1: {"total_time": whisper_result.get("duration", 0), "segment_count": total_segments, "avg_length": 0}}
+            advanced_speaker_data = None
+            
+            print(f"✅ Processed {total_segments} segments without speaker detection")
+            
+        else:
+            # Enhanced speaker detection for Large V3 results
+            if progress:
+                progress.update_stage("transcription", 75, f"Analyzing {total_segments} segments for speakers...")
+            
+            # Analyze conversation patterns to detect real speaker count
+            speaker_count = analyze_smart_speaker_patterns(whisper_result["segments"])
+            print(f"🎯 Large V3 Smart detection found {speaker_count} speakers in conversation")
+            
+            if progress:
+                progress.update_stage("transcription", 80, f"Detected {speaker_count} speakers, assigning segments...")
+            
+            # Enhanced speaker assignment for Large V3 with better accuracy
+            current_speaker = 1
+            last_speaker_change = 0
+            speaker_changes_detected = 0
+            speaker_stats = {i+1: {"total_time": 0, "segment_count": 0, "avg_length": 0} for i in range(speaker_count)}
+            
+            for i, segment in enumerate(whisper_result["segments"]):
+                segment_text = segment['text'].strip()
+                segment_duration = segment['end'] - segment['start']
+                time_since_last = segment['start'] - (whisper_result["segments"][i-1]['end'] if i > 0 else 0)
                 
-                # Enhanced segment processing with speaker detection data
-                segments_with_speakers = format_speaker_segments(
-                    advanced_speaker_data, 
-                    segments_with_speakers
+                # Enhanced speaker change detection for Large V3
+                should_change_speaker = detect_speaker_change(
+                    segment_text, 
+                    whisper_result["segments"][i-1]['text'].strip() if i > 0 else "",
+                    time_since_last,
+                    i - last_speaker_change,
+                    speaker_count
                 )
                 
-                # Update speaker count if advanced detection is more confident
-                if advanced_confidence in ["high", "medium"] and advanced_count > 0:
-                    speaker_count = advanced_count
-                    print(f"🔄 Updated speaker count to {speaker_count} based on advanced detection")
+                if should_change_speaker and i > 0:
+                    # Cycle to next speaker
+                    current_speaker = (current_speaker % speaker_count) + 1
+                    last_speaker_change = i
+                    speaker_changes_detected += 1
+                    print(f"🔄 Large V3 Speaker change detected at {segment['start']:.1f}s → Speaker {current_speaker}")
                 
-                if progress:
-                    progress.update_stage("transcription", 95, f"Advanced detection completed: {advanced_count} speakers")
-            else:
-                print("⚠️ Advanced speaker detection returned no data")
+                # Track speaker statistics
+                speaker_stats[current_speaker]["total_time"] += segment_duration
+                speaker_stats[current_speaker]["segment_count"] += 1
+                speaker_stats[current_speaker]["avg_length"] += len(segment_text)
                 
-        except Exception as adv_error:
-            print(f"⚠️ Advanced speaker detection failed: {adv_error}")
-            print("   Continuing with basic speaker assignment...")
+                segments_with_speakers.append({
+                    "id": i,
+                    "start": segment['start'],
+                    "end": segment['end'],
+                    "text": segment_text,
+                    "speaker": f"speaker-{current_speaker:02d}",
+                    "speaker_name": f"Speaker {current_speaker}",
+                    "confidence": 0.9,  # Higher confidence for Large V3
+                    "tags": [],
+                    "assigned_speaker": current_speaker,
+                    "duration": segment_duration,
+                    "words": segment.get("words", [])  # Include word-level timestamps
+                })
+                
+                # Update progress periodically during segment processing
+                if progress and i % 25 == 0:
+                    segment_progress = 80 + (i / total_segments) * 15  # 80% to 95%
+                    progress.update_stage("transcription", segment_progress, f"Processing segments: {i+1}/{total_segments}")
+            
+            # Calculate final speaker statistics
+            for speaker_id in speaker_stats:
+                if speaker_stats[speaker_id]["segment_count"] > 0:
+                    speaker_stats[speaker_id]["avg_length"] /= speaker_stats[speaker_id]["segment_count"]
+                    print(f"👤 Speaker {speaker_id}: {speaker_stats[speaker_id]['segment_count']} segments, {speaker_stats[speaker_id]['total_time']:.1f}s total")
+            
+            print(f"🔍 LARGE V3 ANALYSIS RESULTS:")
+            print(f"   - Model: Faster-Whisper Large V3")
+            print(f"   - Language: {whisper_result['language']} (confidence: {whisper_result['language_probability']:.2f})")
+            print(f"   - Detected speakers: {speaker_count}")
+            print(f"   - Speaker changes: {speaker_changes_detected}")
+            print(f"   - Total segments: {total_segments}")
+            
+            # ADVANCED: Advanced speaker detection with selected method
             advanced_speaker_data = None
+            print(f"🎯 ADVANCED SPEAKER DETECTION ACTIVATED!")
+            print(f"   - Selected method: {speaker_method}")
+            print(f"   - Audio file: {file_path}")
+            print(f"🔍 Running {speaker_method} speaker detection...")
+            if progress:
+                progress.update_stage("transcription", 85, f"Running {speaker_method} speaker detection...")
+            
+            try:
+                # Run selected speaker detection method
+                advanced_speaker_data = analyze_speakers(file_path, method=speaker_method)
+                
+                if advanced_speaker_data:
+                    advanced_count = advanced_speaker_data.get("speaker_count", 0)
+                    advanced_method = advanced_speaker_data.get("method", "unknown")
+                    advanced_confidence = advanced_speaker_data.get("confidence", "unknown")
+                    
+                    print(f"🎯 {speaker_method.upper()} detection: {advanced_count} speakers ({advanced_method}, confidence: {advanced_confidence})")
+                    
+                    # Enhanced segment processing with speaker detection data
+                    segments_with_speakers = format_speaker_segments(
+                        advanced_speaker_data, 
+                        segments_with_speakers
+                    )
+                    
+                    # Update speaker count if advanced detection is more confident
+                    if advanced_confidence in ["high", "medium"] and advanced_count > 0:
+                        speaker_count = advanced_count
+                        print(f"🔄 Updated speaker count to {speaker_count} based on advanced detection")
+                    
+                    if progress:
+                        progress.update_stage("transcription", 95, f"Advanced detection completed: {advanced_count} speakers")
+                else:
+                    print("⚠️ Advanced speaker detection returned no data")
+                    
+            except Exception as adv_error:
+                print(f"⚠️ Advanced speaker detection failed: {adv_error}")
+                print("   Continuing with basic speaker assignment...")
+                advanced_speaker_data = None
         
         if progress:
             progress.update_stage("transcription", 100, f"Large V3 analysis completed: {speaker_count} speakers, {speaker_changes_detected} changes")
@@ -1643,10 +1687,11 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
             "channels": 1,
             "processing_time": "optimized",
             "total_segments": total_segments,
-            "speaker_detection": "enhanced_pattern_analysis",
+            "speaker_detection": "disabled" if speaker_method == "none" else f"{speaker_method}_advanced_detection",
             "features_used": list(LARGE_V3_FEATURES.keys()),
             "optimization_settings": optimization_settings,
-            "speed_mode": speed
+            "speed_mode": "disabled" if speed == "medium" and speaker_method == "none" else speed,  # Show disabled only when both features off
+            "speaker_method": speaker_method
         }
         
         # Add advanced speaker detection data if available
@@ -1668,7 +1713,11 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
             "speaker_stats": speaker_stats,
             "detected_speakers": speaker_count,
             "experimental_speaker_data": advanced_speaker_data,  # Include full advanced speaker data
-            "audio_info": audio_info
+            "audio_info": audio_info,
+            "toggle_states": {
+                "speed_processing_enabled": speed != "medium",  # If not forced to medium, speed processing is ON
+                "speaker_detection_enabled": speaker_method != "none"  # If not "none", speaker detection is ON
+            }
         }
         
         print(f"✅ Large V3 transcription complete: {len(segments_with_speakers)} segments, {duration:.1f}s, {speaker_count} speakers")
@@ -1796,8 +1845,8 @@ class ProgressTracker:
         }
         print(f"❌ Processing failed after {elapsed:.1f}s: {error_message}")
 
-async def process_audio_librosa(job_id: str, file_path: str, filename: str, language: str = "auto", engine: str = "faster-whisper", speed: str = "medium", speaker_method: str = "pyannote"):
-    """Process audio using fast Whisper approach with enhanced progress tracking, speed options, and speaker detection methods"""
+async def process_audio_librosa(job_id: str, file_path: str, filename: str, language: str = "auto", engine: str = "faster-whisper", speed: str = "medium", speaker_method: str = "pyannote", enable_speed_processing: bool = True, enable_speaker_detection: bool = True):
+    """Process audio using fast Whisper approach with enhanced progress tracking, speed options, speaker detection methods, and toggle controls"""
     progress = ProgressTracker(job_id)
     
     # Initialize variables at function scope to avoid NameError
@@ -1808,15 +1857,42 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str, lang
     
     try:
         print(f"⚡ Starting processing: {filename}")
-        print(f"🌐 Language: {language}, Engine: {engine}, Speed: {speed}")
+        print(f"🌐 Language: {language}, Engine: {engine}")
+        print(f"⚙️ Feature toggles:")
+        print(f"   - Speed processing: {'ON' if enable_speed_processing else 'OFF'}")
+        print(f"   - Speaker detection: {'ON' if enable_speaker_detection else 'OFF'}")
         
-        # Import speed config
-        from whisper_config import get_speed_config
-        speed_config = get_speed_config(speed)
+        # Determine processing configuration based on toggles
+        if enable_speed_processing:
+            print(f"🚀 Speed processing enabled - using {speed} mode")
+            # Import speed config
+            from whisper_config import get_speed_config
+            speed_config = get_speed_config(speed)
+            
+            print(f"🚀 Using {speed} mode:")
+            print(f"   Model: {speed_config['model_config']['model']}")
+            print(f"   Expected: {speed_config['model_config']['expected_speed']}")
+        else:
+            print(f"🎯 Speed processing disabled - using default medium mode")
+            speed = "medium"  # Force medium mode when speed processing is disabled
+            from whisper_config import get_speed_config
+            speed_config = get_speed_config(speed)
         
-        print(f"🚀 Using {speed} mode:")
-        print(f"   Model: {speed_config['model_config']['model']}")
-        print(f"   Expected: {speed_config['model_config']['expected_speed']}")
+        if enable_speaker_detection:
+            print(f"🔬 Speaker detection enabled - using {speaker_method} method")
+        else:
+            print(f"🔇 Speaker detection disabled - single speaker mode")
+            speaker_method = "none"  # Disable speaker detection
+        
+        # Handle case when both features are disabled
+        if not enable_speed_processing and not enable_speaker_detection:
+            print("⚠️  MINIMAL MODE: Both speed processing and speaker detection disabled")
+            print("   🎯 Using: Medium model, Single speaker, Basic transcription")
+            print("   ✅ This provides fastest processing with minimal features")
+        elif not enable_speed_processing:
+            print("⚠️  Speed optimization disabled - using standard medium processing")
+        elif not enable_speaker_detection:
+            print("⚠️  Speaker detection disabled - treating as single speaker audio")
         
         # Stage 1: Initialization
         progress.update_stage("initialization", 50, f"Initializing {speed} processing for {filename} (Language: {language})")
@@ -2910,10 +2986,27 @@ def fast_speaker_assignment_large_files(whisper_segments: List, speaker_segments
                     max_overlap = overlap
                     best_speaker = speaker_id
         
-        # Assign the best matching speaker
-        speaker_key = best_speaker.lower().replace("_", "-")
-        segment["speaker"] = speaker_key
+        # Assign the best matching speaker with normalized format
+        # Convert to normalized speaker format (1-based numbering)
+        if best_speaker.startswith("SPEAKER_"):
+            # PyAnnote format: SPEAKER_00 → speaker-01, SPEAKER_01 → speaker-02
+            speaker_num = int(best_speaker.split("_")[1]) + 1
+            normalized_speaker_id = f"speaker-{speaker_num:02d}"
+            assigned_speaker_num = speaker_num
+        elif best_speaker.startswith("Speaker_"):
+            # Other formats: Speaker_1 → speaker-01, Speaker_2 → speaker-02  
+            speaker_num = int(best_speaker.split("_")[1])
+            normalized_speaker_id = f"speaker-{speaker_num:02d}"
+            assigned_speaker_num = speaker_num
+        else:
+            # Fallback for unknown formats
+            normalized_speaker_id = "speaker-01"
+            assigned_speaker_num = 1
+        
+        segment["speaker"] = normalized_speaker_id
         segment["speaker_name"] = speaker_names[best_speaker]
+        segment["assigned_speaker"] = assigned_speaker_num
+        segment["confidence"] = 0.9 if max_overlap > 0 else 0.5  # High confidence if overlap found
     
     print(f"✅ Time-based speaker assignment complete for {len(whisper_segments)} segments")
     return whisper_segments
