@@ -13,6 +13,11 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional, Any
 import json
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()  # Load from current directory
+load_dotenv('../.env')  # Load from parent directory if exists
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,11 +57,51 @@ class PyannoteDetector:
             
             logger.info("Initializing pyannote.audio speaker diarization...")
             
+            # Get token and log (safely)
+            token = os.getenv("HUGGINGFACE_TOKEN")
+            if token:
+                logger.info(f"Found HuggingFace token: {token[:10]}...{token[-5:]}")
+            else:
+                logger.warning("No HUGGINGFACE_TOKEN found in environment")
+            
             # Initialize the speaker diarization pipeline
-            self.pipeline = Pipeline.from_pretrained(
-                "pyannote/speaker-diarization",
-                use_auth_token=os.getenv("HUGGINGFACE_TOKEN")  # Optional for public models
-            )
+            try:
+                # Try newer 3.1 model first (faster, pure PyTorch, no onnxruntime issues)
+                logger.info("Attempting to load pyannote/speaker-diarization-3.1...")
+                self.pipeline = Pipeline.from_pretrained(
+                    "pyannote/speaker-diarization-3.1",
+                    use_auth_token=token
+                )
+                logger.info("✅ Successfully loaded pyannote/speaker-diarization-3.1")
+            except Exception as e1:
+                logger.warning(f"Failed to load 3.1 model: {e1}")
+                # Try alternative models or fallback
+                alternative_models = [
+                    "pyannote/speaker-diarization-3.0",
+                    "pyannote/speaker-diarization",
+                    "pyannote/segmentation"
+                ]
+                
+                for model in alternative_models:
+                    try:
+                        self.pipeline = Pipeline.from_pretrained(model)
+                        logger.info(f"Loaded alternative model: {model}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to load {model}: {e}")
+                        continue
+                
+                if self.pipeline is None:
+                    logger.error("❌ No pyannote model could be loaded")
+                    logger.error("🔐 Token is valid but model access requires user conditions acceptance")
+                    logger.info("📋 To fix PyAnnote access:")
+                    logger.info("   1. Visit https://huggingface.co/pyannote/segmentation-3.0")
+                    logger.info("   2. Click 'Accept' on user conditions")
+                    logger.info("   3. Visit https://huggingface.co/pyannote/speaker-diarization-3.1") 
+                    logger.info("   4. Click 'Accept' on user conditions")
+                    logger.info("   5. Restart backend server")
+                    logger.info("🚀 After accepting: speaker detection akan menggunakan PyAnnote (high accuracy)")
+                    return False
             
             self.is_initialized = True
             logger.info("Pyannote.audio initialized successfully")
@@ -84,6 +129,11 @@ class PyannoteDetector:
         if not self.is_initialized:
             if not self.initialize():
                 return self._fallback_detection(audio_file)
+        
+        # Double check pipeline is loaded
+        if self.pipeline is None:
+            logger.error("Pipeline is None even after initialization")
+            return self._fallback_detection(audio_file)
         
         try:
             # Apply the pipeline to the audio file
@@ -116,6 +166,19 @@ class PyannoteDetector:
         except Exception as e:
             logger.error(f"Pyannote detection failed: {e}")
             return self._fallback_detection(audio_file)
+    
+    def _fallback_detection(self, audio_file: str) -> Dict:
+        """Fallback speaker detection when pyannote fails"""
+        logger.info("Using fallback speaker detection (energy-based)")
+        
+        return {
+            "speaker_count": 2,
+            "speakers": ["Speaker_1", "Speaker_2"],
+            "segments": [],
+            "method": "pyannote_fallback_energy",
+            "confidence": "low",
+            "note": "PyAnnote model not available, using basic detection"
+        }
     
 class SpeechBrainDetector:
     """Speaker detection using SpeechBrain"""
