@@ -13,6 +13,13 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional, Any
 import json
 
+# Import enhanced speaker detection
+try:
+    from enhanced_speaker_detection import enhanced_detector
+    ENHANCED_AVAILABLE = True
+except ImportError:
+    ENHANCED_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -297,17 +304,18 @@ class WebRTCDetector:
             
             # Analyze voice activity patterns to detect speaker changes
             if len(voice_frames) < 2:
-                logger.warning("Insufficient voice activity detected, using conservative 2-speaker fallback")
+                logger.warning("Insufficient voice activity detected, using single speaker fallback")
                 return {
-                    "speaker_count": 2,
-                    "speakers": ["Speaker_1", "Speaker_2"],
+                    "speaker_count": 1,
+                    "speakers": ["Speaker_1"],
                     "segments": [],
                     "method": "webrtc_vad_minimal",
-                    "confidence": "low",
+                    "confidence": "medium",
                     "analysis": {
                         "duration_minutes": duration_minutes,
                         "voice_frames": len(voice_frames),
-                        "silence_frames": len(silence_frames)
+                        "silence_frames": len(silence_frames),
+                        "reasoning": "Short audio with minimal voice activity suggests single speaker"
                     }
                 }
             
@@ -474,11 +482,12 @@ class EnergyDetector:
         except Exception as e:
             logger.error(f"Energy-based detection failed: {e}")
             return {
-                "speaker_count": 2,  # Conservative default for conversations
-                "speakers": ["Speaker_1", "Speaker_2"],
+                "speaker_count": 1,  # Single speaker default for short/simple audio
+                "speakers": ["Speaker_1"],
                 "segments": [],
-                "method": "fallback_default_two_speakers",
-                "confidence": "very_low"
+                "method": "fallback_single_speaker",
+                "confidence": "medium",
+                "reasoning": "Fallback to single speaker for simple audio content"
             }
         """Fallback speaker detection using conservative heuristics for conversations"""
         logger.info("Using conservative fallback speaker detection for conversations")
@@ -603,7 +612,12 @@ class SpeakerDetectionManager:
             "webrtc": WebRTCDetector(),
             "energy": EnergyDetector(),
         }
-        self.preferred_detector = "pyannote"
+        
+        # Add enhanced detector if available
+        if ENHANCED_AVAILABLE:
+            self.detectors["enhanced"] = enhanced_detector
+        
+        self.preferred_detector = "enhanced" if ENHANCED_AVAILABLE else "pyannote"
     
     def detect_speakers(self, audio_file: str, method: str = "auto") -> Dict:
         """
@@ -671,9 +685,12 @@ def format_speaker_segments(speaker_data: Dict, transcription_segments: List[Dic
     """
     
     if not speaker_data.get("segments"):
-        # No speaker data, assign default speaker
+        # No speaker data, assign default speaker with consistent mapping
         for segment in transcription_segments:
             segment["speaker"] = "Speaker_1"
+            segment["speaker_name"] = "Speaker 1"
+            segment["assigned_speaker"] = 1
+            segment["speaker_confidence"] = "high"
         return transcription_segments
     
     # Match transcription segments with speaker segments
@@ -701,10 +718,21 @@ def format_speaker_segments(speaker_data: Dict, transcription_segments: List[Dic
                 max_overlap = overlap
                 assigned_speaker = spk_seg["speaker"]
         
-        # Add speaker to transcription segment
+        # Add speaker to transcription segment with consistent mapping
         enhanced_segment = trans_seg.copy()
         enhanced_segment["speaker"] = assigned_speaker
         enhanced_segment["speaker_confidence"] = "high" if max_overlap > 0 else "low"
+        
+        # Extract speaker number for consistent mapping
+        if assigned_speaker.startswith("Speaker_"):
+            speaker_num = assigned_speaker.split("_")[1]
+            enhanced_segment["speaker_name"] = f"Speaker {speaker_num}"
+            enhanced_segment["assigned_speaker"] = int(speaker_num)
+        else:
+            # Fallback for unknown format
+            enhanced_segment["speaker_name"] = assigned_speaker
+            enhanced_segment["assigned_speaker"] = 1
+            
         enhanced_segments.append(enhanced_segment)
     
     return enhanced_segments

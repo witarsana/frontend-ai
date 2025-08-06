@@ -119,6 +119,7 @@ mistral_client = None
 diarization_pipeline = None
 deepgram_client = None
 processing_jobs = {}
+cancelled_jobs = set()  # Track cancelled jobs
 chat_system = None
 multi_chat_system = None
 api_providers = None  # Our new multi-provider system
@@ -465,7 +466,7 @@ async def upload_and_process(
         
         # Validate speaker_method parameter for experimental mode
         if speed == "experimental":
-            valid_methods = ["pyannote", "speechbrain", "resemblyzer", "webrtc", "energy"]
+            valid_methods = ["pyannote", "speechbrain", "resemblyzer", "webrtc", "energy", "enhanced"]
             if speaker_method not in valid_methods:
                 raise HTTPException(status_code=400, detail=f"Invalid speaker method for experimental mode. Must be one of: {valid_methods}")
         
@@ -612,6 +613,38 @@ async def get_result(job_id: str):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading result file: {str(e)}")
+
+@app.post("/api/cancel/{job_id}")
+async def cancel_job(job_id: str):
+    """Cancel a running transcription job"""
+    try:
+        # Add to cancelled jobs set
+        cancelled_jobs.add(job_id)
+        
+        # Update job status if it exists
+        if job_id in processing_jobs:
+            processing_jobs[job_id]["status"] = "cancelled"
+            processing_jobs[job_id]["message"] = "Job cancelled by user"
+            processing_jobs[job_id]["progress"] = 0
+            
+            # Clean up after a short delay to ensure status is read
+            import asyncio
+            async def cleanup_cancelled_job():
+                await asyncio.sleep(2)  # Wait 2 seconds
+                if job_id in processing_jobs:
+                    del processing_jobs[job_id]
+            
+            asyncio.create_task(cleanup_cancelled_job())
+        
+        print(f"🚫 Job {job_id} cancelled by user")
+        
+        return {
+            "job_id": job_id,
+            "status": "cancelled",
+            "message": "Job cancelled successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cancelling job: {str(e)}")
 
 @app.get("/api/config")
 async def get_config():
@@ -1207,6 +1240,10 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
         global whisper_model
         current_model_name = getattr(whisper_model, 'model_size_or_path', None) if whisper_model else None
         
+        # Check cancellation before loading model
+        if job_id and check_if_cancelled(job_id):
+            return {"error": "Job was cancelled"}
+        
         # Load new model if different from current or if not loaded
         if whisper_model is None or current_model_name != model_name:
             if progress:
@@ -1294,6 +1331,11 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
                     print(f"📊 Starting optimized segment processing...")
                     
                     for segment in segments:
+                        # Check cancellation during segment processing
+                        if job_id and check_if_cancelled(job_id):
+                            print(f"🚫 Transcription cancelled at segment {processed_segments}")
+                            return {"error": "Job was cancelled"}
+                        
                         processed_segments += 1
                         
                         # Batch progress reporting (every 25 segments)
@@ -1654,11 +1696,31 @@ class ProgressTracker:
         }
         print(f"❌ Processing failed after {elapsed:.1f}s: {error_message}")
 
+def check_if_cancelled(job_id: str) -> bool:
+    """Check if a job has been cancelled"""
+    return job_id in cancelled_jobs
+
+def handle_cancellation(job_id: str):
+    """Handle job cancellation cleanup"""
+    if job_id in processing_jobs:
+        processing_jobs[job_id]["status"] = "cancelled"
+        processing_jobs[job_id]["message"] = "Job was cancelled"
+        processing_jobs[job_id]["progress"] = 0
+    
+    # Remove from cancelled set
+    cancelled_jobs.discard(job_id)
+    print(f"🚫 Job {job_id} processing stopped due to cancellation")
+
 async def process_audio_librosa(job_id: str, file_path: str, filename: str, language: str = "auto", engine: str = "faster-whisper", speed: str = "medium", speaker_method: str = "pyannote"):
     """Process audio using fast Whisper approach with enhanced progress tracking, speed options, and speaker detection methods"""
     progress = ProgressTracker(job_id)
     
     try:
+        # Check if job was cancelled before starting
+        if check_if_cancelled(job_id):
+            handle_cancellation(job_id)
+            return
+        
         print(f"⚡ Starting processing: {filename}")
         print(f"🌐 Language: {language}, Engine: {engine}, Speed: {speed}")
         
@@ -1672,6 +1734,11 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str, lang
         
         # Stage 1: Initialization
         progress.update_stage("initialization", 50, f"Initializing {speed} processing for {filename} (Language: {language})")
+        
+        # Check cancellation after initialization
+        if check_if_cancelled(job_id):
+            handle_cancellation(job_id)
+            return
         
         # Get file info for better progress estimation
         file_size = os.path.getsize(file_path) / (1024 * 1024)  # MB
@@ -1726,11 +1793,23 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str, lang
         
         # Stage 3: Load models
         progress.update_stage("model_loading", 20, "Loading AI models...")
+        
+        # Check cancellation before loading models
+        if check_if_cancelled(job_id):
+            handle_cancellation(job_id)
+            return
+        
         load_models()
         progress.update_stage("model_loading", 100, "AI models loaded successfully")
         
         # Stage 3: Audio analysis
         progress.update_stage("audio_analysis", 30, "Analyzing audio format...")
+        
+        # Check cancellation before audio analysis
+        if check_if_cancelled(job_id):
+            handle_cancellation(job_id)
+            return
+        
         # Quick audio info check
         try:
             import librosa
@@ -1742,8 +1821,18 @@ async def process_audio_librosa(job_id: str, file_path: str, filename: str, lang
         # Stage 4: Transcription (this is the longest stage) - use optimized file
         progress.update_stage("transcription", 0, f"Starting transcription with {engine} (Language: {language})...")
         
+        # Check cancellation before starting transcription
+        if check_if_cancelled(job_id):
+            handle_cancellation(job_id)
+            return
+        
         # Transcription using Faster-Whisper with speed optimization
         transcription = await transcribe_with_faster_whisper_large_v3(optimized_file_path, job_id, progress, language, speed, speaker_method)
+        
+        # Check cancellation after transcription
+        if check_if_cancelled(job_id):
+            handle_cancellation(job_id)
+            return
         
         if not transcription or not transcription.get("segments"):
             raise Exception("Transcription failed or returned empty result")

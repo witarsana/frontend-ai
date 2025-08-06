@@ -15,6 +15,7 @@ export const API_CONFIG = {
     CHAT_SUGGESTIONS: "/api/chat/suggestions",
     CHAT_STATUS: "/api/chat/status",
     CHAT_LOAD: "/api/chat/load",
+    CANCEL: "/api/cancel",
   },
 };
 
@@ -312,6 +313,22 @@ export class AITranscriptionAPI {
 
     if (!response.ok) {
       throw new Error(`Get result failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Cancel a running job
+  async cancelJob(jobId: string): Promise<{job_id: string, status: string, message: string}> {
+    const response = await fetch(
+      `${this.baseUrl}${API_CONFIG.ENDPOINTS.CANCEL}/${jobId}`,
+      {
+        method: 'POST',
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Cancel job failed: ${response.statusText}`);
     }
 
     return response.json();

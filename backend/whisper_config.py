@@ -88,10 +88,19 @@ SPEED_CONFIGS = {
                 "requirements": ["librosa"],
                 "memory": "minimal",
                 "speed": "very_fast"
+            },
+            "enhanced": {
+                "name": "Enhanced Multi-Feature",
+                "description": "Advanced multi-feature speaker detection with ML clustering",
+                "accuracy": "very_high",
+                "requirements": ["librosa", "scikit-learn", "scipy"],
+                "memory": "~300MB extra",
+                "speed": "medium",
+                "features": ["mfcc", "spectral_features", "pitch_analysis", "energy_patterns", "hierarchical_clustering"]
             }
         },
-        "default_method": "pyannote",
-        "models_required": ["pyannote/speaker-diarization", "pyannote/segmentation"]
+        "default_method": "enhanced",
+        "models_required": ["enhanced_multi_feature_detection"]
     }
 }
 

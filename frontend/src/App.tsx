@@ -15,11 +15,21 @@ const App: React.FC = () => {
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
 
-  // Check API connection on mount
+  // Check API connection on mount and periodically
   useEffect(() => {
     checkAPIConnection();
     loadActiveJobs(); // Load active jobs from localStorage
-  }, []);
+    
+    // Auto-retry API connection every 10 seconds if not connected
+    const apiCheckInterval = setInterval(() => {
+      if (!apiConnected) {
+        console.log('🔄 Retrying API connection...');
+        checkAPIConnection();
+      }
+    }, 10000); // Check every 10 seconds
+    
+    return () => clearInterval(apiCheckInterval);
+  }, [apiConnected]);
 
   // Load active jobs from localStorage
   const loadActiveJobs = () => {
@@ -429,9 +439,72 @@ const App: React.FC = () => {
           </p>
         </div>
 
-        {/* Upload Section */}
-        <div className="uploader-section">
-          <UploadSection onFileSelect={handleFileSelect} />
+        {/* Navigation Buttons */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            marginBottom: "20px",
+          }}
+        >
+          <button
+            onClick={() => setViewMode("upload")}
+            style={{
+              padding: "14px 20px",
+              backgroundColor: viewMode === "upload" ? "#7c3aed" : "#f8fafc",
+              color: viewMode === "upload" ? "white" : "#374151",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+              fontWeight: "600",
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "all 0.2s ease",
+            }}
+          >
+            📤 Upload File
+          </button>
+          <button
+            onClick={() => setViewMode("recording")}
+            style={{
+              padding: "14px 20px",
+              backgroundColor: viewMode === "recording" ? "#7c3aed" : "#f8fafc",
+              color: viewMode === "recording" ? "white" : "#374151",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+              fontWeight: "600",
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "all 0.2s ease",
+            }}
+          >
+            🎙️ Record Audio
+          </button>
+          <button
+            onClick={() => setViewMode("history")}
+            style={{
+              padding: "14px 20px",
+              backgroundColor: viewMode === "history" ? "#7c3aed" : "#f8fafc",
+              color: viewMode === "history" ? "white" : "#374151",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+              fontWeight: "600",
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "all 0.2s ease",
+            }}
+          >
+            📋 History
+          </button>
         </div>
 
         {/* API Status */}
@@ -596,9 +669,28 @@ const App: React.FC = () => {
                         📊 View Details
                       </button>
                       <button
-                        onClick={() => {
-                          localStorage.removeItem('currentProcessingJob');
-                          setCurrentJobId(null);
+                        onClick={async () => {
+                          if (currentJobId) {
+                            try {
+                              console.log(`Cancelling job: ${currentJobId}`);
+                              await aiAPI.cancelJob(currentJobId);
+                              console.log(`Job ${currentJobId} cancelled successfully`);
+                              
+                              // Remove from local storage and state
+                              localStorage.removeItem('currentProcessingJob');
+                              setCurrentJobId(null);
+                              
+                              // Show success message
+                              alert('Job cancelled successfully');
+                            } catch (error) {
+                              console.error('Failed to cancel job:', error);
+                              alert('Failed to cancel job. It may have already completed.');
+                              
+                              // Still remove from local state even if API call failed
+                              localStorage.removeItem('currentProcessingJob');
+                              setCurrentJobId(null);
+                            }
+                          }
                         }}
                         style={{
                           padding: '6px 12px',
@@ -823,44 +915,14 @@ const App: React.FC = () => {
             {viewMode === 'upload' ? (
               <div style={{
                 backgroundColor: 'white',
-                borderRadius: '12px',
-                padding: '24px',
+                borderRadius: '16px',
+                padding: '32px',
                 marginBottom: '24px',
-                border: '1px solid #e5e7eb'
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                minHeight: '500px'
               }}>
-                <h3 style={{
-                  margin: '0 0 16px 0',
-                  color: '#2c3e50',
-                  fontSize: '18px',
-                  fontWeight: '600'
-                }}>
-                  📤 Upload New File
-                </h3>
-                
-                <div style={{
-                  textAlign: 'center',
-                  padding: '20px'
-                }}>
-                  <p style={{
-                    color: '#6b7280',
-                    fontSize: '16px',
-                    margin: '0 0 20px 0'
-                  }}>
-                    Drag & drop your audio/video file or use the upload button on the left panel
-                  </p>
-                  
-                  <div style={{
-                    display: 'inline-block',
-                    padding: '12px 24px',
-                    backgroundColor: '#f3e8ff',
-                    borderRadius: '8px',
-                    color: '#7c3aed',
-                    fontSize: '14px',
-                    fontWeight: '500'
-                  }}>
-                    💡 Supports MP3, WAV, MP4, MOV and more - up to 1GB
-                  </div>
-                </div>
+                <UploadSection onFileSelect={handleFileSelect} />
               </div>
             ) : viewMode === 'recording' ? (
               <div style={{
