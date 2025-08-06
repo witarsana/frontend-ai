@@ -12,8 +12,16 @@ interface EngineModalProps {
   onClose: () => void;
   onEngineChange?: (engine: string) => void;
   onLanguageChange?: (language: string) => void;
+  onSpeedChange?: (speed: string) => void;
+  onSpeakerMethodChange?: (method: string) => void;
+  onSpeedProcessingToggle?: (enabled: boolean) => void;
+  onSpeakerDetectionToggle?: (enabled: boolean) => void;
   currentLanguage?: string;
   currentEngine?: string;
+  currentSpeed?: string;
+  currentSpeakerMethod?: string;
+  enableSpeedProcessing?: boolean;
+  enableSpeakerDetection?: boolean;
 }
 
 export const EngineModal: React.FC<EngineModalProps> = ({
@@ -21,8 +29,16 @@ export const EngineModal: React.FC<EngineModalProps> = ({
   onClose,
   onEngineChange,
   onLanguageChange,
+  onSpeedChange,
+  onSpeakerMethodChange,
+  onSpeedProcessingToggle,
+  onSpeakerDetectionToggle,
   currentLanguage = "auto",
-  // currentEngine = "faster-whisper",
+  currentEngine = "faster-whisper",
+  currentSpeed = "medium",
+  currentSpeakerMethod = "pyannote",
+  enableSpeedProcessing = true,
+  enableSpeakerDetection = true,
 }) => {
   const [engines, setEngines] = useState<EnginesResponse | null>(null);
   const [loading, setLoading] = useState(false);

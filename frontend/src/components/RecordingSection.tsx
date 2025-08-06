@@ -5,13 +5,24 @@ import './RecordingSection.css';
 interface RecordingSectionProps {
   onRecordingComplete: (
     audioBlob: Blob,
-    options?: { language?: string; engine?: string }
+    options?: { 
+      language?: string; 
+      engine?: string;
+      speed?: string;
+      speakerMethod?: string;
+      enableSpeedProcessing?: boolean;
+      enableSpeakerDetection?: boolean;
+    }
   ) => void;
 }
 
 interface RecordingOptions {
   language: string;
   engine: string;
+  speed: string;
+  speakerMethod: string;
+  enableSpeedProcessing: boolean;
+  enableSpeakerDetection: boolean;
 }
 
 const RecordingSection: React.FC<RecordingSectionProps> = ({
@@ -25,6 +36,10 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
   const [recordingOptions, setRecordingOptions] = useState<RecordingOptions>({
     language: "auto",
     engine: "faster-whisper",
+    speed: "medium",
+    speakerMethod: "pyannote",
+    enableSpeedProcessing: true,
+    enableSpeakerDetection: true,
   });
   const [isEngineModalOpen, setIsEngineModalOpen] = useState<boolean>(false);
   const [audioURL, setAudioURL] = useState<string | null>(null);
@@ -193,7 +208,7 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
 
     setIsProcessing(true);
 
-    // Call the parent callback with audio blob and options
+    // Call the parent callback with audio blob and all options including toggles
     onRecordingComplete(audioBlob, recordingOptions);
 
     // Reset state after a brief delay
@@ -364,6 +379,215 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
               </div>
             )}
 
+            {/* Toggle Controls */}
+            <div style={{ 
+              margin: '16px 0', 
+              padding: '16px', 
+              backgroundColor: '#f8f9fa', 
+              borderRadius: '12px',
+              border: '2px solid #e5e7eb',
+              width: '100%',
+              maxWidth: '400px'
+            }}>
+              <h4 style={{ 
+                margin: '0 0 12px 0', 
+                fontSize: '14px', 
+                color: '#374151',
+                fontWeight: '600'
+              }}>
+                ⚙️ Processing Options
+              </h4>
+              
+              {/* Speed Processing Toggle */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: '12px',
+                padding: '8px 0'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>🚀</span>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Speed Processing
+                  </span>
+                </div>
+                <label style={{ 
+                  position: 'relative', 
+                  display: 'inline-block', 
+                  width: '44px', 
+                  height: '24px',
+                  cursor: 'pointer'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={recordingOptions.enableSpeedProcessing}
+                    onChange={(e) => setRecordingOptions(prev => ({ 
+                      ...prev, 
+                      enableSpeedProcessing: e.target.checked 
+                    }))}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span style={{
+                    position: 'absolute',
+                    cursor: 'pointer',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: recordingOptions.enableSpeedProcessing ? '#10b981' : '#d1d5db',
+                    borderRadius: '24px',
+                    transition: '0.3s',
+                    boxShadow: recordingOptions.enableSpeedProcessing ? '0 0 0 2px rgba(16, 185, 129, 0.2)' : 'none'
+                  }}>
+                    <span style={{
+                      position: 'absolute',
+                      content: '',
+                      height: '18px',
+                      width: '18px',
+                      left: recordingOptions.enableSpeedProcessing ? '23px' : '3px',
+                      bottom: '3px',
+                      backgroundColor: 'white',
+                      borderRadius: '50%',
+                      transition: '0.3s',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }} />
+                  </span>
+                </label>
+              </div>
+
+              {/* Speed Selection */}
+              {recordingOptions.enableSpeedProcessing && (
+                <div style={{ 
+                  marginBottom: '12px',
+                  paddingLeft: '24px'
+                }}>
+                  <select
+                    value={recordingOptions.speed}
+                    onChange={(e) => setRecordingOptions(prev => ({ 
+                      ...prev, 
+                      speed: e.target.value 
+                    }))}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '12px',
+                      backgroundColor: 'white',
+                      color: '#374151'
+                    }}
+                  >
+                    <option value="fast">⚡ Fast (Base model)</option>
+                    <option value="medium">🚀 Medium (Small model)</option>
+                    <option value="slow">🎯 Slow (Large-v3 model)</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Speaker Detection Toggle */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: '12px',
+                padding: '8px 0'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>🎤</span>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Speaker Detection
+                  </span>
+                </div>
+                <label style={{ 
+                  position: 'relative', 
+                  display: 'inline-block', 
+                  width: '44px', 
+                  height: '24px',
+                  cursor: 'pointer'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={recordingOptions.enableSpeakerDetection}
+                    onChange={(e) => setRecordingOptions(prev => ({ 
+                      ...prev, 
+                      enableSpeakerDetection: e.target.checked 
+                    }))}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span style={{
+                    position: 'absolute',
+                    cursor: 'pointer',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: recordingOptions.enableSpeakerDetection ? '#8b5cf6' : '#d1d5db',
+                    borderRadius: '24px',
+                    transition: '0.3s',
+                    boxShadow: recordingOptions.enableSpeakerDetection ? '0 0 0 2px rgba(139, 92, 246, 0.2)' : 'none'
+                  }}>
+                    <span style={{
+                      position: 'absolute',
+                      content: '',
+                      height: '18px',
+                      width: '18px',
+                      left: recordingOptions.enableSpeakerDetection ? '23px' : '3px',
+                      bottom: '3px',
+                      backgroundColor: 'white',
+                      borderRadius: '50%',
+                      transition: '0.3s',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }} />
+                  </span>
+                </label>
+              </div>
+
+              {/* Speaker Method Selection */}
+              {recordingOptions.enableSpeakerDetection && (
+                <div style={{ 
+                  marginBottom: '8px',
+                  paddingLeft: '24px'
+                }}>
+                  <select
+                    value={recordingOptions.speakerMethod}
+                    onChange={(e) => setRecordingOptions(prev => ({ 
+                      ...prev, 
+                      speakerMethod: e.target.value 
+                    }))}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '12px',
+                      backgroundColor: 'white',
+                      color: '#374151'
+                    }}
+                  >
+                    <option value="pyannote">🧠 PyAnnote (Recommended)</option>
+                    <option value="speechbrain">🎯 SpeechBrain</option>
+                    <option value="resemblyzer">🔊 Resemblyzer</option>
+                    <option value="webrtc">📡 WebRTC</option>
+                    <option value="energy">⚡ Energy-based</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Minimal Mode Warning */}
+              {!recordingOptions.enableSpeedProcessing && !recordingOptions.enableSpeakerDetection && (
+                <div style={{
+                  padding: '8px 12px',
+                  backgroundColor: '#fef3cd',
+                  border: '1px solid #fbbf24',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: '#92400e',
+                  marginTop: '8px'
+                }}>
+                  ⚠️ Minimal Mode: Basic transcription only
+                </div>
+              )}
+            </div>
+
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
               <button
                 onClick={deleteRecording}
@@ -430,7 +654,7 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
             borderRadius: '8px',
             border: '2px solid #e5e7eb'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
               <div style={{ fontSize: '14px', color: '#374151' }}>
                 <span style={{ fontWeight: '600' }}>🌐 Bahasa:</span>{" "}
                 <span style={{ color: '#7c3aed', fontWeight: '500' }}>
@@ -441,6 +665,18 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
                 <span style={{ fontWeight: '600' }}>⚙️ Engine:</span>{" "}
                 <span style={{ color: '#7c3aed', fontWeight: '500' }}>
                   {recordingOptions.engine}
+                </span>
+              </div>
+              <div style={{ fontSize: '14px', color: '#374151' }}>
+                <span style={{ fontWeight: '600' }}>🚀 Speed:</span>{" "}
+                <span style={{ color: recordingOptions.enableSpeedProcessing ? '#10b981' : '#9ca3af', fontWeight: '500' }}>
+                  {recordingOptions.enableSpeedProcessing ? recordingOptions.speed : 'disabled'}
+                </span>
+              </div>
+              <div style={{ fontSize: '14px', color: '#374151' }}>
+                <span style={{ fontWeight: '600' }}>🎤 Speaker:</span>{" "}
+                <span style={{ color: recordingOptions.enableSpeakerDetection ? '#8b5cf6' : '#9ca3af', fontWeight: '500' }}>
+                  {recordingOptions.enableSpeakerDetection ? recordingOptions.speakerMethod : 'disabled'}
                 </span>
               </div>
             </div>
@@ -466,8 +702,24 @@ const RecordingSection: React.FC<RecordingSectionProps> = ({
           onLanguageChange={(language: string) => {
             setRecordingOptions(prev => ({ ...prev, language }));
           }}
+          onSpeedChange={(speed: string) => {
+            setRecordingOptions(prev => ({ ...prev, speed }));
+          }}
+          onSpeakerMethodChange={(method: string) => {
+            setRecordingOptions(prev => ({ ...prev, speakerMethod: method }));
+          }}
+          onSpeedProcessingToggle={(enabled: boolean) => {
+            setRecordingOptions(prev => ({ ...prev, enableSpeedProcessing: enabled }));
+          }}
+          onSpeakerDetectionToggle={(enabled: boolean) => {
+            setRecordingOptions(prev => ({ ...prev, enableSpeakerDetection: enabled }));
+          }}
           currentLanguage={recordingOptions.language}
           currentEngine={recordingOptions.engine}
+          currentSpeed={recordingOptions.speed}
+          currentSpeakerMethod={recordingOptions.speakerMethod}
+          enableSpeedProcessing={recordingOptions.enableSpeedProcessing}
+          enableSpeakerDetection={recordingOptions.enableSpeakerDetection}
         />
       )}
     </div>
