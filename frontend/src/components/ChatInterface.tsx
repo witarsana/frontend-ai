@@ -113,7 +113,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
   useEffect(() => {
     const loadLatestTranscript = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/chat/load/job_20250806_024210_3815', {
+        const response = await fetch(`http://localhost:8000/api/chat/load/${sessionId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });

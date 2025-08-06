@@ -31,6 +31,24 @@ except ImportError:
     API_PROVIDERS_AVAILABLE = False
     print("⚠️  API providers not available - using simple fallback")
 
+# Import FAISS offline chat system
+try:
+    from faiss_chat_system import FAISSChatSystem
+    FAISS_CHAT_AVAILABLE = True
+    print("✅ FAISS offline chat system available")
+except ImportError:
+    FAISS_CHAT_AVAILABLE = False
+    print("⚠️ FAISS chat system not available")
+
+# Import Multi-Model Chat System that handles FAISS + Mistral smartly
+try:
+    from multi_model_chat import MultiModelChatSystem
+    MULTI_MODEL_CHAT_AVAILABLE = True
+    print("✅ Multi-model chat system (FAISS + Mistral) available")
+except ImportError:
+    MULTI_MODEL_CHAT_AVAILABLE = False
+    print("⚠️ Multi-model chat system not available")
+
 # Simple whisper import - try both options
 try:
     import whisper
@@ -59,6 +77,18 @@ app.add_middleware(
 # Global model storage
 whisper_model = None
 processing_jobs = {}
+
+# Initialize FAISS chat system
+faiss_chat = None
+if FAISS_CHAT_AVAILABLE:
+    faiss_chat = FAISSChatSystem(data_dir="./results")
+    print("🤖 FAISS offline chat system initialized")
+
+# Initialize Multi-Model Chat System (preferred for both FAISS + Mistral)
+multi_model_chat = None
+if MULTI_MODEL_CHAT_AVAILABLE:
+    multi_model_chat = MultiModelChatSystem(data_dir="./results")
+    print("🤖 Multi-model chat system initialized (FAISS + Mistral)")
 
 # Simple model options
 MODEL_OPTIONS = {
@@ -670,6 +700,8 @@ class ChatRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
     file_id: Optional[str] = None
+    model_preference: Optional[str] = "faiss"  # Default to FAISS offline
+    use_smart_routing: Optional[bool] = True  # Enable smart model routing
 
 class ChatResponse(BaseModel):
     response: str
@@ -739,6 +771,7 @@ async def chat_enhanced(request: ChatRequest):
     try:
         transcript_data = None
         session_id = request.session_id or "default"
+        model_preference = getattr(request, 'model_preference', 'faiss')
         
         # Try to get transcript data from multiple sources
         if request.file_id:
@@ -764,7 +797,87 @@ async def chat_enhanced(request: ChatRequest):
             print(f"💬 Using most recent transcript: {most_recent_job}")
         
         if transcript_data:
-            # Generate AI response based on query and transcript
+            # Use Multi-Model Chat System (preferred) for intelligent routing
+            if MULTI_MODEL_CHAT_AVAILABLE and multi_model_chat:
+                print(f"🚀 Using Multi-Model Chat System for: {request.query}")
+                
+                # Load transcript data into multi-model system
+                results_dir = os.path.join(os.path.dirname(__file__), "results")
+                result_file = os.path.join(results_dir, f"{request.file_id}_result.json")
+                
+                if multi_model_chat.load_transcription_data(result_file):
+                    # Use smart query with model preference
+                    use_smart_routing = getattr(request, 'use_smart_routing', True)
+                    multi_response = multi_model_chat.smart_query(
+                        query=request.query,
+                        session_id=session_id,
+                        model_preference=model_preference,
+                        use_smart_routing=use_smart_routing
+                    )
+                    
+                    # Store conversation in session history
+                    if request.file_id in chat_sessions:
+                        chat_sessions[request.file_id]["conversation_history"].append({
+                            "query": request.query,
+                            "response": multi_response["response"],
+                            "model_used": multi_response.get("model_used", "multi_model"),
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    
+                    return ChatResponse(
+                        response=multi_response["response"],
+                        sources=[{
+                            "type": "multi_model_system", 
+                            "job_id": request.file_id,
+                            "filename": transcript_data.get("filename", "Unknown"),
+                            "model_used": multi_response.get("model_used", "multi_model"),
+                            "confidence": multi_response.get("confidence", 0.0)
+                        }] + multi_response.get("sources", []),
+                        session_id=session_id,
+                        timestamp=datetime.now().isoformat(),
+                        confidence=multi_response.get("confidence", 0.9)
+                    )
+                else:
+                    print("⚠️ Failed to load data into Multi-Model system, using fallback")
+            
+            # Fallback 1: Use FAISS directly for 'faiss' preference
+            elif model_preference == 'faiss' and FAISS_CHAT_AVAILABLE and faiss_chat and faiss_chat.is_available():
+                print(f"🔋 Using FAISS offline chat system for: {request.query}")
+                
+                # Load transcript data into FAISS if not already loaded
+                results_dir = os.path.join(os.path.dirname(__file__), "results")
+                result_file = os.path.join(results_dir, f"{request.file_id}_result.json")
+                
+                if faiss_chat.load_transcription_data(result_file):
+                    faiss_response = faiss_chat.query(request.query, session_id)
+                    
+                    # Store conversation in session history
+                    if request.file_id in chat_sessions:
+                        chat_sessions[request.file_id]["conversation_history"].append({
+                            "query": request.query,
+                            "response": faiss_response["response"],
+                            "model_used": "faiss_offline",
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    
+                    return ChatResponse(
+                        response=faiss_response["response"],
+                        sources=[{
+                            "type": "faiss_offline", 
+                            "job_id": request.file_id,
+                            "filename": transcript_data.get("filename", "Unknown"),
+                            "segments_found": faiss_response.get("segments_found", 0),
+                            "confidence": faiss_response.get("confidence", 0.0)
+                        }],
+                        session_id=session_id,
+                        timestamp=datetime.now().isoformat(),
+                        confidence=faiss_response.get("confidence", 0.9)
+                    )
+                else:
+                    print("⚠️ Failed to load data into FAISS, falling back to online AI")
+            
+            # Fallback 2: Original online AI system (Mistral/others)
+            print(f"🧠 Using online AI system for: {request.query}")
             response_text = await generate_chat_response(request.query, transcript_data, session_id)
             
             # Store conversation in session history
@@ -772,6 +885,7 @@ async def chat_enhanced(request: ChatRequest):
                 chat_sessions[request.file_id]["conversation_history"].append({
                     "query": request.query,
                     "response": response_text,
+                    "model_used": "online_ai",
                     "timestamp": datetime.now().isoformat()
                 })
             
@@ -946,6 +1060,93 @@ async def get_chat_history(job_id: str):
         }
     else:
         raise HTTPException(status_code=404, detail="Chat session not found")
+
+@app.get("/api/chat/suggestions")
+async def get_chat_suggestions():
+    """Get suggested questions for current transcript"""
+    if MULTI_MODEL_CHAT_AVAILABLE and multi_model_chat:
+        # Use multi-model system for suggestions
+        try:
+            suggestions = multi_model_chat.get_suggestions()
+            return {
+                "suggestions": suggestions,
+                "source": "multi_model_system"
+            }
+        except:
+            pass
+    
+    if FAISS_CHAT_AVAILABLE and faiss_chat and faiss_chat.is_available():
+        suggestions = faiss_chat.get_suggestions()
+        return {
+            "suggestions": suggestions,
+            "source": "faiss_offline"
+        }
+    else:
+        # Default suggestions
+        return {
+            "suggestions": [
+                "What is this transcript about?",
+                "Who are the main speakers?", 
+                "What are the key topics discussed?",
+                "Can you summarize the main points?",
+                "What decisions were made?",
+                "What action items were mentioned?"
+            ],
+            "source": "default"
+        }
+
+@app.get("/api/chat/faiss/stats")
+async def get_faiss_stats():
+    """Get FAISS system statistics"""
+    if FAISS_CHAT_AVAILABLE and faiss_chat:
+        stats = faiss_chat.get_index_stats()
+        return {
+            "faiss_available": faiss_chat.is_available(),
+            "stats": stats
+        }
+    else:
+        return {
+            "faiss_available": False,
+            "stats": {"status": "unavailable", "message": "FAISS chat system not installed"}
+        }
+
+@app.get("/api/chat/models")
+async def get_available_models():
+    """Get information about available chat models"""
+    models = {}
+    
+    if MULTI_MODEL_CHAT_AVAILABLE and multi_model_chat:
+        # Get models from multi-model system
+        models.update(multi_model_chat.get_available_models())
+        return {
+            "models": models,
+            "default_model": "faiss",
+            "smart_routing_available": True,
+            "source": "multi_model_system"
+        }
+    
+    # Fallback: individual systems
+    if FAISS_CHAT_AVAILABLE and faiss_chat and faiss_chat.is_available():
+        models["faiss"] = {
+            "name": "FAISS Offline Search",
+            "capabilities": ["offline_search", "semantic_similarity"],
+            "offline": True,
+            "priority": 0
+        }
+    
+    models["mistral"] = {
+        "name": "Mistral AI (Online)",
+        "capabilities": ["advanced_analysis", "chat"],
+        "offline": False,
+        "priority": 1
+    }
+    
+    return {
+        "models": models,
+        "default_model": "faiss" if "faiss" in models else "mistral",
+        "smart_routing_available": False,
+        "source": "individual_systems"
+    }
 
 if __name__ == "__main__":
     import uvicorn
