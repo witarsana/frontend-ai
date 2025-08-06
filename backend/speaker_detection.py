@@ -26,12 +26,17 @@ class SpeakerDetectionConfig:
     """Configuration for speaker detection systems"""
     
     PYANNOTE_CONFIG = {
-        "segmentation_model": "pyannote/segmentation",
-        "diarization_pipeline": "pyannote/speaker-diarization",
+        "segmentation_model": "pyannote/segmentation-3.0",
+        "diarization_pipeline": "pyannote/speaker-diarization-3.1",
         "embedding_model": "pyannote/embedding",
         "min_speakers": 1,
-        "max_speakers": 10,
-        "clustering_threshold": 0.7
+        "max_speakers": 8,
+        "clustering_threshold": 0.7,
+        # Performance optimizations
+        "use_gpu": False,  # CPU-only for stability
+        "batch_size": 1,   # Small batches for memory efficiency
+        "num_workers": 1,  # Single worker for stability
+        "timeout": 30      # 30 second timeout for processing
     }
     
     SPEECHBRAIN_CONFIG = {
@@ -136,8 +141,23 @@ class PyannoteDetector:
             return self._fallback_detection(audio_file)
         
         try:
-            # Apply the pipeline to the audio file
+            # Apply the pipeline to the audio file with progress indicators
+            logger.info(f"🎵 Processing audio file: {os.path.basename(audio_file)}")
+            
+            # Get file size for processing time estimation
+            file_size_mb = os.path.getsize(audio_file) / (1024 * 1024)
+            duration_estimate = file_size_mb * 0.5  # Rough estimate: 30 seconds per MB
+            logger.info(f"📊 Audio file size: {file_size_mb:.1f} MB")
+            logger.info(f"⏱️  Estimated processing time: {duration_estimate:.1f} seconds")
+            
+            # Processing status messages
+            logger.info("🔄 PyAnnote is processing... Please wait (this may take a few minutes)")
+            logger.info("📈 Progress: Loading audio and extracting features...")
+            
+            # Apply pipeline - let it run without interruption
             diarization = self.pipeline(audio_file)
+            
+            logger.info("✅ PyAnnote processing completed successfully!")
             
             # Process results
             speakers = set()
@@ -190,7 +210,12 @@ class SpeechBrainDetector:
     def initialize(self):
         """Initialize SpeechBrain models"""
         try:
-            from speechbrain.pretrained import SpeakerRecognition
+            # Use new import path for SpeechBrain 1.0+
+            try:
+                from speechbrain.inference import SpeakerRecognition
+            except ImportError:
+                # Fallback to old import for older versions 
+                from speechbrain.pretrained import SpeakerRecognition  # type: ignore
             
             logger.info("Initializing SpeechBrain speaker recognition...")
             
@@ -233,6 +258,67 @@ class SpeechBrainDetector:
         except Exception as e:
             logger.error(f"SpeechBrain detection failed: {e}")
             return self._fallback_detection(audio_file)
+    
+    def _fallback_detection(self, audio_file: str) -> Dict:
+        """Conservative fallback detection for SpeechBrain"""
+        logger.info("Using SpeechBrain fallback detection")
+        
+        try:
+            import librosa
+            
+            # Load audio
+            y, sr = librosa.load(audio_file, sr=16000)
+            duration_minutes = len(y) / sr / 60
+            
+            # Simple energy-based speaker change detection
+            hop_length = int(sr * 2.0)  # 2-second windows
+            energy = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+            
+            # Detect energy changes as potential speaker changes
+            energy_diff = abs(energy[1:] - energy[:-1])
+            threshold = energy_diff.mean() + energy_diff.std()
+            
+            speaker_changes = []
+            current_speaker = 1
+            
+            for i, diff in enumerate(energy_diff):
+                if diff > threshold:
+                    timestamp = i * hop_length / sr
+                    speaker_changes.append({
+                        "timestamp": timestamp,
+                        "speaker": current_speaker % 2 + 1
+                    })
+                    current_speaker += 1
+            
+            # Estimate speaker count (minimum 2 for conversations)
+            estimated_speakers = min(max(len(speaker_changes) + 1, 2), 4)
+            
+            logger.info(f"SpeechBrain fallback detected {estimated_speakers} speakers")
+            
+            return {
+                "speaker_count": estimated_speakers,
+                "speakers": [f"Speaker_{i+1}" for i in range(estimated_speakers)],
+                "segments": speaker_changes,
+                "method": "speechbrain_energy_fallback",
+                "confidence": "low",
+                "analysis": {
+                    "duration_minutes": duration_minutes,
+                    "energy_changes": len(speaker_changes),
+                    "estimated_speakers": estimated_speakers
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"SpeechBrain fallback detection failed: {e}")
+            # Ultimate fallback
+            return {
+                "speaker_count": 2,
+                "speakers": ["Speaker_1", "Speaker_2"],
+                "segments": [],
+                "method": "speechbrain_minimal_fallback", 
+                "confidence": "very_low",
+                "analysis": {"error": str(e)}
+            }
 
 class ResemblyzerDetector:
     """Speaker detection using Resemblyzer"""
@@ -284,6 +370,69 @@ class ResemblyzerDetector:
         except Exception as e:
             logger.error(f"Resemblyzer detection failed: {e}")
             return self._fallback_detection(audio_file)
+    
+    def _fallback_detection(self, audio_file: str) -> Dict:
+        """Conservative fallback detection for Resemblyzer"""
+        logger.info("Using Resemblyzer fallback detection")
+        
+        try:
+            import librosa
+            
+            # Load audio
+            y, sr = librosa.load(audio_file, sr=16000)
+            duration_minutes = len(y) / sr / 60
+            
+            # Simple spectral-based speaker change detection
+            hop_length = int(sr * 1.5)  # 1.5-second windows
+            
+            # Extract MFCC features
+            mfcc = librosa.feature.mfcc(y=y, sr=sr, hop_length=hop_length, n_mfcc=13)
+            
+            # Detect spectral changes as potential speaker changes
+            mfcc_diff = abs(mfcc[:, 1:] - mfcc[:, :-1]).mean(axis=0)
+            threshold = mfcc_diff.mean() + mfcc_diff.std()
+            
+            speaker_changes = []
+            current_speaker = 1
+            
+            for i, diff in enumerate(mfcc_diff):
+                if diff > threshold:
+                    timestamp = i * hop_length / sr
+                    speaker_changes.append({
+                        "timestamp": timestamp,
+                        "speaker": current_speaker % 3 + 1  # Cycle through 3 speakers
+                    })
+                    current_speaker += 1
+            
+            # Estimate speaker count (minimum 2 for conversations)
+            estimated_speakers = min(max(len(speaker_changes) + 1, 2), 3)
+            
+            logger.info(f"Resemblyzer fallback detected {estimated_speakers} speakers")
+            
+            return {
+                "speaker_count": estimated_speakers,
+                "speakers": [f"Speaker_{i+1}" for i in range(estimated_speakers)],
+                "segments": speaker_changes,
+                "method": "resemblyzer_mfcc_fallback",
+                "confidence": "low",
+                "analysis": {
+                    "duration_minutes": duration_minutes,
+                    "spectral_changes": len(speaker_changes),
+                    "estimated_speakers": estimated_speakers
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Resemblyzer fallback detection failed: {e}")
+            # Ultimate fallback
+            return {
+                "speaker_count": 2,
+                "speakers": ["Speaker_1", "Speaker_2"],
+                "segments": [],
+                "method": "resemblyzer_minimal_fallback",
+                "confidence": "very_low", 
+                "analysis": {"error": str(e)}
+            }
 
 class WebRTCDetector:
     """Speaker detection using WebRTC VAD"""
