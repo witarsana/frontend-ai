@@ -101,14 +101,16 @@ def get_unified_analysis_prompt(transcript_text):
 Based on the following transcript, extract MAXIMUM VALUE by deeply analyzing the content for rich insights and actionable next steps:
 
 TRANSCRIPT:
-{transcript_text[:8000]}
+{transcript_text[:6000]}
+
+🚨 MANDATORY: You MUST generate ALL 4 sections. Empty sections are NOT acceptable.
 
 Analyze this content thoroughly and generate a JSON response with 4 distinct sections:
 
 1. NARRATIVE SUMMARY - Only main topics and overview (NO speaker details, NO decisions, NO action items)
 2. SPEAKER POINTS - Detailed points per speaker with their specific contributions and expertise  
-3. KEY TAKEAWAYS - Extract 5-8 VALUABLE INSIGHTS from actual content discussed
-4. NEXT STEPS - Extract 3-5 SPECIFIC ACTIONABLE ITEMS that are unique and directly relevant to this content
+3. KEY TAKEAWAYS - Extract AT LEAST 3 VALUABLE INSIGHTS from actual content discussed (MANDATORY - never empty)
+4. NEXT STEPS - Extract AT LEAST 2 SPECIFIC ACTIONABLE ITEMS that are unique and directly relevant to this content
 
 JSON FORMAT (EXACTLY THIS STRUCTURE):
 {{

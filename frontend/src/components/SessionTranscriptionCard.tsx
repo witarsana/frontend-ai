@@ -60,9 +60,6 @@ interface Transcription {
 
 interface SessionTranscriptionCardProps {
   transcription: Transcription;
-  onCopy: () => void;
-  onDownload: () => void;
-  onClear: () => void;
   onBack?: () => void; // Optional back button handler
 }
 
