@@ -59,7 +59,7 @@ cleanup_ports() {
     
     # Kill any Python processes that might be running our backend
     echo -e "   🔍 Cleaning up Python backend processes..."
-    pkill -f "ffmpeg_free_main.py\|uvicorn.*8000" 2>/dev/null || true
+    pkill -f "main.py\|uvicorn.*8000" 2>/dev/null || true
     
     # Wait for cleanup
     sleep 3
@@ -99,7 +99,7 @@ start_backend() {
     fi
     
     # Start backend
-    nohup python ffmpeg_free_main.py > ../backend.log 2>&1 &
+    nohup python main.py > ../backend.log 2>&1 &
     BACKEND_PID=$!
     echo $BACKEND_PID > ../backend.pid
     echo -e "   📊 Backend PID: $BACKEND_PID"
@@ -248,7 +248,7 @@ cleanup() {
     
     # Force cleanup if needed
     echo -e "   🧹 Force cleaning remaining processes..."
-    pkill -f "ffmpeg_free_main.py" 2>/dev/null || true
+    pkill -f "main.py" 2>/dev/null || true
     pkill -f "npm run dev" 2>/dev/null || true
     pkill -f "vite" 2>/dev/null || true
     

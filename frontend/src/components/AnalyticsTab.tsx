@@ -1,9 +1,10 @@
 import React from 'react';
+import { parseTimeToSeconds } from '../utils/helpers';
 
 interface Segment {
   id?: number;
-  start: number;
-  end: number;
+  start: string;
+  end: string;
   text: string;
   speaker?: string;
   speaker_name?: string;
@@ -45,7 +46,7 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ transcription }) => {
 
     transcription.segments.forEach(segment => {
       const speaker = segment.speaker_name || segment.speaker || `Speaker ${Math.floor(Math.random() * 3) + 1}`;
-      const duration = segment.end - segment.start;
+      const duration = parseTimeToSeconds(segment.end) - parseTimeToSeconds(segment.start);
       const words = segment.text.split(' ').length;
       
       if (!speakerData[speaker]) {

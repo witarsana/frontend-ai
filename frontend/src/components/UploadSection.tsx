@@ -5,7 +5,7 @@ import { EngineModal } from "./EngineModal";
 interface UploadSectionProps {
   onFileSelect: (
     file: File,
-    options?: { language?: string; engine?: string; speed?: string; speakerMethod?: string }
+    options?: { language?: string; engine?: string; speed?: string }
   ) => void;
 }
 
@@ -13,7 +13,6 @@ interface UploadOptions {
   language: string;
   engine: string;
   speed: string;
-  speakerMethod: string;
 }
 
 const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
@@ -26,7 +25,6 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
     language: "auto",
     engine: "faster-whisper",
     speed: "medium", // Default speed
-    speakerMethod: "basic", // Default to basic speaker detection, enhanced for advanced mode
   });
   const [isEngineModalOpen, setIsEngineModalOpen] = useState<boolean>(false);
   const [_experimentalMethods, setExperimentalMethods] = useState<any>(null);
@@ -139,7 +137,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
   };
 
   const getEngineDisplayName = (engine: string) => {
-    if (engine === "faster-whisper") return "Faster-Whisper";
+    if (engine === "faster-whisper") return "OpenAI Whisper";
     if (engine === "deepgram") return "Deepgram";
     return engine;
   };
@@ -397,7 +395,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
                       {getEngineDisplayName(uploadOptions.engine)}
                     </div>
                     <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                      Fast, high-quality local processing - FREE
+                      High-quality AI transcription - FREE
                     </div>
                   </div>
                   <div
@@ -476,15 +474,15 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
                       e.currentTarget.style.backgroundColor = "#f8faff";
                     }}
                   >
-                    <option value="fast">⚡ Fast (Base Model) - 3-4x faster</option>
-                    <option value="medium">⚖️ Medium (Small Model) - 2x faster</option>
-                    <option value="slow">🎯 Slow (Large-v3 Model) - Best accuracy</option>
-                    <option value="experimental">🧪 Advanced (Large-v3 + Enhanced Speaker Detection)</option>
+                    <option value="fast">⚡ Fast (Tiny Model) - 3-4x faster, least accurate</option>
+                    <option value="medium">⚖️ Medium (Base Model) - Balanced speed & accuracy</option>
+                    <option value="slow">🎯 Slow (Small Model) - Better accuracy, slower</option>
+                    <option value="experimental">🧪 Experimental (Medium Model) - Advanced features</option>
                   </select>
                 </div>
               </div>
 
-              {/* Speaker Detection Method Selection - Always available */}
+              {/* Speaker Detection Notice */}
               <div style={{ marginTop: "20px" }}>
                 <label
                   style={{
@@ -495,64 +493,23 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
                     display: "block",
                   }}
                 >
-                  🔬 Speaker Detection {uploadOptions.speed === "experimental" ? "(Enhanced ML)" : "(Standard)"}
+                  🔬 Speaker Detection (Basic)
                 </label>
-                <div>
-                  <select
-                    value={uploadOptions.speakerMethod}
-                    onChange={(e) =>
-                      setUploadOptions({
-                        ...uploadOptions,
-                        speakerMethod: e.target.value,
-                      })
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #c084fc",
-                      borderRadius: "8px",
-                      backgroundColor: "#fdf4ff",
-                      fontSize: "14px",
-                      color: "#7c3aed",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      outline: "none",
-                      transition: "all 0.2s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "#a855f7";
-                      e.currentTarget.style.backgroundColor = "#f3e8ff";
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#c084fc";
-                      e.currentTarget.style.backgroundColor = "#fdf4ff";
-                    }}
-                  >
-                    {uploadOptions.speed === "experimental" ? (
-                      <>
-                        <option value="enhanced">🚀 Enhanced Multi-Feature - Advanced ML (Very High Accuracy)</option>
-                        <option value="pyannote">🧠 pyannote.audio - State-of-the-art (High Accuracy)</option>
-                        <option value="speechbrain">🎯 SpeechBrain - Modern toolkit (Good Accuracy)</option>
-                        <option value="resemblyzer">⚡ Resemblyzer - Lightweight (Medium Accuracy)</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="basic">🎤 Basic - Simple speaker detection (Fast, Standard Accuracy)</option>
-                        <option value="energy">⚙️ Energy-based - Voice activity detection (Very Fast)</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-                <div style={{ 
-                  marginTop: "8px", 
-                  fontSize: "12px", 
-                  color: "#6b7280",
-                  fontStyle: "italic"
-                }}>
-                  {uploadOptions.speed === "experimental" 
-                    ? "💡 Enhanced method uses advanced ML features for best conversation accuracy"
-                    : "💡 Standard speaker detection for basic speaker identification"
-                  }
+                <div
+                  style={{
+                    padding: "12px",
+                    border: "2px solid #fbbf24",
+                    borderRadius: "8px",
+                    backgroundColor: "#fffbeb",
+                    fontSize: "14px",
+                    color: "#92400e",
+                  }}
+                >
+                  📝 All speakers are currently labeled as "Speaker 1"
+                  <br />
+                  <span style={{ fontSize: "12px", color: "#6b7280" }}>
+                    Advanced speaker detection coming soon
+                  </span>
                 </div>
               </div>
 

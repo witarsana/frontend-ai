@@ -30,8 +30,8 @@ const HistoryDetailViewer: React.FC<HistoryDetailViewerProps> = ({ selectedJob, 
     setError(null);
     
     try {
-      // Use the new result endpoint to get full data
-      const response = await fetch(`${API_CONFIG.BASE_URL}/api/jobs/${selectedJob.job_id}/result`);
+      // Use the correct result endpoint to get full data
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/results/${selectedJob.job_id}`);
       
       if (!response.ok) {
         throw new Error(`Failed to load transcription data: ${response.status}`);
@@ -39,11 +39,10 @@ const HistoryDetailViewer: React.FC<HistoryDetailViewerProps> = ({ selectedJob, 
       
       const data = await response.json();
       
-      if (data.success && data.result) {
-        const result = data.result;
-        
+      // Backend returns data directly, not wrapped in success/result
+      if (data.job_id && data.transcript) {
         // Extract transcript text from segments
-        const fullText = result.transcript?.map((segment: any) => segment.text).join(' ') || '';
+        const fullText = data.transcript?.map((segment: any) => segment.text).join(' ') || '';
         
         // Convert backend data to SessionTranscriptionCard format
         const fullData = {
@@ -52,20 +51,20 @@ const HistoryDetailViewer: React.FC<HistoryDetailViewerProps> = ({ selectedJob, 
           status: 'completed' as const,
           uploadTime: new Date(selectedJob.processed_at),
           text: fullText,
-          segments: result.transcript || [],
-          summary: result.summary || null,
-          actionItems: result.action_items || null,
-          keyDecisions: result.key_decisions || null,
-          sentiment: result.sentiment || null,
-          participants: result.participants || null,
+          segments: data.transcript || [],
+          summary: data.summary || null,
+          actionItems: data.actionItems || data.action_items || null,
+          keyDecisions: data.keyDecisions || data.key_decisions || null,
+          sentiment: data.sentiment || null,
+          participants: data.speakers || data.participants || null,
           duration: selectedJob.duration,
-          fullResult: result,
+          fullResult: data,
           audioUrl: `${API_CONFIG.BASE_URL}/api/audio/${selectedJob.job_id}` // Corrected audio endpoint
         };
         
         setTranscriptionData(fullData);
       } else {
-        throw new Error(data.message || 'Failed to load transcription data');
+        throw new Error('Invalid transcription data format');
       }
     } catch (error) {
       console.error('Failed to load full transcription data:', error);

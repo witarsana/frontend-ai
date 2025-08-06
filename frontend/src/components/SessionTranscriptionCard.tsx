@@ -3,11 +3,12 @@ import ChatInterface from "./ChatInterface";
 import NotionService, { ActionItemDetail } from "../services/notionApi";
 import ExperimentalDataCard from "./ExperimentalDataCard";
 import AnalyticsTab from "./AnalyticsTab";
+import { parseTimeToSeconds } from "../utils/helpers";
 
 interface Segment {
   id?: number;
-  start: number;
-  end: number;
+  start: string;
+  end: string;
   text: string;
   speaker?: string;
   speaker_name?: string;
@@ -121,7 +122,9 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
     
     for (let i = 0; i < transcription.segments.length; i++) {
       const segment = transcription.segments[i];
-      if (currentTime >= segment.start && currentTime <= segment.end) {
+      const startSeconds = parseTimeToSeconds(segment.start);
+      const endSeconds = parseTimeToSeconds(segment.end);
+      if (currentTime >= startSeconds && currentTime <= endSeconds) {
         // Only log when segment changes to avoid spam
         if (i !== playingSegmentIndex) {
           console.log(`🎯 Auto-detected segment ${i} at time ${currentTime.toFixed(2)}s (${segment.start}-${segment.end})`);
@@ -1536,7 +1539,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                                         console.log('🎯 Timestamp clicked - segment.start:', segment.start, 'segmentIndex:', globalIndex);
                                         console.log('🎯 Segment data:', segment);
                                         if (transcription.audioUrl) {
-                                          jumpToTime(segment.start, globalIndex);
+                                          jumpToTime(parseTimeToSeconds(segment.start), globalIndex);
                                         }
                                       }}
                                       disabled={!transcription.audioUrl}
@@ -1584,7 +1587,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
                                         <span style={{ fontSize: "10px" }}>▶️</span>
                                       )}
                                       {segment.start !== undefined && segment.end !== undefined
-                                        ? `${formatTime(segment.start)} - ${formatTime(segment.end)}`
+                                        ? `${segment.start} - ${segment.end}`
                                         : ""}
                                     </button>
                                     <span style={{
