@@ -1,0 +1,436 @@
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel
+import os
+from dotenv import load_dotenv
+import asyncio
+from datetime import datetime
+import json
+import whisper  # Pure OpenAI Whisper
+
+from typing import Dict, List, Any, Optional
+import traceback
+import librosa
+import soundfile as sf
+import sys
+import numpy as np
+from pydub import AudioSegment
+import re
+
+# Import prompts dari file terpisah
+from prompts import get_summary_prompt, get_fallback_responses, truncate_transcript
+
+# Import our new multi-provider API system
+from api_providers import initialize_providers, call_api
+
+# Notion integration import
+try:
+    from notion_integration import router as notion_router
+    NOTION_INTEGRATION_AVAILABLE = True
+    print("✅ Notion integration available")
+except ImportError as e:
+    print(f"⚠️  Notion integration not available: {e}")
+    NOTION_INTEGRATION_AVAILABLE = False
+    notion_router = None
+
+# Chat system imports
+try:
+    import sys
+    from pathlib import Path
+    
+    # Add current directory to path for imports
+    current_dir = Path(__file__).parent
+    sys.path.insert(0, str(current_dir))
+    
+    from chat_system import ChatSystem
+    from multi_model_chat import MultiModelChatSystem
+    CHAT_SYSTEM_AVAILABLE = True
+    print("✅ Chat system imports available")
+except ImportError as e:
+    print(f"⚠️  Chat system not available: {e}")
+    CHAT_SYSTEM_AVAILABLE = False
+
+# Define chat classes (used regardless of chat system availability)
+class ChatRequest(BaseModel):
+    query: str
+    session_id: Optional[str] = None
+    file_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    sources: List[dict] = []
+    session_id: str
+    timestamp: str
+    confidence: float
+
+# Load .env file from parent directory
+import os
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / '.env')
+
+app = FastAPI(title="AI Meeting Transcription - Pure OpenAI Whisper", version="2.0.0")
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include Notion integration router
+if NOTION_INTEGRATION_AVAILABLE and notion_router:
+    app.include_router(notion_router, prefix="/api", tags=["notion"])
+    print("✅ Notion integration routes added")
+else:
+    print("⚠️  Notion integration routes not available")
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize models on startup"""
+    print("🔄 Initializing AI models on startup...")
+    load_models()
+    print("✅ Startup initialization complete!")
+
+# Global variables
+whisper_model = None
+processing_jobs = {}
+chat_system = None
+multi_chat_system = None
+api_providers = None
+
+def load_models():
+    """Load AI models - Pure OpenAI Whisper only"""
+    global whisper_model, api_providers
+    
+    try:
+        print("🚀 Loading Pure OpenAI Whisper model...")
+        
+        # Initialize our multi-provider API system
+        if api_providers is None:
+            print("🔄 Initializing multi-provider API system...")
+            api_providers = initialize_providers()
+            print("✅ Multi-provider API system initialized!")
+        
+        # Load Pure OpenAI Whisper
+        if whisper_model is None:
+            print("🎵 Loading OpenAI Whisper base model...")
+            whisper_model = whisper.load_model("base")  # You can change to "small", "medium", "large"
+            print("✅ OpenAI Whisper model loaded successfully!")
+        
+        # Initialize Chat System
+        global chat_system, multi_chat_system
+        chat_system = None
+        multi_chat_system = None
+        
+        if CHAT_SYSTEM_AVAILABLE:
+            try:
+                print("🤖 Initializing Chat System...")
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                results_dir = os.path.join(current_dir, "results")
+                
+                chat_system = ChatSystem(data_dir=results_dir)
+                multi_chat_system = MultiModelChatSystem(data_dir=results_dir)
+                print("✅ Chat system initialized!")
+            except Exception as chat_error:
+                print(f"⚠️  Chat system initialization failed: {chat_error}")
+                chat_system = None
+                multi_chat_system = None
+                
+    except Exception as e:
+        print(f"❌ Model loading error: {e}")
+
+@app.get("/")
+async def root():
+    """Root endpoint with Pure OpenAI Whisper information"""
+    return {
+        "message": "AI Meeting Transcription - Pure OpenAI Whisper", 
+        "status": "running",
+        "transcription_engine": "openai-whisper",
+        "whisper_model": {
+            "name": "openai-whisper-base",
+            "type": "pure_openai",
+            "loaded": whisper_model is not None
+        },
+        "features": [
+            "Pure OpenAI Whisper",
+            "Simple and Fast",
+            "No Complex Dependencies",
+            "Reliable Transcription"
+        ],
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/api/upload-and-process")
+async def upload_and_process(
+    file: UploadFile = File(...),
+    language: str = Form("auto")
+):
+    """Upload and process with Pure OpenAI Whisper"""
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+        
+        content = await file.read()
+        if len(content) > 150 * 1024 * 1024:  # 150MB limit
+            raise HTTPException(status_code=400, detail="File too large. Maximum 150MB.")
+        
+        # Check file format
+        allowed_extensions = ['.wav', '.mp3', '.m4a', '.flac', '.ogg', '.webm', '.mp4', '.mov']
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {file_ext}")
+        
+        # Generate job ID
+        job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:20]}"
+        processing_jobs[job_id] = {
+            "status": "starting", 
+            "progress": 0, 
+            "message": "Initializing...",
+            "language": language
+        }
+        
+        # Save file
+        uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
+        file_path = os.path.join(uploads_dir, f"{job_id}{file_ext}")
+        
+        with open(file_path, 'wb') as f:
+            f.write(content)
+        
+        print(f"📁 File saved: {file_path} ({len(content)/1024:.1f} KB)")
+        print(f"🌐 Language: {language}")
+        
+        # Start processing
+        asyncio.create_task(process_audio_simple(job_id, file_path, file.filename, language))
+        
+        return JSONResponse({
+            "job_id": job_id,
+            "status": "processing_started",
+            "message": f"File uploaded ({len(content)/1024:.1f} KB). Using OpenAI Whisper with language: {language}",
+            "file_size_kb": len(content)/1024,
+            "language": language
+        })
+        
+    except Exception as e:
+        print(f"❌ Upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@app.get("/api/status/{job_id}")
+async def get_processing_status(job_id: str):
+    if job_id not in processing_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return processing_jobs[job_id]
+
+@app.get("/api/result/{job_id}")
+async def get_result(job_id: str):
+    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    result_file = os.path.join(results_dir, f"{job_id}_result.json")
+    
+    if not os.path.exists(result_file):
+        raise HTTPException(status_code=404, detail="Result file not found")
+    
+    try:
+        with open(result_file, 'r', encoding='utf-8') as f:
+            result = json.load(f)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading result file: {str(e)}")
+
+async def process_audio_simple(job_id: str, file_path: str, filename: str, language: str = "auto"):
+    """Simple audio processing with Pure OpenAI Whisper"""
+    try:
+        print(f"⚡ Starting simple processing: {filename}")
+        
+        # Update progress
+        processing_jobs[job_id]["progress"] = 10
+        processing_jobs[job_id]["message"] = "Loading audio file..."
+        
+        # Load models if not loaded
+        if whisper_model is None:
+            load_models()
+        
+        processing_jobs[job_id]["progress"] = 20
+        processing_jobs[job_id]["message"] = "Starting transcription with OpenAI Whisper..."
+        
+        # Simple transcription with OpenAI Whisper
+        print(f"🎵 Transcribing with OpenAI Whisper: {file_path}")
+        
+        # Use OpenAI Whisper directly
+        if language == "auto":
+            result = whisper_model.transcribe(file_path)
+        else:
+            result = whisper_model.transcribe(file_path, language=language)
+        
+        processing_jobs[job_id]["progress"] = 70
+        processing_jobs[job_id]["message"] = "Processing transcript segments..."
+        
+        # Process segments
+        segments = []
+        for i, segment in enumerate(result["segments"]):
+            segments.append({
+                "id": i,
+                "start": segment["start"],
+                "end": segment["end"],
+                "text": segment["text"].strip(),
+                "speaker": "Speaker 1",  # Simple single speaker
+                "speaker_name": "Speaker 1",
+                "confidence": 0.9
+            })
+        
+        processing_jobs[job_id]["progress"] = 80
+        processing_jobs[job_id]["message"] = "Generating summary..."
+        
+        # Generate simple summary
+        summary = await generate_simple_summary(result["text"])
+        
+        # Prepare final result
+        final_result = {
+            "filename": filename,
+            "job_id": job_id,
+            "transcript": segments,
+            "summary": summary,
+            "speakers": ["Speaker 1"],
+            "participants": ["Speaker 1"],
+            "duration": segments[-1]["end"] if segments else 0,
+            "language": result.get("language", "unknown"),
+            "word_count": len(result["text"].split()),
+            "processed_at": datetime.now().isoformat(),
+            "engine": "openai-whisper"
+        }
+        
+        processing_jobs[job_id]["progress"] = 90
+        processing_jobs[job_id]["message"] = "Saving results..."
+        
+        # Save result
+        results_dir = os.path.join(os.path.dirname(__file__), "results")
+        os.makedirs(results_dir, exist_ok=True)
+        result_file = os.path.join(results_dir, f"{job_id}_result.json")
+        
+        with open(result_file, 'w', encoding='utf-8') as f:
+            json.dump(final_result, f, ensure_ascii=False, indent=2)
+        
+        # Complete processing
+        processing_jobs[job_id] = {
+            "status": "completed",
+            "progress": 100,
+            "message": "Processing completed successfully!",
+            "result_available": True,
+            "word_count": final_result["word_count"],
+            "duration": final_result["duration"]
+        }
+        
+        print(f"✅ Simple processing completed: {filename}")
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Processing failed: {error_msg}")
+        
+        processing_jobs[job_id] = {
+            "status": "error",
+            "progress": 0,
+            "error": error_msg,
+            "message": f"Processing failed: {error_msg}"
+        }
+
+async def generate_simple_summary(text: str) -> str:
+    """Generate simple summary using API providers"""
+    try:
+        if not api_providers or not text.strip():
+            return "Audio has been successfully transcribed. Please review the transcript for detailed content."
+        
+        # Simple prompt for summary
+        prompt = f"""Please provide a brief summary of the following transcript:
+
+{text[:3000]}  # Limit text length
+
+Keep the summary concise and focus on the main points discussed."""
+        
+        summary = call_api(prompt, providers=api_providers, max_tokens=500)
+        return summary
+        
+    except Exception as e:
+        print(f"⚠️ Summary generation failed: {e}")
+        return "Audio has been successfully transcribed. Summary generation encountered an issue, but the complete transcript is available for review."
+
+# Keep existing chat system endpoints (unchanged)
+@app.post("/api/chat")
+async def chat_query(request: ChatRequest):
+    """Send chat message to the AI system"""
+    if not CHAT_SYSTEM_AVAILABLE or chat_system is None:
+        fallback_responses = get_fallback_responses()
+        return ChatResponse(
+            response=fallback_responses["chat_not_available"],
+            sources=[],
+            session_id=request.session_id or "default", 
+            timestamp=datetime.now().isoformat(),
+            confidence=0.0
+        )
+    
+    try:
+        result = chat_system.query(request.query)
+        
+        return ChatResponse(
+            response=result["response"],
+            sources=result.get("sources", []),
+            session_id=request.session_id or "default",
+            timestamp=datetime.now().isoformat(),
+            confidence=result.get("confidence", 0.0)
+        )
+        
+    except Exception as e:
+        print(f"❌ Chat error: {e}")
+        fallback_responses = get_fallback_responses()
+        return ChatResponse(
+            response=fallback_responses["load_error"],
+            sources=[],
+            session_id=request.session_id or "default",
+            timestamp=datetime.now().isoformat(), 
+            confidence=0.0
+        )
+
+# Keep other necessary endpoints for frontend compatibility
+@app.get("/api/jobs/completed")
+async def get_completed_jobs():
+    """Get list of completed jobs with basic info"""
+    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    if not os.path.exists(results_dir):
+        return {"jobs": []}
+    
+    completed_jobs = []
+    for filename in os.listdir(results_dir):
+        if filename.endswith('_result.json'):
+            job_id = filename.replace('_result.json', '')
+            result_file = os.path.join(results_dir, filename)
+            
+            try:
+                with open(result_file, 'r', encoding='utf-8') as f:
+                    result = json.load(f)
+                
+                completed_jobs.append({
+                    "job_id": job_id,
+                    "filename": result.get('filename', 'Unknown'),
+                    "duration": result.get('duration', 0),
+                    "word_count": result.get('word_count', 0),
+                    "processed_at": result.get('processed_at', ''),
+                    "summary_preview": result.get('summary', '')[:100] + "..." if result.get('summary') else ""
+                })
+            except Exception as e:
+                print(f"Error reading result file {filename}: {e}")
+                continue
+    
+    completed_jobs.sort(key=lambda x: x['processed_at'], reverse=True)
+    return {"jobs": completed_jobs}
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    BACKEND_PORT = 8000
+    BACKEND_HOST = "0.0.0.0"
+    
+    print("🚀 Starting Pure OpenAI Whisper API...")
+    print(f"🔧 Server will run on: {BACKEND_HOST}:{BACKEND_PORT}")
+    print("🔧 Features: Pure OpenAI Whisper, Simple & Fast")
+    uvicorn.run(app, host=BACKEND_HOST, port=BACKEND_PORT)
