@@ -421,15 +421,131 @@ async def get_speed_options():
 async def get_experimental_methods():
     """Get available experimental speaker detection methods"""
     try:
-        from whisper_config import SPEED_CONFIGS
-        experimental_config = SPEED_CONFIGS.get("experimental", {})
-        speaker_methods = experimental_config.get("speaker_methods", {})
+        # Define all available speaker detection methods
+        available_methods = {
+            "pyannote": {
+                "name": "PyAnnote Audio",
+                "description": "State-of-the-art neural speaker diarization using pyannote.audio",
+                "accuracy": "High",
+                "speed": "Medium",
+                "requirements": ["pyannote.audio", "torch"],
+                "suitable_for": ["Professional recordings", "Multiple speakers", "High accuracy needs"]
+            },
+            "speechbrain": {
+                "name": "SpeechBrain",
+                "description": "Open-source speech processing toolkit with speaker verification",
+                "accuracy": "High",
+                "speed": "Medium-Fast",
+                "requirements": ["speechbrain", "torch"],
+                "suitable_for": ["Real-time processing", "Speaker verification", "Research applications"]
+            },
+            "resemblyzer": {
+                "name": "Resemblyzer",
+                "description": "Speaker verification using deep learning embeddings",
+                "accuracy": "Medium-High",
+                "speed": "Fast",
+                "requirements": ["resemblyzer", "tensorflow"],
+                "suitable_for": ["Quick speaker clustering", "Voice cloning detection", "Fast processing"]
+            },
+            "webrtc": {
+                "name": "WebRTC VAD",
+                "description": "Voice Activity Detection optimized for real-time applications",
+                "accuracy": "Medium",
+                "speed": "Very Fast",
+                "requirements": ["webrtcvad"],
+                "suitable_for": ["Real-time streaming", "Voice/silence detection", "Low latency needs"]
+            },
+            "energy": {
+                "name": "Energy-based Detection",
+                "description": "Simple energy-threshold based voice activity detection",
+                "accuracy": "Basic",
+                "speed": "Very Fast",
+                "requirements": ["librosa", "numpy"],
+                "suitable_for": ["Simple use cases", "Fallback option", "Low resource environments"]
+            }
+        }
         
         return JSONResponse({
             "success": True,
-            "experimental_methods": speaker_methods,
-            "default_method": experimental_config.get("default_method", "pyannote"),
-            "description": "Advanced speaker detection methods for experimental mode"
+            "available_methods": available_methods,
+            "default_method": "pyannote",
+            "total_methods": len(available_methods),
+            "description": "Complete list of available speaker detection methods. All methods can be used with any speed mode."
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.get("/api/speaker-methods")
+async def get_speaker_methods():
+    """Get all available speaker detection methods with detailed information"""
+    try:
+        from speaker_detection import SpeakerDetectionManager
+        
+        # Get available methods from the actual detection system
+        manager = SpeakerDetectionManager()
+        available_methods = {
+            "pyannote": {
+                "id": "pyannote",
+                "name": "PyAnnote Audio",
+                "description": "State-of-the-art neural speaker diarization using pyannote.audio",
+                "accuracy": "High",
+                "speed": "Medium",
+                "status": "active",
+                "recommended": True,
+                "use_cases": ["Professional recordings", "Multiple speakers", "High accuracy requirements"]
+            },
+            "speechbrain": {
+                "id": "speechbrain", 
+                "name": "SpeechBrain",
+                "description": "Open-source speech processing toolkit with speaker verification",
+                "accuracy": "High",
+                "speed": "Medium-Fast",
+                "status": "available",
+                "recommended": True,
+                "use_cases": ["Real-time processing", "Speaker verification", "Research applications"]
+            },
+            "resemblyzer": {
+                "id": "resemblyzer",
+                "name": "Resemblyzer",
+                "description": "Speaker verification using deep learning embeddings",
+                "accuracy": "Medium-High", 
+                "speed": "Fast",
+                "status": "available",
+                "recommended": False,
+                "use_cases": ["Quick speaker clustering", "Voice cloning detection", "Fast processing"]
+            },
+            "webrtc": {
+                "id": "webrtc",
+                "name": "WebRTC VAD",
+                "description": "Voice Activity Detection optimized for real-time applications",
+                "accuracy": "Medium",
+                "speed": "Very Fast",
+                "status": "available",
+                "recommended": False,
+                "use_cases": ["Real-time streaming", "Voice/silence detection", "Low latency needs"]
+            },
+            "energy": {
+                "id": "energy",
+                "name": "Energy-based Detection",
+                "description": "Simple energy-threshold based voice activity detection",
+                "accuracy": "Basic",
+                "speed": "Very Fast", 
+                "status": "available",
+                "recommended": False,
+                "use_cases": ["Simple use cases", "Fallback option", "Low resource environments"]
+            }
+        }
+        
+        return JSONResponse({
+            "success": True,
+            "methods": available_methods,
+            "default_method": "pyannote",
+            "total_methods": len(available_methods),
+            "recommended_methods": [method for method in available_methods.values() if method["recommended"]],
+            "info": "All speaker detection methods are available for use with any speed mode (fast, medium, slow, experimental)"
         })
     except Exception as e:
         return JSONResponse({
@@ -443,7 +559,7 @@ async def upload_and_process(
     language: str = Form("auto"),
     engine: str = Form("faster-whisper"),
     speed: str = Form("medium"),  # Speed parameter: fast, medium, slow, experimental
-    speaker_method: str = Form("pyannote")  # For experimental mode: pyannote, speechbrain, resemblyzer, webrtc, energy
+    speaker_method: str = Form("pyannote")  # Speaker detection method (available for all speeds): pyannote, speechbrain, resemblyzer, webrtc, energy
 ):
     """Upload and process with librosa instead of FFmpeg - Now with speed options and speaker detection methods"""
     try:
@@ -463,11 +579,10 @@ async def upload_and_process(
         if speed not in valid_speeds:
             raise HTTPException(status_code=400, detail=f"Invalid speed. Must be one of: {valid_speeds}")
         
-        # Validate speaker_method parameter for experimental mode
-        if speed == "experimental":
-            valid_methods = ["pyannote", "speechbrain", "resemblyzer", "webrtc", "energy"]
-            if speaker_method not in valid_methods:
-                raise HTTPException(status_code=400, detail=f"Invalid speaker method for experimental mode. Must be one of: {valid_methods}")
+        # Validate speaker_method parameter - now available for all speeds
+        valid_methods = ["pyannote", "speechbrain", "resemblyzer", "webrtc", "energy"]
+        if speaker_method not in valid_methods:
+            raise HTTPException(status_code=400, detail=f"Invalid speaker method. Must be one of: {valid_methods}")
         
         content = await file.read()
         if len(content) > 150 * 1024 * 1024:  # 150MB limit
@@ -1472,48 +1587,46 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
         print(f"   - Speaker changes: {speaker_changes_detected}")
         print(f"   - Total segments: {total_segments}")
         
-        # EXPERIMENTAL: Advanced speaker detection with selected method
-        experimental_speaker_data = None
-        if speed == "experimental":
-            print(f"🧪 EXPERIMENTAL MODE TRIGGERED!")
-            print(f"   - Selected method: {speaker_method}")
-            print(f"   - Audio file: {file_path}")
-            print(f"🧪 EXPERIMENTAL MODE: Running {speaker_method} speaker detection...")
-            if progress:
-                progress.update_stage("transcription", 85, f"Running {speaker_method} speaker detection...")
+        # ADVANCED: Advanced speaker detection with selected method (ALWAYS RUN)
+        advanced_speaker_data = None
+        print(f"🎯 ADVANCED SPEAKER DETECTION ACTIVATED!")
+        print(f"   - Selected method: {speaker_method}")
+        print(f"   - Audio file: {file_path}")
+        print(f"🔍 Running {speaker_method} speaker detection...")
+        if progress:
+            progress.update_stage("transcription", 85, f"Running {speaker_method} speaker detection...")
+        
+        try:
+            # Run selected speaker detection method (ALWAYS, not just experimental)
+            advanced_speaker_data = analyze_speakers(file_path, method=speaker_method)
             
-            try:
-                # Run selected speaker detection method
-                experimental_speaker_data = analyze_speakers(file_path, method=speaker_method)
+            if advanced_speaker_data:
+                advanced_count = advanced_speaker_data.get("speaker_count", 0)
+                advanced_method = advanced_speaker_data.get("method", "unknown")
+                advanced_confidence = advanced_speaker_data.get("confidence", "unknown")
                 
-                if experimental_speaker_data:
-                    experimental_count = experimental_speaker_data.get("speaker_count", 0)
-                    experimental_method = experimental_speaker_data.get("method", "unknown")
-                    experimental_confidence = experimental_speaker_data.get("confidence", "unknown")
-                    
-                    print(f"🧪 {speaker_method.upper()} detection: {experimental_count} speakers ({experimental_method}, confidence: {experimental_confidence})")
-                    
-                    # Enhanced segment processing with pyannote data
-                    segments_with_speakers = format_speaker_segments(
-                        experimental_speaker_data, 
-                        segments_with_speakers
-                    )
-                    
-                    # Update speaker count if experimental is more confident
-                    if experimental_confidence in ["high", "medium"] and experimental_count > 0:
-                        speaker_count = experimental_count
-                        print(f"🔄 Updated speaker count to {speaker_count} based on experimental detection")
-                    
-                    if progress:
-                        progress.update_stage("transcription", 95, f"Experimental detection completed: {experimental_count} speakers")
-                else:
-                    print("⚠️ Experimental speaker detection returned no data")
-                    
-            except Exception as exp_error:
-                print(f"⚠️ Experimental speaker detection failed: {exp_error}")
-                print("   Continuing with standard speaker detection...")
+                print(f"🎯 {speaker_method.upper()} detection: {advanced_count} speakers ({advanced_method}, confidence: {advanced_confidence})")
+                
+                # Enhanced segment processing with speaker detection data
+                segments_with_speakers = format_speaker_segments(
+                    advanced_speaker_data, 
+                    segments_with_speakers
+                )
+                
+                # Update speaker count if advanced detection is more confident
+                if advanced_confidence in ["high", "medium"] and advanced_count > 0:
+                    speaker_count = advanced_count
+                    print(f"🔄 Updated speaker count to {speaker_count} based on advanced detection")
+                
                 if progress:
-                    progress.update_stage("transcription", 95, "Experimental detection failed, using standard method")
+                    progress.update_stage("transcription", 95, f"Advanced detection completed: {advanced_count} speakers")
+            else:
+                print("⚠️ Advanced speaker detection returned no data")
+                
+        except Exception as adv_error:
+            print(f"⚠️ Advanced speaker detection failed: {adv_error}")
+            print("   Continuing with basic speaker assignment...")
+            advanced_speaker_data = None
         
         if progress:
             progress.update_stage("transcription", 100, f"Large V3 analysis completed: {speaker_count} speakers, {speaker_changes_detected} changes")
@@ -1536,14 +1649,14 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
             "speed_mode": speed
         }
         
-        # Add experimental data if available
-        if experimental_speaker_data:
+        # Add advanced speaker detection data if available
+        if advanced_speaker_data:
             audio_info["experimental_speaker_detection"] = {
-                "method": experimental_speaker_data.get("method", "unknown"),
-                "confidence": experimental_speaker_data.get("confidence", "unknown"),
-                "speaker_count": experimental_speaker_data.get("speaker_count", 0),
-                "speakers": experimental_speaker_data.get("speakers", []),
-                "segments_count": len(experimental_speaker_data.get("segments", []))
+                "method": advanced_speaker_data.get("method", "unknown"),
+                "confidence": advanced_speaker_data.get("confidence", "unknown"),
+                "speaker_count": advanced_speaker_data.get("speaker_count", 0),
+                "speakers": advanced_speaker_data.get("speakers", []),
+                "segments_count": len(advanced_speaker_data.get("segments", []))
             }
         
         result = {
@@ -1554,7 +1667,7 @@ async def transcribe_with_faster_whisper_large_v3(file_path: str, job_id: str = 
             "duration": duration,
             "speaker_stats": speaker_stats,
             "detected_speakers": speaker_count,
-            "experimental_speaker_data": experimental_speaker_data,  # Include full experimental data
+            "experimental_speaker_data": advanced_speaker_data,  # Include full advanced speaker data
             "audio_info": audio_info
         }
         
@@ -2698,12 +2811,51 @@ def detect_speaker_change(current_text: str, prev_text: str, time_gap: float, se
     print(f"⚡ ULTRA-FAST speaker assignment: {total_segments} segments, {total_speakers} speakers")
     
     if not speaker_segments:
-        print("⚠️  No speaker segments provided, using fast fallback...")
-        # FAST multi-speaker fallback
+        print("⚠️  No speaker segments provided, using intelligent fallback...")
+        # INTELLIGENT fallback based on audio characteristics
         for i, segment in enumerate(whisper_segments):
-            speaker_num = (i // 3) % 3 + 1  # Cycle through 3 speakers every 3 segments
+            # Use text characteristics and time gaps for speaker assignment
+            segment_text = segment['text'].strip()
+            time_gap = segment['start'] - whisper_segments[i-1]['end'] if i > 0 else 0
+            
+            # Default to speaker 1 for first segment
+            if i == 0:
+                speaker_num = 1
+            else:
+                prev_segment = whisper_segments[i-1]
+                prev_speaker = prev_segment.get('assigned_speaker', 1)
+                
+                # Smart speaker change based on multiple factors
+                should_change = False
+                
+                # Factor 1: Significant time gap suggests speaker change
+                if time_gap > 2.0:
+                    should_change = True
+                
+                # Factor 2: Question-answer pattern
+                prev_text = prev_segment['text'].strip().lower()
+                if prev_text.endswith('?') or any(q in prev_text for q in ['what', 'how', 'why', 'when', 'where']):
+                    should_change = True
+                
+                # Factor 3: Response indicators
+                if any(resp in segment_text.lower() for resp in ['yes', 'no', 'yeah', 'okay', 'right', 'exactly']):
+                    should_change = True
+                
+                # Factor 4: Length difference (short response after long statement)
+                if len(segment_text) < 50 and len(prev_segment['text']) > 100:
+                    should_change = True
+                
+                # Apply speaker change with max 3 speakers
+                if should_change:
+                    speaker_num = (prev_speaker % 3) + 1
+                else:
+                    speaker_num = prev_speaker
+            
             segment["speaker"] = f"speaker-{speaker_num:02d}"
             segment["speaker_name"] = f"Speaker {speaker_num}"
+            segment["assigned_speaker"] = speaker_num
+            
+        print(f"🧠 Intelligent fallback completed with {len(set(s.get('assigned_speaker', 1) for s in whisper_segments))} speakers")
         return whisper_segments
     
     # ALWAYS use fast assignment - no time mapping for any file size
@@ -2713,35 +2865,57 @@ def detect_speaker_change(current_text: str, prev_text: str, time_gap: float, se
 def fast_speaker_assignment_large_files(whisper_segments: List, speaker_segments: Dict) -> List:
     """Ultra-fast speaker assignment for large files - skip time mapping"""
     
-    # Create simple speaker name mapping
+    # Create universal speaker name mapping for all detection methods
     speaker_names = {}
     unique_speakers = sorted(list(speaker_segments.keys()))
     
     for i, speaker_id in enumerate(unique_speakers):
         if speaker_id.startswith("SPEAKER_"):
-            speaker_num = speaker_id.split("_")[1].lstrip("0") or "1"
+            # PyAnnote format: SPEAKER_00, SPEAKER_01 → Speaker 1, Speaker 2
+            speaker_num = int(speaker_id.split("_")[1]) + 1
+            speaker_names[speaker_id] = f"Speaker {speaker_num}"
+        elif speaker_id.startswith("Speaker_"):
+            # SpeechBrain/Resemblyzer/WebRTC/Energy format: Speaker_1, Speaker_2 → Speaker 1, Speaker 2
+            speaker_num = speaker_id.split("_")[1]
             speaker_names[speaker_id] = f"Speaker {speaker_num}"
         else:
+            # Fallback for any other format
             speaker_names[speaker_id] = f"Speaker {i + 1}"
     
-    # Fast direct assignment without time mapping
+    # Proper time-based speaker assignment using PyAnnote results
     available_speakers = list(speaker_segments.keys())
     
-    for i, segment in enumerate(whisper_segments):
-        # Simple cyclic assignment with some variation
-        base_speaker_idx = i % len(available_speakers)
+    for segment in whisper_segments:
+        segment_start = segment.get("start", 0)
+        segment_end = segment.get("end", segment_start + 1)
         
-        # Add variation every 15 segments
-        if i > 0 and i % 15 == 0:
-            base_speaker_idx = (base_speaker_idx + 1) % len(available_speakers)
+        # Find best matching speaker based on time overlap
+        best_speaker = available_speakers[0]  # Default to first speaker
+        max_overlap = 0
         
-        selected_speaker = available_speakers[base_speaker_idx]
-        speaker_key = selected_speaker.lower().replace("_", "-")
+        for speaker_id in available_speakers:
+            speaker_times = speaker_segments[speaker_id]
+            
+            # Calculate overlap with this speaker's time segments
+            for speaker_time in speaker_times:
+                spk_start = speaker_time.get("start", 0)
+                spk_end = speaker_time.get("end", spk_start + 1)
+                
+                # Calculate overlap
+                overlap_start = max(segment_start, spk_start)
+                overlap_end = min(segment_end, spk_end)
+                overlap = max(0, overlap_end - overlap_start)
+                
+                if overlap > max_overlap:
+                    max_overlap = overlap
+                    best_speaker = speaker_id
         
+        # Assign the best matching speaker
+        speaker_key = best_speaker.lower().replace("_", "-")
         segment["speaker"] = speaker_key
-        segment["speaker_name"] = speaker_names[selected_speaker]
+        segment["speaker_name"] = speaker_names[best_speaker]
     
-    print(f"✅ Fast assignment complete for {len(whisper_segments)} segments")
+    print(f"✅ Time-based speaker assignment complete for {len(whisper_segments)} segments")
     return whisper_segments
 
 def _transcribe_librosa_sync(audio_path: str, job_id: str = None) -> Dict[Any, Any]:
@@ -3250,6 +3424,11 @@ async def generate_unified_analysis(transcript_segments: list, progress: 'Progre
     if not transcript_segments:
         raise Exception("No transcript available for analysis")
     
+    # Extract actual speakers from transcript segments
+    actual_speakers = sorted(list(set(segment.get("speaker_name", "Speaker 1") for segment in transcript_segments if segment.get("speaker_name"))))
+    if not actual_speakers:
+        actual_speakers = ["Speaker 1"]
+    
     # Format transcript from segments with speaker context - OPTIMIZE length for better AI analysis
     transcript_lines = []
     total_chars = 0
@@ -3277,7 +3456,7 @@ async def generate_unified_analysis(transcript_segments: list, progress: 'Progre
         if progress:
             progress.update_stage("ai_analysis", 35, "Generating AI analysis prompt...")
         
-        prompt = get_unified_analysis_prompt(formatted_transcript)
+        prompt = get_unified_analysis_prompt(formatted_transcript, actual_speakers)
         
         if progress:
             progress.update_stage("ai_analysis", 45, "Calling AI API for comprehensive analysis...")
@@ -3438,7 +3617,7 @@ async def generate_unified_analysis(transcript_segments: list, progress: 'Progre
         raise Exception(f"Failed to generate unified analysis: {str(e)}")
 
 
-def process_summary_sections(summary: str) -> tuple:
+def process_summary_sections(summary: str, actual_speakers: list = None) -> tuple:
     """
     Process summary to create clean version and extract speaker points
     Returns: (clean_summary, speaker_points)
@@ -3460,11 +3639,11 @@ def process_summary_sections(summary: str) -> tuple:
     # Clean up extra whitespace and newlines
     clean_summary = re.sub(r'\n{3,}', '\n\n', clean_summary.strip())
     
-    # Extract speaker points from summary
+    # Extract speaker points from summary, but use actual speaker names
     speaker_points = []
     speaker_match = re.search(r'#### Important Points from Each Speaker\s*([\s\S]*?)(?=####|$)', summary, re.IGNORECASE)
     
-    if speaker_match:
+    if speaker_match and actual_speakers:
         speaker_text = speaker_match.group(1).strip()
         
         # Split by speaker sections (looking for **Speaker pattern)
@@ -3472,8 +3651,9 @@ def process_summary_sections(summary: str) -> tuple:
         speaker_headers = re.findall(r'\*\*Speaker\s+\d+.*?\*\*', speaker_text, flags=re.IGNORECASE)
         
         for i, speaker_content in enumerate(speaker_sections[1:], 0):
-            if i < len(speaker_headers):
-                speaker_name = speaker_headers[i].replace('**', '').strip()
+            if i < len(speaker_headers) and i < len(actual_speakers):
+                # Use actual speaker name instead of parsed header
+                speaker_name = actual_speakers[i]
                 content = speaker_content.strip()
                 
                 if content:

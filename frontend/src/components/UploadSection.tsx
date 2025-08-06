@@ -29,22 +29,33 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
     speakerMethod: "pyannote", // Default experimental speaker detection method
   });
   const [isEngineModalOpen, setIsEngineModalOpen] = useState<boolean>(false);
-  const [_experimentalMethods, setExperimentalMethods] = useState<any>(null);
+  const [_speakerMethods, setSpeakerMethods] = useState<any>(null);
 
-  // Fetch experimental methods when component mounts
+  // Fetch speaker detection methods when component mounts
   React.useEffect(() => {
-    const fetchExperimentalMethods = async () => {
+    const fetchSpeakerMethods = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/experimental-methods');
+        const response = await fetch('http://localhost:8000/api/speaker-methods');
         const data = await response.json();
         if (data.success) {
-          setExperimentalMethods(data.experimental_methods);
+          setSpeakerMethods(data.methods);
+          console.log('📊 Available speaker methods:', data.methods);
         }
       } catch (error) {
-        console.error('Failed to fetch experimental methods:', error);
+        console.error('Failed to fetch speaker methods:', error);
+        // Fallback to experimental-methods endpoint
+        try {
+          const fallbackResponse = await fetch('http://localhost:8000/api/experimental-methods');
+          const fallbackData = await fallbackResponse.json();
+          if (fallbackData.success) {
+            setSpeakerMethods(fallbackData.available_methods);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback fetch also failed:', fallbackError);
+        }
       }
     };
-    fetchExperimentalMethods();
+    fetchSpeakerMethods();
   }, []);
 
   const handleFileInputChange = (
@@ -478,73 +489,71 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileSelect }) => {
                   <option value="fast">⚡ Fast (Base Model) - 3-4x faster</option>
                   <option value="medium">⚖️ Medium (Small Model) - 2x faster</option>
                   <option value="slow">🎯 Slow (Large-v3 Model) - Best accuracy</option>
-                  <option value="experimental">🧪 Experimental (Speaker Detection) - Advanced analysis</option>
+                  <option value="experimental">🧪 Experimental - Advanced features & speaker detection</option>
                 </select>
               </div>
             </div>
 
-            {/* Speaker Detection Method Selection - Only show for experimental mode */}
-            {uploadOptions.speed === "experimental" && (
-              <div style={{ marginTop: "20px" }}>
-                <label
+            {/* Speaker Detection Method Selection - Available for all speeds */}
+            <div style={{ marginTop: "20px" }}>
+              <label
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#333",
+                  marginBottom: "8px",
+                  display: "block",
+                }}
+              >
+                🔬 Speaker Detection Method
+              </label>
+              <div>
+                <select
+                  value={uploadOptions.speakerMethod}
+                  onChange={(e) =>
+                    setUploadOptions({
+                      ...uploadOptions,
+                      speakerMethod: e.target.value,
+                    })
+                  }
                   style={{
+                    width: "100%",
+                    padding: "12px",
+                    border: "2px solid #c084fc",
+                    borderRadius: "8px",
+                    backgroundColor: "#fdf4ff",
                     fontSize: "14px",
+                    color: "#7c3aed",
                     fontWeight: "600",
-                    color: "#333",
-                    marginBottom: "8px",
-                    display: "block",
+                    cursor: "pointer",
+                    outline: "none",
+                    transition: "all 0.2s ease",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "#a855f7";
+                    e.currentTarget.style.backgroundColor = "#f3e8ff";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#c084fc";
+                    e.currentTarget.style.backgroundColor = "#fdf4ff";
                   }}
                 >
-                  🔬 Speaker Detection Method
-                </label>
-                <div>
-                  <select
-                    value={uploadOptions.speakerMethod}
-                    onChange={(e) =>
-                      setUploadOptions({
-                        ...uploadOptions,
-                        speakerMethod: e.target.value,
-                      })
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #c084fc",
-                      borderRadius: "8px",
-                      backgroundColor: "#fdf4ff",
-                      fontSize: "14px",
-                      color: "#7c3aed",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      outline: "none",
-                      transition: "all 0.2s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "#a855f7";
-                      e.currentTarget.style.backgroundColor = "#f3e8ff";
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#c084fc";
-                      e.currentTarget.style.backgroundColor = "#fdf4ff";
-                    }}
-                  >
-                    <option value="pyannote">🧠 pyannote.audio - State-of-the-art (Slow, High Accuracy)</option>
-                    <option value="speechbrain">🎯 SpeechBrain - Modern toolkit (Medium, Good Accuracy)</option>
-                    <option value="resemblyzer">⚡ Resemblyzer - Lightweight (Fast, Medium Accuracy)</option>
-                    <option value="webrtc">🎤 WebRTC VAD - Voice Activity (Very Fast, Medium Accuracy)</option>
-                    <option value="energy">⚙️ Energy-based - Simple fallback (Very Fast, Low Accuracy)</option>
-                  </select>
-                </div>
-                <div style={{ 
-                  marginTop: "8px", 
-                  fontSize: "12px", 
-                  color: "#6b7280",
-                  fontStyle: "italic"
-                }}>
-                  💡 Choose detection method based on your accuracy vs speed needs
-                </div>
+                  <option value="pyannote">🧠 PyAnnote Audio - State-of-the-art (Recommended)</option>
+                  <option value="speechbrain">🎯 SpeechBrain - Modern toolkit (High accuracy)</option>
+                  <option value="resemblyzer">⚡ Resemblyzer - Lightweight (Fast processing)</option>
+                  <option value="webrtc">🎤 WebRTC VAD - Voice Activity Detection (Very fast)</option>
+                  <option value="energy">⚙️ Energy-based - Simple fallback (Fastest)</option>
+                </select>
               </div>
-            )}
+              <div style={{ 
+                marginTop: "8px", 
+                fontSize: "12px", 
+                color: "#6b7280",
+                fontStyle: "italic"
+              }}>
+                💡 All speaker detection methods are now available for any speed mode
+              </div>
+            </div>
 
             {/* Start Button */}
             <button

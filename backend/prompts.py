@@ -92,11 +92,43 @@ IMPORTANT RULES:
 9. SECTION ORDER must be: Main Topics → Speaker Points → Decisions → Action Items
 """
 
-def get_unified_analysis_prompt(transcript_text):
+def get_unified_analysis_prompt(transcript_text, actual_speakers=None):
     """
     Enhanced unified prompt focused on extracting rich Key Takeaways and specific Next Steps
     Returns: summary (narrative only), speaker_points, key_decisions (insights), enhanced_action_items (next steps)
     """
+    
+    # Create speaker examples based on actual speakers detected
+    if actual_speakers and len(actual_speakers) > 0:
+        speaker_examples = []
+        for i, speaker in enumerate(actual_speakers):
+            speaker_examples.append(f'''    {{
+      "speaker": "{speaker}",
+      "points": [
+        "Key point 1 from this speaker",
+        "Key point 2 from this speaker", 
+        "Key point 3 from this speaker"
+      ]
+    }}''')
+        
+        speaker_examples_text = ",\n".join(speaker_examples)
+    else:
+        speaker_examples_text = '''    {
+      "speaker": "Speaker 1",
+      "points": [
+        "Key point 1 from this speaker",
+        "Key point 2 from this speaker", 
+        "Key point 3 from this speaker"
+      ]
+    },
+    {
+      "speaker": "Speaker 2", 
+      "points": [
+        "Key point 1 from this speaker",
+        "Key point 2 from this speaker"
+      ]
+    }'''
+    
     return f"""
 Based on the following transcript, extract MAXIMUM VALUE by deeply analyzing the content for rich insights and actionable next steps:
 
@@ -116,18 +148,8 @@ JSON FORMAT (EXACTLY THIS STRUCTURE):
 {{
   "narrative_summary": "### Meeting Summary\\n\\n#### Main Topics Discussed\\n\\n1. **Topic 1**: Description...\\n2. **Topic 2**: Description...\\n\\nProvide comprehensive overview of main topics and themes discussed in the meeting.",
   "speaker_points": [
-    {{
-      "speaker": "Speaker 1 (Name)",
-      "points": [
-        "Key point 1 from this speaker",
-        "Key point 2 from this speaker", 
-        "Key point 3 from this speaker"
-      ]
-    }},
-    {{
-      "speaker": "Speaker 2 (Name)", 
-      "points": [
-        "Key point 1 from this speaker",
+{speaker_examples_text}
+  ],
         "Key point 2 from this speaker"
       ]
     }}
