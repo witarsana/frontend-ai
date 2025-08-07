@@ -4448,6 +4448,154 @@ async def mistral_standalone_chat(request: dict):
             "timestamp": datetime.now().isoformat()
         }
 
+# Source Files Import Endpoint
+@app.post("/api/source/import/{filename}")
+async def import_source_file(
+    filename: str,
+    language: str = Form("auto"),
+    engine: str = Form("faster-whisper"),
+    speed: str = Form("slow"),
+    speaker_method: str = Form("pyannote"),
+    enable_speed_processing: bool = Form(False),
+    enable_speaker_detection: bool = Form(True)
+):
+    """Import and process a file from the source directory"""
+    try:
+        source_dir = "source"
+        source_file_path = os.path.join(source_dir, filename)
+        
+        # Verify file exists
+        if not os.path.exists(source_file_path):
+            raise HTTPException(status_code=404, detail=f"File '{filename}' not found in source directory")
+        
+        # Generate job ID
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        random_suffix = str(hash(filename + timestamp))[-4:]
+        job_id = f"job_{timestamp}_{random_suffix}"
+        
+        # Copy file to uploads directory
+        uploads_dir = "uploads"
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        # Get file extension and create destination filename
+        file_ext = os.path.splitext(filename)[1].lower()
+        dest_filename = f"{job_id}{file_ext}"
+        dest_path = os.path.join(uploads_dir, dest_filename)
+        
+        # Copy file
+        import shutil
+        shutil.copy2(source_file_path, dest_path)
+        
+        # Get file size
+        file_size = os.path.getsize(dest_path)
+        
+        print(f"🔍 DEBUG - Source import parameters:")
+        print(f"   - File: {filename}")
+        print(f"   - Language: {language}")
+        print(f"   - Engine: {engine}")
+        print(f"   - Speed: {speed}")
+        print(f"   - Speaker method: {speaker_method}")
+        print(f"   - Enable speed processing: {enable_speed_processing}")
+        print(f"   - Enable speaker detection: {enable_speaker_detection}")
+        print(f"📁 File copied from source: {filename} ({file_size / 1024 / 1024:.1f} MB)")
+        
+        # Store job parameters
+        processing_jobs[job_id] = {
+            "filename": filename,
+            "file_path": dest_path,
+            "language": language,
+            "engine": engine,
+            "speed": speed,
+            "speaker_method": speaker_method,
+            "enable_speed_processing": enable_speed_processing,
+            "enable_speaker_detection": enable_speaker_detection,
+            "start_time": datetime.now(),
+            "source": "import",
+            "status": "processing",
+            "progress": 0,
+            "stage": "initialization"
+        }
+        
+        # Start processing in background
+        asyncio.create_task(process_audio_librosa(
+            job_id, dest_path, filename, language, engine, speed,
+            speaker_method, enable_speed_processing, enable_speaker_detection
+        ))
+        
+        return {
+            "job_id": job_id,
+            "message": f"Started processing '{filename}' from source directory",
+            "filename": filename,
+            "processing_params": {
+                "language": language,
+                "engine": engine,
+                "speed": speed,
+                "speaker_method": speaker_method,
+                "enable_speed_processing": enable_speed_processing,
+                "enable_speaker_detection": enable_speaker_detection
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Error importing source file: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/source/files")
+async def list_source_files():
+    """List all available files in the source directory"""
+    try:
+        source_dir = "source"
+        if not os.path.exists(source_dir):
+            return {"files": [], "message": "Source directory not found"}
+        
+        # Supported audio/video extensions
+        supported_extensions = {
+            '.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.wma',
+            '.mp4', '.avi', '.mov', '.mkv', '.webm', '.m4v', '.3gp'
+        }
+        
+        files = []
+        for filename in os.listdir(source_dir):
+            file_path = os.path.join(source_dir, filename)
+            if os.path.isfile(file_path):
+                file_ext = os.path.splitext(filename)[1].lower()
+                if file_ext in supported_extensions:
+                    # Get file info
+                    file_stats = os.stat(file_path)
+                    file_size = file_stats.st_size
+                    modified_time = datetime.fromtimestamp(file_stats.st_mtime)
+                    
+                    # Try to get duration if possible
+                    duration = None
+                    try:
+                        duration = librosa.get_duration(path=file_path)
+                    except Exception:
+                        pass
+                    
+                    files.append({
+                        "filename": filename,
+                        "size": file_size,
+                        "size_mb": round(file_size / 1024 / 1024, 2),
+                        "modified_at": modified_time.isoformat(),
+                        "duration": duration,
+                        "extension": file_ext
+                    })
+        
+        # Sort by modified time, newest first
+        files.sort(key=lambda x: x["modified_at"], reverse=True)
+        
+        return {
+            "files": files,
+            "count": len(files),
+            "message": f"Found {len(files)} supported files in source directory"
+        }
+        
+    except Exception as e:
+        print(f"❌ Error listing source files: {e}")
+        return {"files": [], "error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     

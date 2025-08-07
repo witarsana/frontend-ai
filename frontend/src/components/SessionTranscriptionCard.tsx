@@ -773,11 +773,11 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
           </div>
         </div>
         
-        {/* Action Buttons */}
+        {/* Action Buttons - More Prominent Design */}
         <div style={{ 
           display: "flex", 
           alignItems: "center", 
-          gap: "8px",
+          gap: "16px",
           position: "relative",
           zIndex: 1
         }}>
@@ -785,35 +785,39 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
             <button
               onClick={onCopy}
               style={{
-                background: "rgba(34, 197, 94, 0.08)",
-                border: "1px solid rgba(34, 197, 94, 0.2)",
-                borderRadius: "10px",
-                color: "#22c55e",
-                padding: "8px 12px",
+                background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+                border: "none",
+                borderRadius: "14px",
+                color: "white",
+                padding: "12px 20px",
                 cursor: "pointer",
-                fontSize: "12px",
-                fontWeight: "500",
+                fontSize: "14px",
+                fontWeight: "700",
                 display: "flex",
                 alignItems: "center",
-                gap: "6px",
+                gap: "10px",
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                backdropFilter: "blur(8px)"
+                boxShadow: "0 4px 16px rgba(34, 197, 94, 0.25), 0 2px 8px rgba(34, 197, 94, 0.15)",
+                minWidth: "120px",
+                justifyContent: "center",
+                textShadow: "0 1px 2px rgba(0, 0, 0, 0.2)"
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(34, 197, 94, 0.12)";
-                e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.3)";
-                e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow = "0 4px 16px rgba(34, 197, 94, 0.15)";
+                e.currentTarget.style.background = "linear-gradient(135deg, #16a34a 0%, #15803d 100%)";
+                e.currentTarget.style.transform = "translateY(-3px) scale(1.05)";
+                e.currentTarget.style.boxShadow = "0 8px 25px rgba(34, 197, 94, 0.35), 0 4px 12px rgba(34, 197, 94, 0.25)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(34, 197, 94, 0.08)";
-                e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.2)";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "none";
+                e.currentTarget.style.background = "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)";
+                e.currentTarget.style.transform = "translateY(0) scale(1)";
+                e.currentTarget.style.boxShadow = "0 4px 16px rgba(34, 197, 94, 0.25), 0 2px 8px rgba(34, 197, 94, 0.15)";
               }}
-              title="Copy transcription text"
+              title="Copy transcription text to clipboard"
             >
-              <span style={{ fontSize: "14px" }}>📋</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
               <span>Copy</span>
             </button>
           )}
@@ -822,40 +826,45 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
             <button
               onClick={onDownload}
               style={{
-                background: "rgba(168, 85, 247, 0.08)",
-                border: "1px solid rgba(168, 85, 247, 0.2)",
-                borderRadius: "10px",
-                color: "#a855f7",
-                padding: "8px 12px",
+                background: "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
+                border: "none",
+                borderRadius: "14px",
+                color: "white",
+                padding: "12px 20px",
                 cursor: "pointer",
-                fontSize: "12px",
-                fontWeight: "500",
+                fontSize: "14px",
+                fontWeight: "700",
                 display: "flex",
                 alignItems: "center",
-                gap: "6px",
+                gap: "10px",
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                backdropFilter: "blur(8px)"
+                boxShadow: "0 4px 16px rgba(168, 85, 247, 0.25), 0 2px 8px rgba(168, 85, 247, 0.15)",
+                minWidth: "140px",
+                justifyContent: "center",
+                textShadow: "0 1px 2px rgba(0, 0, 0, 0.2)"
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(168, 85, 247, 0.12)";
-                e.currentTarget.style.borderColor = "rgba(168, 85, 247, 0.3)";
-                e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow = "0 4px 16px rgba(168, 85, 247, 0.15)";
+                e.currentTarget.style.background = "linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)";
+                e.currentTarget.style.transform = "translateY(-3px) scale(1.05)";
+                e.currentTarget.style.boxShadow = "0 8px 25px rgba(168, 85, 247, 0.35), 0 4px 12px rgba(168, 85, 247, 0.25)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(168, 85, 247, 0.08)";
-                e.currentTarget.style.borderColor = "rgba(168, 85, 247, 0.2)";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "none";
+                e.currentTarget.style.background = "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)";
+                e.currentTarget.style.transform = "translateY(0) scale(1)";
+                e.currentTarget.style.boxShadow = "0 4px 16px rgba(168, 85, 247, 0.25), 0 2px 8px rgba(168, 85, 247, 0.15)";
               }}
               title="Download transcription as text file"
             >
-              <span style={{ fontSize: "14px" }}>💾</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7,10 12,15 17,10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
               <span>Download</span>
             </button>
           )}
           
-          {onClear && (
+          {/* {onClear && (
             <button
               onClick={onClear}
               style={{
@@ -890,12 +899,7 @@ const SessionTranscriptionCard: React.FC<SessionTranscriptionCardProps> = ({
               <span style={{ fontSize: "14px" }}>🗑️</span>
               <span>Clear</span>
             </button>
-          )}
-        </div>
-        
-        {/* Futuristic Status Badge */}
-        <div style={{ position: "relative", zIndex: 1 }}>
-          {getStatusBadge()}
+          )} */}
         </div>
         
         {/* Add keyframes for animation */}
