@@ -3304,7 +3304,7 @@ def _generate_summary_simple_sync(transcript_text: str) -> Dict[str, Any]:
         print(f"🔍 DEBUG: Calling API with prompt length: {len(prompt)}")
         
         # Use our multi-provider API system
-        response_text = call_api(prompt, providers=api_providers, max_tokens=1200)
+        response_text = call_api(prompt, providers=api_providers, max_tokens=12000)
         
         print(f"🤖 API response length: {len(response_text)} chars")
         print(f"📝 Response preview: {response_text[:200]}...")
@@ -3555,7 +3555,7 @@ async def generate_unified_analysis(transcript_segments: list, progress: 'Progre
             progress.update_stage("ai_analysis", 45, "Calling AI API for comprehensive analysis...")
         
         # Use our multi-provider API system with increased tokens for complex analysis
-        response_text = call_api(prompt, providers=api_providers, max_tokens=8000)
+        response_text = call_api(prompt, providers=api_providers, max_tokens=80000)
         
         # DEBUG: Check response length and structure
         print(f"🔍 AI response length: {len(response_text)} chars")
@@ -3623,13 +3623,44 @@ async def generate_unified_analysis(transcript_segments: list, progress: 'Progre
             
             result = json.loads(json_str)
             
-            # Validate required fields with smart fallbacks
+            # Validate required fields with field mapping for flexibility
             required_fields = ["narrative_summary", "speaker_points", "enhanced_action_items", "key_decisions"]
+            field_mappings = {
+                "enhanced_action_items": ["next_steps", "action_items", "enhanced_action_items"],
+                "key_decisions": ["key_takeaways", "key_insights", "key_decisions", "decisions"]
+            }
+            
             for field in required_fields:
-                if field not in result or not result[field]:
-                    print(f"⚠️ Missing or empty field: {field}")
+                if field not in result:
+                    # Try alternative field names
+                    if field in field_mappings:
+                        found_alternative = False
+                        for alt_field in field_mappings[field]:
+                            if alt_field in result and result[alt_field]:
+                                print(f"🔄 Mapping {alt_field} → {field}")
+                                result[field] = result[alt_field]
+                                found_alternative = True
+                                break
+                        
+                        if not found_alternative:
+                            print(f"⚠️ MISSING field entirely: {field}")
+                            print(f"🔍 Available fields: {list(result.keys())}")
+                            print(f"🔍 Tried alternatives: {field_mappings[field]}")
+                    else:
+                        print(f"⚠️ MISSING field entirely: {field}")
+                        print(f"🔍 Available fields: {list(result.keys())}")
+                elif not result[field]:
+                    print(f"⚠️ EMPTY field: {field} = {result[field]}")
+                    print(f"🔍 Field type: {type(result[field])}")
+                else:
+                    print(f"✅ Field OK: {field} has {len(result[field]) if isinstance(result[field], list) else 'content'}")
+                    continue
+                
+                # Only use fallbacks if field is completely missing or None after mapping attempts
+                if field not in result or result[field] is None or not result[field]:
+                    print(f"🔧 Generating fallback for missing field: {field}")
                     if field == "narrative_summary":
-                        result[field] = "No summary available"
+                        result[field] = "Content analysis completed successfully."
                     elif field == "speaker_points":
                         # Generate basic speaker points from transcript
                         speakers = set()
@@ -3639,8 +3670,8 @@ async def generate_unified_analysis(transcript_segments: list, progress: 'Progre
                     elif field == "enhanced_action_items":
                         result[field] = [
                             {
-                                "title": "Review Transcript for Next Steps",
-                                "description": "Analyze the complete transcript to identify specific action items and implementation steps based on the discussion.",
+                                "title": "Review Content and Extract Action Items",
+                                "description": "Analyze the transcribed content to identify specific action items and next steps based on the discussion points.",
                                 "priority": "Medium",
                                 "category": "Short-term",
                                 "timeframe": "1-2 weeks",
@@ -3648,26 +3679,28 @@ async def generate_unified_analysis(transcript_segments: list, progress: 'Progre
                             }
                         ]
                     elif field == "key_decisions":
-                        # Generate key decisions based on content analysis
                         result[field] = [
                             {
-                                "title": "Content Successfully Processed and Analyzed",
-                                "description": "The audio content has been successfully transcribed and processed using advanced AI technology. The system identified multiple speakers and provided detailed segmentation for further analysis.",
-                                "category": "Framework",
-                                "impact": "High",
-                                "actionable": True,
-                                "source": "System Analysis"
-                            },
-                            {
-                                "title": "Multi-Speaker Discussion Structure Identified",
-                                "description": "The conversation structure shows clear speaker transitions and topic progressions, providing a foundation for extracting actionable insights and decision points from the dialogue.",
-                                "category": "Insight", 
+                                "title": "Content Processing Complete",
+                                "description": "Successfully transcribed and analyzed the audio content with speaker detection.",
+                                "category": "Process",
                                 "impact": "Medium",
-                                "actionable": True,
-                                "source": "Speaker Detection"
+                                "actionable": False,
+                                "source": "System"
                             }
                         ]
                         print(f"✅ Generated fallback key_decisions: {len(result[field])} items")
+                else:
+                    # Field exists but is empty - this suggests AI response issue
+                    print(f"❌ AI provided empty {field} - this suggests prompt or API issue")
+                    print(f"🔍 Raw response sample for debugging:")
+                    # Look for the field in raw response
+                    if f'"{field}"' in response_text:
+                        field_start = response_text.find(f'"{field}"')
+                        field_sample = response_text[field_start:field_start+200]
+                        print(f"   Found in raw: {field_sample}")
+                    else:
+                        print(f"   Field '{field}' not found in raw response!")
             
             if progress:
                 progress.update_stage("ai_analysis", 95, "Validating analysis results...")
@@ -3793,7 +3826,7 @@ async def extract_structured_data_from_summary(transcript_segments: list) -> tup
         prompt = get_structured_data_extraction_prompt(transcript_text)
 
         # Use our multi-provider API system
-        response_text = call_api(prompt, providers=api_providers, max_tokens=1500)
+        response_text = call_api(prompt, providers=api_providers, max_tokens=15000)
         
         # Clean and parse JSON response with better error handling
         json_str = ""

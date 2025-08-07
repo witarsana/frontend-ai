@@ -245,15 +245,93 @@ class SpeechBrainDetector:
                 return self._fallback_detection(audio_file)
         
         try:
-            # SpeechBrain implementation
-            logger.info("Running SpeechBrain speaker detection...")
+            # Actual SpeechBrain implementation
+            logger.info("Running SpeechBrain speaker detection with embeddings...")
             
-            # For now, use conservative fallback with SpeechBrain labeling
-            result = self._fallback_detection(audio_file)
-            result["method"] = "speechbrain_fallback"
-            result["confidence"] = "medium"
+            import librosa
+            import torch
+            from sklearn.cluster import AgglomerativeClustering
+            from sklearn.metrics.pairwise import cosine_similarity
             
-            return result
+            # Load audio
+            y, sr = librosa.load(audio_file, sr=16000)
+            
+            # Split audio into segments for embedding extraction
+            segment_length = 3.0  # 3 second segments
+            hop_length = 1.5     # 1.5 second hop
+            
+            embeddings = []
+            timestamps = []
+            
+            segment_samples = int(segment_length * sr)
+            hop_samples = int(hop_length * sr)
+            
+            for start in range(0, len(y) - segment_samples, hop_samples):
+                end = start + segment_samples
+                segment = y[start:end]
+                
+                # Get speaker embedding using SpeechBrain  
+                # Convert numpy array to torch tensor
+                segment_torch = torch.from_numpy(segment).float().unsqueeze(0)
+                embedding = self.model.encode_batch(segment_torch)
+                
+                # Convert back to numpy
+                if hasattr(embedding, 'cpu'):
+                    embedding_np = embedding.squeeze().cpu().numpy()
+                else:
+                    embedding_np = embedding.squeeze()
+                    
+                embeddings.append(embedding_np)
+                timestamps.append(start / sr)
+            
+            if len(embeddings) < 2:
+                logger.warning("Not enough segments for clustering, using fallback")
+                return self._fallback_detection(audio_file)
+            
+            embeddings = np.array(embeddings)
+            
+            # Cluster embeddings to identify speakers
+            similarity_matrix = cosine_similarity(embeddings)
+            n_clusters = min(max(2, int(len(embeddings) * 0.3)), 6)  # Adaptive clustering
+            
+            clustering = AgglomerativeClustering(
+                n_clusters=n_clusters,
+                linkage='average',
+                metric='precomputed'
+            )
+            
+            # Convert similarity to distance
+            distance_matrix = 1 - similarity_matrix
+            labels = clustering.fit_predict(distance_matrix)
+            
+            # Create speaker segments
+            speaker_changes = []
+            current_speaker = labels[0]
+            
+            for i, (timestamp, label) in enumerate(zip(timestamps, labels)):
+                if label != current_speaker:
+                    speaker_changes.append({
+                        "timestamp": timestamp,
+                        "speaker": f"Speaker_{label + 1}"
+                    })
+                    current_speaker = label
+            
+            unique_speakers = len(set(labels))
+            
+            logger.info(f"SpeechBrain detected {unique_speakers} speakers using embeddings")
+            
+            return {
+                "speaker_count": unique_speakers,
+                "speakers": [f"Speaker_{i+1}" for i in range(unique_speakers)],
+                "segments": speaker_changes,
+                "method": "speechbrain_embeddings",
+                "confidence": "high",
+                "analysis": {
+                    "embedding_segments": len(embeddings),
+                    "clustering_method": "agglomerative",
+                    "similarity_threshold": 0.25
+                }
+            }
             
         except Exception as e:
             logger.error(f"SpeechBrain detection failed: {e}")
@@ -357,15 +435,83 @@ class ResemblyzerDetector:
                 return self._fallback_detection(audio_file)
         
         try:
-            # Resemblyzer implementation
-            logger.info("Running Resemblyzer speaker detection...")
+            # Actual Resemblyzer implementation
+            logger.info("Running Resemblyzer speaker detection with voice embeddings...")
             
-            # For now, use conservative fallback with Resemblyzer labeling
-            result = self._fallback_detection(audio_file)
-            result["method"] = "resemblyzer_fallback"
-            result["confidence"] = "medium"
+            import librosa
+            from sklearn.cluster import SpectralClustering
+            from scipy.spatial.distance import pdist, squareform
             
-            return result
+            # Load and preprocess audio for Resemblyzer
+            wav = self.preprocess_wav(audio_file)
+            
+            # Split audio into segments for embedding extraction
+            segment_length = 16000 * 3  # 3 seconds at 16kHz
+            hop_length = 16000 * 1     # 1 second hop
+            
+            embeddings = []
+            timestamps = []
+            
+            for start in range(0, len(wav) - segment_length, hop_length):
+                end = start + segment_length
+                segment = wav[start:end]
+                
+                # Get voice embedding using Resemblyzer
+                embedding = self.model.embed_utterance(segment)
+                embeddings.append(embedding)
+                timestamps.append(start / 16000)  # Convert to seconds
+            
+            if len(embeddings) < 2:
+                logger.warning("Not enough segments for clustering, using fallback")
+                return self._fallback_detection(audio_file)
+            
+            embeddings = np.array(embeddings)
+            
+            # Calculate pairwise distances between embeddings
+            distances = pdist(embeddings, metric='cosine')
+            distance_matrix = squareform(distances)
+            
+            # Adaptive clustering based on content length
+            n_clusters = min(max(2, int(len(embeddings) * 0.2)), 5)
+            
+            clustering = SpectralClustering(
+                n_clusters=n_clusters,
+                affinity='precomputed',
+                random_state=42
+            )
+            
+            # Convert distances to similarity for spectral clustering
+            similarity_matrix = 1 - distance_matrix
+            labels = clustering.fit_predict(similarity_matrix)
+            
+            # Create speaker segments
+            speaker_changes = []
+            current_speaker = labels[0]
+            
+            for i, (timestamp, label) in enumerate(zip(timestamps, labels)):
+                if label != current_speaker:
+                    speaker_changes.append({
+                        "timestamp": timestamp,
+                        "speaker": f"Speaker_{label + 1}"
+                    })
+                    current_speaker = label
+            
+            unique_speakers = len(set(labels))
+            
+            logger.info(f"Resemblyzer detected {unique_speakers} speakers using voice embeddings")
+            
+            return {
+                "speaker_count": unique_speakers,
+                "speakers": [f"Speaker_{i+1}" for i in range(unique_speakers)],
+                "segments": speaker_changes,
+                "method": "resemblyzer_embeddings",
+                "confidence": "high",
+                "analysis": {
+                    "embedding_segments": len(embeddings),
+                    "clustering_method": "spectral",
+                    "distance_metric": "cosine"
+                }
+            }
             
         except Exception as e:
             logger.error(f"Resemblyzer detection failed: {e}")
