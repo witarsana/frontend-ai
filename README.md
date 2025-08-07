@@ -1,6 +1,6 @@
 # 🎯 Voice Note AI
 
-AI-powered meeting transcription and analysis platform.
+AI-powered meeting transcription and analysis platform with Speaker Detection.
 
 ## 🚀 Quick Start
 
@@ -9,23 +9,43 @@ AI-powered meeting transcription and analysis platform.
 git clone https://github.com/witarsana/frontend-ai.git
 cd frontend-ai
 
-# 2. Configure (first time only)
-cp .env.master .env
+# 2. Configure environment
+cp .env.example .env
 # Edit .env with your API keys
 
-# 3. Start everything
+# 3. Configure network for team sharing
+./configure-network.sh
+
+# 4. Start everything
 ./start.sh
 ```
 
-**That's it!** 
+**Access URLs:**
+- Frontend: http://localhost:3001 (or your network IP)
+- Speaker Detection API: http://localhost:8003
+- Database API: http://localhost:8000
 
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8000
+## 📚 Detailed Documentation
 
-## 🛑 Stop Everything
+- **[� Complete Deployment Guide](./README_DEPLOYMENT.md)** - Run, stop, update workflows
+- **[🐳 Docker Speaker Setup](./DOCKER_SPEAKER_SETUP.md)** - Advanced Docker configuration
+- **[🌐 Network Sharing Guide](./NETWORK_ACCESS.md)** - Team collaboration setup
+
+## 🛑 Quick Commands
 
 ```bash
+# Stop everything
 ./stop.sh
+
+# Restart with rebuild
+./stop.sh && ./start.sh --rebuild
+
+# Development mode (local)
+cd backend && python ffmpeg_free_main.py
+cd frontend && npm run dev
+
+# Docker mode (production)
+docker-compose up --build -d
 ```
 
 ## ⚙️ Configuration
