@@ -1,6 +1,10 @@
 # 🎯 Voice Note AI
 
-AI-powered meeting transcription and analysis platform with Speaker Detection.
+AI-powe## 📚 Detailed Documentation
+
+- **[📖 Complete Deployment Guide](./docs/server-guides/README_DEPLOYMENT.md)** - Run, stop, update workflows
+- **[🐳 Docker Speaker Setup](./docs/server-guides/DOCKER_SPEAKER_SETUP.md)** - Advanced Docker configuration
+- **[🚀 Quick Reference Card](./docs/server-guides/QUICK_REFERENCE.md)** - Essential commands referenceeeting transcription and analysis platform with Speaker Detection.
 
 ## 🚀 Quick Start
 
