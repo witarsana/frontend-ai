@@ -897,6 +897,8 @@ const App: React.FC = () => {
             <div style={{ marginBottom: '24px' }}>
               <JobHistoryManager 
                 onViewResult={(result) => {
+                  console.log('🔍 View Results clicked! Data received:', result);
+                  
                   // Check if this result already exists in session transcriptions
                   const existingTranscription = sessionTranscriptions.find(
                     t => t.filename === result.filename && 
@@ -908,23 +910,27 @@ const App: React.FC = () => {
                     return;
                   }
                   
-                  // Add the result to session transcriptions
+                  // Map the backend result to the expected format
                   const newTranscription = {
-                    id: result.jobId || Date.now().toString(),
+                    id: result.job_id || Date.now().toString(),
                     filename: result.filename || 'Unknown File',
                     status: "completed" as const,
-                    uploadTime: new Date(result.upload_time || Date.now()),
+                    uploadTime: new Date(result.processed_at || result.upload_time || Date.now()),
                     transcript: result.transcript || '',
                     summary: result.summary,
                     keyPoints: result.key_points,
                     speakers: result.speakers,
-                    segments: result.segments,
-                    analysisResult: result.analysis,
-                    duration: result.audio_duration
+                    segments: result.transcript, // transcript is actually segments in backend
+                    analysisResult: result.analysis || result.ai_analysis,
+                    duration: result.audio_info?.duration || result.duration
                   };
                   
                   console.log('✅ Adding new transcription to session:', newTranscription.filename);
                   setSessionTranscriptions(prev => [newTranscription, ...prev]);
+                  
+                  // Navigate to history tab to show the result
+                  setViewMode('history');
+                  console.log('🔄 Switched to history tab to display results');
                 }}
               />
             </div>
