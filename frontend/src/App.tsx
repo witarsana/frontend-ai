@@ -4,13 +4,14 @@ import newLogoTranskribo from "./assets/new-logo-transkribo.png";
 
 import UploadSection from "./components/UploadSection";
 import RecordingSection from "./components/RecordingSection";
-import SessionTranscriptionCard from "./components/SessionTranscriptionCard";
 import HistoryViewer from "./components/HistoryViewer";
 import ProcessingPage from "./components/ProcessingPage";
+import JobHistoryManager from "./components/JobHistoryManager";
 
 const App: React.FC = () => {
   const [apiConnected, setApiConnected] = useState<boolean>(false);
   const [sessionTranscriptions, setSessionTranscriptions] = useState<any[]>([]);
+  const [completedJobIds, setCompletedJobIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'upload' | 'recording' | 'history' | 'processing'>('upload');
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
@@ -82,6 +83,12 @@ const App: React.FC = () => {
       localStorage.setItem('activeJobs', JSON.stringify(updated));
       return updated;
     });
+  };
+
+  // Get filename from jobId
+  const getFilenameFromJobId = (jobId: string): string => {
+    const job = activeJobs.find(job => job.jobId === jobId);
+    return job?.filename || 'Unknown File';
   };
 
   // Auto-resume job when API connection is established
@@ -317,6 +324,17 @@ const App: React.FC = () => {
   const handleProcessingComplete = async (result: any) => {
     console.log("Processing completed:", result);
     
+    // Prevent duplicate completion handling
+    const jobId = currentJobId || result.job_id || Date.now().toString();
+    
+    if (completedJobIds.has(jobId)) {
+      console.log('🔄 Job already completed, skipping duplicate:', jobId);
+      return;
+    }
+    
+    // Mark job as completed
+    setCompletedJobIds(prev => new Set([...prev, jobId]));
+    
     // Remove from active jobs list
     if (currentJobId) {
       removeActiveJob(currentJobId);
@@ -324,7 +342,7 @@ const App: React.FC = () => {
     
     // Add completed transcription to session
     const newTranscription = {
-      id: currentJobId || Date.now().toString(),
+      id: jobId,
       filename: result.filename || "Unknown",
       status: "completed" as const,
       uploadTime: new Date(),
@@ -344,6 +362,7 @@ const App: React.FC = () => {
       detectedSpeakers: result.detected_speakers || null,
     };
 
+    console.log('✅ Added completed job to session:', jobId, result.filename);
     setSessionTranscriptions((prev) => [newTranscription, ...prev]);
     
     // Reset and go back to upload view
@@ -367,30 +386,10 @@ const App: React.FC = () => {
     setViewMode('upload');
   };
 
-  // Session transcription handlers (now used only for legacy/simulation)
-  const copyTranscriptionText = (id: string) => {
-    const transcription = sessionTranscriptions.find((t) => t.id === id);
-    if (transcription) {
-      navigator.clipboard.writeText(transcription.text);
-      // Could add toast notification here
-    }
-  };
-
-  const downloadTranscription = (id: string) => {
-    const transcription = sessionTranscriptions.find((t) => t.id === id);
-    if (transcription) {
-      const blob = new Blob([transcription.text], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${transcription.filename}_transcript.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  };
-
-  const clearTranscription = (id: string) => {
-    setSessionTranscriptions((prev) => prev.filter((t) => t.id !== id));
+  const handleViewResults = (jobId: string, filename: string) => {
+    console.log(`🔍 Viewing results for job: ${jobId} (${filename})`);
+    setViewMode('history');
+    // The HistoryViewer will auto-select the job when it loads
   };
 
   return (
@@ -536,9 +535,11 @@ const App: React.FC = () => {
         {viewMode === 'processing' && currentJobId ? (
           <ProcessingPage 
             jobId={currentJobId}
+            filename={getFilenameFromJobId(currentJobId)}
             onComplete={handleProcessingComplete}
             onError={handleProcessingError}
             onBack={handleBackToUpload}
+            onViewResults={handleViewResults}
           />
         ) : viewMode === 'history' ? (
           <HistoryViewer />
@@ -892,42 +893,41 @@ const App: React.FC = () => {
               </div>
             ) : null}
 
-            {/* Session Results */}
-            {sessionTranscriptions.length > 0 && (
-              <>
-                <div style={{
-                  marginBottom: '16px'
-                }}>
-                  <h3 style={{
-                    margin: '0',
-                    color: '#2c3e50',
-                    fontSize: '18px',
-                    fontWeight: '600'
-                  }}>
-                    � Session Results ({sessionTranscriptions.length})
-                  </h3>
-                  <p style={{
-                    color: '#6b7280',
-                    fontSize: '14px',
-                    margin: '4px 0 0 0'
-                  }}>
-                    Completed transcriptions from this session
-                  </p>
-                </div>
-                
-                <div className="session-cards">
-                  {sessionTranscriptions.map((transcription) => (
-                    <SessionTranscriptionCard
-                      key={transcription.id}
-                      transcription={transcription}
-                      onCopy={() => copyTranscriptionText(transcription.id)}
-                      onDownload={() => downloadTranscription(transcription.id)}
-                      onClear={() => clearTranscription(transcription.id)}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
+            {/* Job History Manager - Show completed jobs */}
+            <div style={{ marginBottom: '24px' }}>
+              <JobHistoryManager 
+                onViewResult={(result) => {
+                  // Check if this result already exists in session transcriptions
+                  const existingTranscription = sessionTranscriptions.find(
+                    t => t.filename === result.filename && 
+                         Math.abs(new Date(t.uploadTime).getTime() - new Date(result.upload_time || Date.now()).getTime()) < 60000 // Within 1 minute
+                  );
+                  
+                  if (existingTranscription) {
+                    console.log('🔄 Transcription already exists in session, skipping duplicate');
+                    return;
+                  }
+                  
+                  // Add the result to session transcriptions
+                  const newTranscription = {
+                    id: result.jobId || Date.now().toString(),
+                    filename: result.filename || 'Unknown File',
+                    status: "completed" as const,
+                    uploadTime: new Date(result.upload_time || Date.now()),
+                    transcript: result.transcript || '',
+                    summary: result.summary,
+                    keyPoints: result.key_points,
+                    speakers: result.speakers,
+                    segments: result.segments,
+                    analysisResult: result.analysis,
+                    duration: result.audio_duration
+                  };
+                  
+                  console.log('✅ Adding new transcription to session:', newTranscription.filename);
+                  setSessionTranscriptions(prev => [newTranscription, ...prev]);
+                }}
+              />
+            </div>
           </>
         )}
       </div>

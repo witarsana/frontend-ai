@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AITranscriptionAPI } from '../services/api';
+import { addCompletedJobToHistory } from './JobHistoryManager';
 
 // Add CSS animation for spinning icon, pulse indicator, and shimmer effect
 const spinKeyframes = `
@@ -54,16 +55,20 @@ interface ProcessingStatus {
 
 interface ProcessingPageProps {
   jobId: string;
+  filename?: string;
   onComplete?: (result: any) => void;
   onError?: (error: string) => void;
   onBack?: () => void;
+  onViewResults?: (jobId: string, filename: string) => void;
 }
 
 const ProcessingPage: React.FC<ProcessingPageProps> = ({ 
   jobId, 
+  filename = 'Unknown File',
   onComplete, 
   onError, 
-  onBack 
+  onBack,
+  onViewResults
 }) => {
   const [status, setStatus] = useState<ProcessingStatus>({
     status: 'initializing',
@@ -74,6 +79,8 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
   const [logs, setLogs] = useState<string[]>([]);
   const [startTime] = useState(Date.now());
   const [isResumed, setIsResumed] = useState(false);
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
+  const [hasCompletedOnce, setHasCompletedOnce] = useState(false);
 
   const api = new AITranscriptionAPI();
 
@@ -88,9 +95,13 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
 
     try {
       const statusResponse = await api.getStatus(jobId);
-      const newStatus = {
+      
+      // Reset consecutive errors on successful request
+      setConsecutiveErrors(0);
+      
+      const newStatus: ProcessingStatus = {
         status: statusResponse.status,
-        progress: statusResponse.progress,
+        progress: statusResponse.progress || 0,
         stage_progress: (statusResponse as any).stage_progress,
         message: statusResponse.message || 'Processing...',
         error: statusResponse.error,
@@ -116,42 +127,119 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
         }));
       }
       
-      // Enhanced logging with stage information
+      // Enhanced logging with stage information - only log significant changes
       const stageInfo = (statusResponse as any).stage_detail ? 
         ` [${(statusResponse as any).stage_detail.name}: ${(statusResponse as any).stage_progress || 0}%]` : '';
-      addLog(`Status: ${statusResponse.status} (${statusResponse.progress}%)${stageInfo} - ${statusResponse.message || 'Processing...'}`);
+      
+      // Only log if status, stage, or significant progress change
+      const shouldLog = newStatus.status !== status.status || 
+                       newStatus.current_stage !== status.current_stage ||
+                       Math.abs(newStatus.progress - status.progress) >= 10; // Log every 10% progress
+      
+      if (shouldLog) {
+        addLog(`Status: ${statusResponse.status} (${statusResponse.progress}%)${stageInfo} - ${statusResponse.message || 'Processing...'}`);
+      }
 
-      if (statusResponse.status === 'completed') {
+      // Check for completion FIRST - more robust completion detection
+      if (statusResponse.status === 'completed' || 
+          (statusResponse.progress && statusResponse.progress >= 100) ||
+          (statusResponse as any).result_available === true) {
+        
+        // Prevent multiple completion calls
+        if (hasCompletedOnce) {
+          console.log('🔄 Completion already processed, skipping...');
+          return;
+        }
+        
+        setHasCompletedOnce(true);
+        
+        console.log('🎉 Processing completed detected!', {
+          status: statusResponse.status,
+          progress: statusResponse.progress,
+          result_available: (statusResponse as any).result_available
+        });
+        
         setIsPolling(false);
+        
+        // Force progress to 100% and status to completed
+        setStatus(prev => ({
+          ...prev,
+          status: 'completed',
+          progress: 100,
+          message: '✅ Processing completed successfully!'
+        }));
+        
         addLog('✅ Processing completed successfully!');
         
-        // Clear saved progress since job is done
-        localStorage.removeItem(`job_progress_${jobId}`);
-        
-        if (onComplete) {
-          // Get the result and call onComplete
-          try {
-            const result = await api.getResult(jobId);
+        // Add job to history with result data
+        try {
+          const result = await api.getResult(jobId);
+          
+          // Add to job history
+          addCompletedJobToHistory({
+            jobId,
+            filename: filename,
+            status: 'completed',
+            progress: 100,
+            duration: `${elapsedTime}s`,
+            result: result
+          });
+          
+          // Clear saved progress since job is done
+          localStorage.removeItem(`job_progress_${jobId}`);
+          localStorage.removeItem('currentProcessingJob');
+          
+          if (onComplete) {
             onComplete(result);
-          } catch (error) {
-            addLog(`❌ Error getting result: ${error}`);
           }
+        } catch (error) {
+          addLog(`❌ Error getting result: ${error}`);
+          
+          // Still add to history as completed but without result
+          addCompletedJobToHistory({
+            jobId,
+            filename: filename,
+            status: 'error',
+            progress: 100,
+            duration: `${elapsedTime}s`
+          });
         }
+        return; // Important: exit early to prevent further processing
       } else if (statusResponse.status === 'error') {
         setIsPolling(false);
         const errorMsg = statusResponse.error || 'Unknown error';
         addLog(`❌ Error: ${errorMsg}`);
         
+        // Add failed job to history
+        addCompletedJobToHistory({
+          jobId,
+          filename: filename,
+          status: 'error',
+          progress: newStatus.progress || 0,
+          duration: `${elapsedTime}s`
+        });
+        
         // Clear saved progress since job failed
         localStorage.removeItem(`job_progress_${jobId}`);
+        localStorage.removeItem('currentProcessingJob');
         
         if (onError) {
           onError(errorMsg);
         }
       }
     } catch (error) {
+      setConsecutiveErrors(prev => prev + 1);
       addLog(`⚠️ Polling error: ${error}`);
       console.error('Polling error:', error);
+      
+      // Stop polling after 5 consecutive errors
+      if (consecutiveErrors >= 5) {
+        setIsPolling(false);
+        addLog(`❌ Stopped polling after too many errors. Please refresh the page.`);
+        if (onError) {
+          onError('Too many polling errors. Please try again.');
+        }
+      }
     }
   };
 
@@ -194,8 +282,25 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
     // Start polling immediately
     pollStatus();
     
-    // Set up polling interval  
-    const interval = setInterval(pollStatus, 1000); // Poll every 1 second for better responsiveness
+    // Set up polling interval - more responsive for completion detection
+    const interval = setInterval(() => {
+      // Stop polling after 30 minutes (safety timeout)
+      const elapsed = Date.now() - startTime;
+      if (elapsed > 30 * 60 * 1000) { // 30 minutes
+        clearInterval(interval);
+        setIsPolling(false);
+        addLog(`⏰ Polling timeout after 30 minutes. Please refresh to continue.`);
+        return;
+      }
+      
+      // Always poll if isPolling is true - let pollStatus handle completion detection
+      if (isPolling) {
+        pollStatus();
+      } else {
+        // Stop interval if polling is disabled
+        clearInterval(interval);
+      }
+    }, 1500); // Poll every 1.5 seconds - balanced between responsiveness and load
     
     return () => {
       clearInterval(interval);
@@ -207,7 +312,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
         localStorage.removeItem(`job_progress_${jobId}`);
       }
     };
-  }, [jobId, status.status]);
+  }, [jobId]); // Remove status.status dependency to prevent restart loop
 
   const getStatusColor = () => {
     switch (status.status) {
@@ -334,7 +439,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           position: 'relative'
         }}>
           <div style={{
-            width: `${status.progress}%`,
+            width: `${status.status === 'completed' ? 100 : status.progress}%`,
             height: '100%',
             background: status.status === 'completed' 
               ? 'linear-gradient(90deg, #10b981, #059669)'
@@ -360,7 +465,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
             )}
           </div>
           {/* Progress percentage overlay */}
-          {status.progress > 10 && (
+          {(status.progress > 10 || status.status === 'completed') && (
             <div style={{
               position: 'absolute',
               top: '50%',
@@ -371,7 +476,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
               fontWeight: 'bold',
               textShadow: '0 1px 2px rgba(0,0,0,0.5)'
             }}>
-              {status.progress}%
+              {status.status === 'completed' ? '100' : status.progress}%
             </div>
           )}
         </div>
@@ -384,7 +489,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           marginBottom: '8px'
         }}>
           <span>
-            {status.message}
+            {status.status === 'completed' ? '✅ Processing completed successfully!' : status.message}
             {(status.status === 'processing' || status.status === 'transcribing' || status.status === 'ai_analysis') && (
               <span style={{
                 marginLeft: '8px',
@@ -392,6 +497,15 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
                 animation: 'pulse 1.5s ease-in-out infinite'
               }}>
                 ● ACTIVE
+              </span>
+            )}
+            {status.status === 'completed' && (
+              <span style={{
+                marginLeft: '8px',
+                color: '#10b981',
+                fontWeight: 'bold'
+              }}>
+                ● COMPLETED
               </span>
             )}
             {status.estimated_remaining && (
@@ -629,7 +743,9 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
         {status.status === 'completed' && (
           <button
             onClick={() => {
-              // This will be handled by onComplete callback
+              if (onViewResults) {
+                onViewResults(jobId, filename);
+              }
             }}
             style={{
               padding: '12px 24px',
@@ -642,7 +758,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
               fontWeight: '500'
             }}
           >
-            ✅ Completed
+            👁️ View Results
           </button>
         )}
 
@@ -673,7 +789,7 @@ const ProcessingPage: React.FC<ProcessingPageProps> = ({
           color: '#6b7280',
           fontSize: '12px'
         }}>
-          🔄 Auto-refreshing every 1 second...
+          🔄 Auto-refreshing every 1.5 seconds...
         </div>
       )}
 

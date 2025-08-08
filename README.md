@@ -13,6 +13,9 @@ AI-powe## 📚 Detailed Documentation
 git clone https://github.com/witarsana/frontend-ai.git
 cd frontend-ai
 
+cd frontend && npm run dev
+cd backend && python ffmpeg_free_main.py
+
 # 2. Configure environment
 cp .env.example .env
 # Edit .env with your API keys

@@ -589,8 +589,8 @@ async def upload_and_process(
             raise HTTPException(status_code=400, detail=f"Invalid speaker method. Must be one of: {valid_methods}")
         
         content = await file.read()
-        if len(content) > 150 * 1024 * 1024:  # 150MB limit
-            raise HTTPException(status_code=400, detail="File too large. Maximum 150MB.")
+        if len(content) > 500 * 1024 * 1024:  # 500MB limit for video files
+            raise HTTPException(status_code=400, detail="File too large. Maximum 500MB.")
         
         # Check file format and provide optimization info
         allowed_extensions = ['.wav', '.mp3', '.m4a', '.flac', '.ogg', '.webm', '.mp4', '.mov']
@@ -651,6 +651,8 @@ async def upload_and_process(
         
     except Exception as e:
         print(f"❌ Upload error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @app.get("/api/status/{job_id}")
@@ -1182,6 +1184,68 @@ async def get_completed_jobs():
     completed_jobs.sort(key=lambda x: x['processed_at'], reverse=True)
     
     return {"jobs": completed_jobs}
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str):
+    """Delete a completed job and its associated files"""
+    print(f"🗑️ DELETE request received for job_id: {job_id}")
+    
+    try:
+        results_dir = os.path.join(os.path.dirname(__file__), "results")
+        uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+        
+        print(f"🔍 Looking in results_dir: {results_dir}")
+        print(f"🔍 Looking in uploads_dir: {uploads_dir}")
+        
+        # Delete result file
+        result_file = os.path.join(results_dir, f"{job_id}_result.json")
+        files_deleted = []
+        
+        print(f"🔍 Checking result file: {result_file}")
+        print(f"📁 File exists: {os.path.exists(result_file)}")
+        
+        if os.path.exists(result_file):
+            os.remove(result_file)
+            files_deleted.append(f"{job_id}_result.json")
+            print(f"✅ Deleted result file: {job_id}_result.json")
+        
+        # Delete associated audio files
+        audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.mp4', '.mov', '.avi', '.mkv']
+        audio_patterns = [
+            f"{job_id}",
+            f"{job_id}_processed",
+            f"{job_id}_extracted",
+            f"{job_id}_optimized"
+        ]
+        
+        for pattern in audio_patterns:
+            for ext in audio_extensions:
+                audio_file = os.path.join(uploads_dir, f"{pattern}{ext}")
+                if os.path.exists(audio_file):
+                    os.remove(audio_file)
+                    files_deleted.append(f"{pattern}{ext}")
+                    print(f"✅ Deleted audio file: {pattern}{ext}")
+        
+        print(f"📊 Total files deleted: {len(files_deleted)}")
+        print(f"📋 Files deleted: {files_deleted}")
+        
+        if not files_deleted:
+            print(f"❌ No files found to delete for job_id: {job_id}")
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        print(f"✅ Job {job_id} deleted successfully")
+        return {
+            "success": True,
+            "message": f"Job {job_id} deleted successfully",
+            "files_deleted": files_deleted
+        }
+        
+    except HTTPException:
+        print(f"❌ HTTPException raised for job_id: {job_id}")
+        raise
+    except Exception as e:
+        print(f"❌ Unexpected error deleting job {job_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting job: {str(e)}")
 
 @app.get("/api/jobs/{job_id}/result")
 async def get_job_result(job_id: str):
