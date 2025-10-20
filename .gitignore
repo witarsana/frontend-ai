@@ -243,3 +243,21 @@ backend/results/*.json
 
 # Python virtual environments
 .venv_*/
+
+# PlaywrightAI - Other projects (not part of ai_automation_tool)
+PlaywrightAI/automation/
+PlaywrightAI/automationProject/
+PlaywrightAI/codegen/
+PlaywrightAI/generatorPlaywright/
+PlaywrightAI/recordPlaywright/
+PlaywrightAI/recordPlaywrightGit/
+PlaywrightAI/*.rar
+
+# Other project folders
+import/
+reviewticket/
+
+# Playwright specific files
+playwright-report/
+test-results/
+screenshots/
