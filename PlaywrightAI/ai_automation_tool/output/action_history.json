@@ -1,0 +1,20 @@
+[
+  {
+    "step": 1,
+    "action": "TYPE",
+    "description": "ADVANCED",
+    "value": "auckland"
+  },
+  {
+    "step": 2,
+    "action": "CLICK",
+    "description": "",
+    "value": null
+  },
+  {
+    "step": 3,
+    "action": "CLICK",
+    "description": "",
+    "value": null
+  }
+]
